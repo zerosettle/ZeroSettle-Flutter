@@ -3,6 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
+import 'app_state.dart';
+import 'screens/home_screen.dart';
+import 'screens/store_screen.dart';
+import 'screens/entitlements_screen.dart';
+import 'screens/settings_screen.dart';
+
 void main() {
   runApp(const ZeroSettleExampleApp());
 }
@@ -13,34 +19,43 @@ class ZeroSettleExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ZeroSettle Example',
+      title: 'ZeroSettle',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorSchemeSeed: Colors.indigo,
         useMaterial3: true,
+        brightness: Brightness.light,
       ),
-      home: const HomePage(),
+      darkTheme: ThemeData(
+        colorSchemeSeed: Colors.indigo,
+        useMaterial3: true,
+        brightness: Brightness.dark,
+      ),
+      home: const AppShell(),
     );
   }
 }
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<AppShell> createState() => _AppShellState();
 }
 
-class _HomePageState extends State<HomePage> {
-  // Pass via: flutter run --dart-define=ZS_PUBLISHABLE_KEY=zs_pk_test_xxx
+class _AppShellState extends State<AppShell> {
   static const _publishableKey = String.fromEnvironment('ZS_PUBLISHABLE_KEY');
-  static const _userId = 'flutter_example_user';
 
-  bool _configured = false;
-  bool _loading = false;
-  String? _error;
-  List<ZSProduct> _products = [];
-  List<Entitlement> _entitlements = [];
+  final _appState = AppState();
+  int _currentTab = 0;
   StreamSubscription<List<Entitlement>>? _entitlementSub;
+  bool _initStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
 
   @override
   void dispose() {
@@ -48,182 +63,190 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Future<void> _configure() async {
-    setState(() { _loading = true; _error = null; });
+  Future<void> _initialize() async {
+    if (_publishableKey.isEmpty || _initStarted) return;
+    _initStarted = true;
+    _appState.setLoading(true);
+
     try {
+      // 1. Configure
       await ZeroSettle.instance.configure(publishableKey: _publishableKey);
-      _entitlementSub = ZeroSettle.instance.entitlementUpdates.listen((entitlements) {
-        if (mounted) {
-          setState(() => _entitlements = entitlements);
-        }
+
+      // 2. Listen to entitlement updates
+      _entitlementSub =
+          ZeroSettle.instance.entitlementUpdates.listen((entitlements) {
+        _appState.setEntitlements(entitlements);
       });
-      setState(() => _configured = true);
-    } on ZSException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
 
-  Future<void> _bootstrap() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      final catalog = await ZeroSettle.instance.bootstrap(userId: _userId);
-      setState(() => _products = catalog.products);
-    } on ZSException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
+      // 3. Bootstrap
+      final catalog =
+          await ZeroSettle.instance.bootstrap(userId: _appState.userId);
+      _appState.setProducts(catalog.products);
+      _appState.setRemoteConfig(catalog.config);
+      _appState.setInitialized(true);
 
-  Future<void> _presentPaymentSheet(ZSProduct product) async {
-    setState(() { _error = null; });
-    try {
-      final txn = await ZeroSettle.instance.presentPaymentSheet(
-        productId: product.id,
-        userId: _userId,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Purchase complete: ${txn.id}')),
-        );
+      // 4. Restore entitlements
+      try {
+        final entitlements = await ZeroSettle.instance
+            .restoreEntitlements(userId: _appState.userId);
+        _appState.setEntitlements(entitlements);
+      } catch (_) {
+        // Non-fatal: entitlements may be empty for new users
       }
-      // Refresh entitlements after purchase
-      final entitlements = await ZeroSettle.instance.restoreEntitlements(userId: _userId);
-      setState(() => _entitlements = entitlements);
-    } on ZSCancelledException {
-      // User dismissed — no action needed
-    } on ZSCheckoutFailedException catch (e) {
-      setState(() => _error = e.message);
     } on ZSException catch (e) {
-      setState(() => _error = e.message);
-    }
-  }
-
-  Future<void> _restoreEntitlements() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      final entitlements = await ZeroSettle.instance.restoreEntitlements(userId: _userId);
-      setState(() => _entitlements = entitlements);
-    } on ZSException catch (e) {
-      setState(() => _error = e.message);
+      _appState.setError(e.message);
     } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _manageSubscription() async {
-    try {
-      await ZeroSettle.instance.showManageSubscription(userId: _userId);
-    } on ZSException catch (e) {
-      setState(() => _error = e.message);
+      _appState.setLoading(false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_publishableKey.isEmpty) {
+      return _buildMissingKeyScreen(context);
+    }
+
+    return ListenableBuilder(
+      listenable: _appState,
+      builder: (context, _) {
+        if (!_appState.isInitialized && _appState.isLoading) {
+          return _buildLoadingScreen(context);
+        }
+
+        return Scaffold(
+          body: IndexedStack(
+            index: _currentTab,
+            children: [
+              HomeScreen(
+                appState: _appState,
+                onNavigateToStore: () => setState(() => _currentTab = 1),
+              ),
+              StoreScreen(appState: _appState),
+              EntitlementsScreen(appState: _appState),
+              SettingsScreen(appState: _appState),
+            ],
+          ),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _currentTab,
+            onDestinationSelected: (index) =>
+                setState(() => _currentTab = index),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home),
+                label: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.store_outlined),
+                selectedIcon: Icon(Icons.store),
+                label: 'Store',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.verified_outlined),
+                selectedIcon: Icon(Icons.verified),
+                label: 'Entitlements',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: 'Settings',
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMissingKeyScreen(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ZeroSettle Example')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // -- Status --
-          if (_error != null)
-            Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.key_off,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Missing Publishable Key',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Run the app with your ZeroSettle publishable key:',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Container(
                 padding: const EdgeInsets.all(12),
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer)),
-              ),
-            ),
-
-          if (_loading) const LinearProgressIndicator(),
-
-          const SizedBox(height: 8),
-
-          if (_publishableKey.isEmpty)
-            Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  'Missing ZS_PUBLISHABLE_KEY. Run with:\nflutter run --dart-define=ZS_PUBLISHABLE_KEY=zs_pk_test_xxx',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const SelectableText(
+                  'flutter run --dart-define=ZS_PUBLISHABLE_KEY=zs_pk_test_xxx',
+                  style: TextStyle(fontFamily: 'monospace', fontSize: 13),
                 ),
               ),
-            ),
-
-          // -- Configure --
-          if (!_configured) ...[
-            FilledButton(
-              onPressed: _loading || _publishableKey.isEmpty ? null : _configure,
-              child: const Text('Configure SDK'),
-            ),
-          ] else ...[
-            // -- Bootstrap --
-            FilledButton(
-              onPressed: _loading ? null : _bootstrap,
-              child: const Text('Fetch Products'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _loading ? null : _restoreEntitlements,
-              child: const Text('Restore Entitlements'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _manageSubscription,
-              child: const Text('Manage Subscription'),
-            ),
-          ],
-
-          const SizedBox(height: 24),
-
-          // -- Products --
-          if (_products.isNotEmpty) ...[
-            Text('Products', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            ..._products.map((product) => Card(
-              child: ListTile(
-                title: Text(product.displayName),
-                subtitle: Text(
-                  '${product.webPrice.formatted}'
-                  '${product.savingsPercent != null ? " (Save ${product.savingsPercent}%)" : ""}',
-                ),
-                trailing: FilledButton(
-                  onPressed: () => _presentPaymentSheet(product),
-                  child: const Text('Buy'),
-                ),
-              ),
-            )),
-          ],
-
-          const SizedBox(height: 24),
-
-          // -- Entitlements --
-          if (_entitlements.isNotEmpty) ...[
-            Text('Entitlements', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            ..._entitlements.map((ent) => Card(
-              color: ent.isActive
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: ListTile(
-                title: Text(ent.productId),
-                subtitle: Text(
-                  '${ent.source.rawValue} · ${ent.isActive ? "Active" : "Inactive"}'
-                  '${ent.expiresAt != null ? " · Expires ${ent.expiresAt}" : ""}',
-                ),
-                leading: Icon(
-                  ent.isActive ? Icons.check_circle : Icons.cancel,
-                  color: ent.isActive ? Colors.green : Colors.red,
-                ),
-              ),
-            )),
-          ],
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
+
+  Widget _buildLoadingScreen(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.indigo, Colors.purple],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child:
+                  const Icon(Icons.diamond, size: 32, color: Colors.white),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'ZeroSettle',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              'Initializing...',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 }
