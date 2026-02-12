@@ -1,3 +1,7 @@
+## 0.3.3
+
+* Maintenance release - no functional changes
+
 ## 0.3.2
 
 * Add `ZSMigrateTipView` widget for encouraging StoreKit users to migrate to web billing

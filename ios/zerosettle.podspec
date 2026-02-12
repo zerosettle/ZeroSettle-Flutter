@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'zerosettle'
-  s.version          = '0.3.2'
+  s.version          = '0.3.3'
   s.summary          = 'Flutter plugin for ZeroSettleKit — Merchant of Record web checkout.'
   s.description      = <<-DESC
     Flutter wrapper for ZeroSettleKit. Provides web checkout, entitlements,
