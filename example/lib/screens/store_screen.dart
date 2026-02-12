@@ -246,6 +246,7 @@ class _StoreScreenState extends State<StoreScreen> {
       await ZeroSettle.instance.presentPaymentSheet(
         productId: product.id,
         userId: _appState.userId,
+        freeTrialDays: 7,
       );
 
       if (!mounted) return;

@@ -27,9 +27,10 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- Bootstrap --
 
   @override
-  Future<Map<String, dynamic>> bootstrap({required String userId}) async {
+  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) async {
     final result = await methodChannel.invokeMethod<Map>('bootstrap', {
       'userId': userId,
+      'freeTrialDays': freeTrialDays,
     });
     return Map<String, dynamic>.from(result!);
   }
@@ -56,29 +57,33 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
+    required int freeTrialDays,
     bool dismissible = true,
   }) async {
     final result = await methodChannel.invokeMethod<Map>('presentPaymentSheet', {
       'productId': productId,
       'userId': userId,
+      'freeTrialDays': freeTrialDays,
       'dismissible': dismissible,
     });
     return Map<String, dynamic>.from(result!);
   }
 
   @override
-  Future<void> preloadPaymentSheet({required String productId, String? userId}) async {
+  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {
     await methodChannel.invokeMethod('preloadPaymentSheet', {
       'productId': productId,
       'userId': userId,
+      'freeTrialDays': freeTrialDays,
     });
   }
 
   @override
-  Future<void> warmUpPaymentSheet({required String productId, String? userId}) async {
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {
     await methodChannel.invokeMethod('warmUpPaymentSheet', {
       'productId': productId,
       'userId': userId,
+      'freeTrialDays': freeTrialDays,
     });
   }
 

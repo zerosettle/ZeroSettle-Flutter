@@ -302,7 +302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       // Re-bootstrap with new user
       final catalog =
-          await ZeroSettle.instance.bootstrap(userId: newUserId);
+          await ZeroSettle.instance.bootstrap(userId: newUserId, freeTrialDays: 7);
       _appState.setProducts(catalog.products);
       _appState.setRemoteConfig(catalog.config);
 

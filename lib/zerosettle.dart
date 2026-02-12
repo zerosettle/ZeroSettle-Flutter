@@ -55,9 +55,12 @@ class ZeroSettle {
   ///
   /// Convenience method equivalent to calling [fetchProducts], warming up,
   /// and [restoreEntitlements] in sequence.
-  Future<ProductCatalog> bootstrap({required String userId}) {
+  ///
+  /// - [userId]: Your app's user identifier
+  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions
+  Future<ProductCatalog> bootstrap({required String userId, required int freeTrialDays}) {
     return _wrap(() async {
-      final map = await _platform.bootstrap(userId: userId);
+      final map = await _platform.bootstrap(userId: userId, freeTrialDays: freeTrialDays);
       return ProductCatalog.fromMap(map);
     });
   }
@@ -87,15 +90,22 @@ class ZeroSettle {
   /// Returns a [ZSTransaction] on successful payment.
   /// Throws [ZSCancelledException] if the user dismisses the sheet.
   /// Throws [ZSCheckoutFailedException] if the payment fails.
+  ///
+  /// - [productId]: The product to purchase
+  /// - [userId]: Optional user identifier
+  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions
+  /// - [dismissible]: Whether the sheet can be dismissed by the user
   Future<ZSTransaction> presentPaymentSheet({
     required String productId,
     String? userId,
+    required int freeTrialDays,
     bool dismissible = true,
   }) {
     return _wrap(() async {
       final map = await _platform.presentPaymentSheet(
         productId: productId,
         userId: userId,
+        freeTrialDays: freeTrialDays,
         dismissible: dismissible,
       );
       return ZSTransaction.fromMap(map);
@@ -103,18 +113,28 @@ class ZeroSettle {
   }
 
   /// Preload the payment sheet for faster presentation.
-  Future<void> preloadPaymentSheet({required String productId, String? userId}) {
+  ///
+  /// - [productId]: The product to preload
+  /// - [userId]: Optional user identifier
+  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions
+  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
     return _wrap(() => _platform.preloadPaymentSheet(
           productId: productId,
           userId: userId,
+          freeTrialDays: freeTrialDays,
         ));
   }
 
   /// Warm up the payment sheet (preload + cache).
-  Future<void> warmUpPaymentSheet({required String productId, String? userId}) {
+  ///
+  /// - [productId]: The product to warm up
+  /// - [userId]: Optional user identifier
+  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
     return _wrap(() => _platform.warmUpPaymentSheet(
           productId: productId,
           userId: userId,
+          freeTrialDays: freeTrialDays,
         ));
   }
 

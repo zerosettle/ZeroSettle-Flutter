@@ -24,7 +24,7 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   // -- Bootstrap --
 
-  Future<Map<String, dynamic>> bootstrap({required String userId}) {
+  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) {
     throw UnimplementedError('bootstrap() has not been implemented.');
   }
 
@@ -43,16 +43,17 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
+    required int freeTrialDays,
     bool dismissible = true,
   }) {
     throw UnimplementedError('presentPaymentSheet() has not been implemented.');
   }
 
-  Future<void> preloadPaymentSheet({required String productId, String? userId}) {
+  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
     throw UnimplementedError('preloadPaymentSheet() has not been implemented.');
   }
 
-  Future<void> warmUpPaymentSheet({required String productId, String? userId}) {
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
     throw UnimplementedError('warmUpPaymentSheet() has not been implemented.');
   }
 

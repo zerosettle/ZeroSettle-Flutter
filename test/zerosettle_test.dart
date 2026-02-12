@@ -19,7 +19,7 @@ class MockZeroSettlePlatform
   }
 
   @override
-  Future<Map<String, dynamic>> bootstrap({required String userId}) async {
+  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) async {
     lastUserId = userId;
     return _sampleCatalogMap();
   }
@@ -38,16 +38,17 @@ class MockZeroSettlePlatform
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
+    required int freeTrialDays,
     bool dismissible = true,
   }) async {
     return _sampleTransactionMap();
   }
 
   @override
-  Future<void> preloadPaymentSheet({required String productId, String? userId}) async {}
+  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {}
 
   @override
-  Future<void> warmUpPaymentSheet({required String productId, String? userId}) async {}
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {}
 
   @override
   Future<List<Map<String, dynamic>>> restoreEntitlements({required String userId}) async {
@@ -168,7 +169,7 @@ void main() {
     });
 
     test('bootstrap returns ProductCatalog', () async {
-      final catalog = await ZeroSettle.instance.bootstrap(userId: 'user_42');
+      final catalog = await ZeroSettle.instance.bootstrap(userId: 'user_42', freeTrialDays: 7);
       expect(catalog.products, hasLength(1));
       expect(catalog.products.first.id, 'premium_monthly');
       expect(catalog.products.first.type, ZSProductType.autoRenewableSubscription);
@@ -192,6 +193,7 @@ void main() {
       final txn = await ZeroSettle.instance.presentPaymentSheet(
         productId: 'premium_monthly',
         userId: 'user_42',
+        freeTrialDays: 7,
       );
       expect(txn.id, 'txn_abc');
       expect(txn.status, TransactionStatus.completed);

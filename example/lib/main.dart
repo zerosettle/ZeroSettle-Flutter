@@ -80,7 +80,7 @@ class _AppShellState extends State<AppShell> {
 
       // 3. Bootstrap
       final catalog =
-          await ZeroSettle.instance.bootstrap(userId: _appState.userId);
+          await ZeroSettle.instance.bootstrap(userId: _appState.userId, freeTrialDays: 7);
       _appState.setProducts(catalog.products);
       _appState.setRemoteConfig(catalog.config);
       _appState.setInitialized(true);
