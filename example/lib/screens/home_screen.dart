@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zerosettle/zerosettle.dart';
 import '../app_state.dart';
 import '../widgets/gem_balance_card.dart';
 import '../widgets/subscription_status_card.dart';
@@ -45,7 +46,14 @@ class HomeScreen extends StatelessWidget {
                       expiryDate: appState.subscriptionExpiryDate,
                       onTapStore: onNavigateToStore,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+
+                    // Migration Tip (iOS only, auto-hides when not applicable)
+                    ZSMigrateTipView(
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      userId: appState.userId,
+                    ),
+                    const SizedBox(height: 16),
 
                     // Recent Purchases
                     if (appState.purchaseHistory.isNotEmpty) ...[

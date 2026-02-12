@@ -1,3 +1,8 @@
+## 0.3.2
+
+* Add `ZSMigrateTipView` widget for encouraging StoreKit users to migrate to web billing
+* Update to ZeroSettleKit 0.7.2
+
 ## 0.3.1
 
 * **Breaking**: Add required `freeTrialDays` parameter to `bootstrap()`, `warmUpPaymentSheet()`, `preloadPaymentSheet()`, and `presentPaymentSheet()` methods

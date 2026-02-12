@@ -38,6 +38,33 @@ final zeroSettle = ZeroSettle();
 await zeroSettle.initialize('your-api-key');
 ```
 
+## Widgets
+
+### ZSMigrateTipView
+
+A native iOS widget that encourages users with active StoreKit subscriptions to migrate to web billing for savings. The view is completely autonomous and self-contained:
+
+- Automatically shows only when applicable (user has StoreKit subscription but no web entitlement)
+- Handles its own checkout flow internally
+- Manages expansion/collapse animations
+- Dismisses itself when complete or cancelled
+- Returns empty view on Android or when not applicable
+
+**Usage:**
+
+```dart
+ZSMigrateTipView(
+  backgroundColor: Theme.of(context).colorScheme.surface,
+  userId: 'user123',
+)
+```
+
+**Properties:**
+- `backgroundColor` - Background color for the tip view
+- `userId` - Your app's user identifier
+
+**Note:** This widget requires no callbacks or state management. It's a "set it and forget it" component that handles everything internally.
+
 ## Platform Support
 
 | Platform | Status |

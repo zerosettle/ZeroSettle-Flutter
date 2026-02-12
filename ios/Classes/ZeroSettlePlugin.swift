@@ -27,6 +27,10 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         let checkoutEC = FlutterEventChannel(name: "zerosettle/checkout_events", binaryMessenger: registrar.messenger())
         checkoutEC.setStreamHandler(instance.checkoutStreamHandler)
         instance.checkoutEventChannel = checkoutEC
+
+        // Register ZSMigrateTipView PlatformView factory
+        let migrateTipFactory = ZSMigrateTipViewFactory(messenger: registrar.messenger())
+        registrar.register(migrateTipFactory, withId: "zerosettle/migrate_tip_view")
     }
 
     // MARK: - Universal Link Handling

@@ -18,6 +18,7 @@ export 'models/promotion.dart';
 export 'models/product_catalog.dart';
 export 'models/remote_config.dart';
 export 'errors/zs_exception.dart';
+export 'widgets/zs_migrate_tip_view.dart';
 
 /// Main entry point for the ZeroSettle Flutter SDK.
 ///

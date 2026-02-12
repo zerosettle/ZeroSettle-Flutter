@@ -11,8 +11,11 @@ lib/
   zerosettle_method_channel.dart       → MethodChannel + EventChannel implementation
   models/                              → Dart model classes (mirror native types)
   errors/                              → ZSException sealed hierarchy
+  widgets/                             → Flutter widgets wrapping native PlatformViews
 ios/Classes/
   ZeroSettlePlugin.swift               → Native Swift bridge
+  ZSMigrateTipViewFactory.swift        → PlatformView factory for ZSMigrateTipView
+  ZSMigrateTipViewFlutterContainer.swift → UIHostingController wrapper for SwiftUI view
 ```
 
 ## Key Files
@@ -25,6 +28,14 @@ ios/Classes/
 * `MethodChannel('zerosettle')` — All request/response calls
 * `EventChannel('zerosettle/entitlement_updates')` — Streams entitlement changes
 * `EventChannel('zerosettle/checkout_events')` — Streams checkout delegate callbacks
+
+## PlatformViews
+* `zerosettle/migrate_tip_view` — Embeds native `ZSMigrateTipView` SwiftUI component via UIHostingController
+  - Factory: `ZSMigrateTipViewFactory` creates `ZSMigrateTipViewFlutterContainer`
+  - Container wraps SwiftUI view in `UIHostingController` and attaches to view hierarchy
+  - Creation params: `backgroundColor` (ARGB int32), `userId` (String)
+  - Widget: `ZSMigrateTipView` in `lib/widgets/` — renders `UiKitView` on iOS, `SizedBox.shrink()` on Android
+  - Pattern: Thin wrapper around autonomous native view — no callbacks, no reactive updates, props set once at creation
 
 ## Bridge Pattern
 * Swift `handle()` is nonisolated; dispatches to `@MainActor handleOnMainActor()` via `Task { @MainActor in }` (required because `ZeroSettle.shared` is `@MainActor`-isolated)
