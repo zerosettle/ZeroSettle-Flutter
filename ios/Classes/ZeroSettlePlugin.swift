@@ -44,7 +44,6 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
               let url = userActivity.webpageURL else {
             return false
         }
-        // handle() is called on the main thread by Flutter, so MainActor.assumeIsolated is safe
         return MainActor.assumeIsolated {
             ZeroSettle.shared.handleUniversalLink(url)
         }
@@ -53,7 +52,6 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     // MARK: - Method Channel Handler
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        // Flutter calls handle() on the main thread, so we can dispatch to MainActor
         Task { @MainActor in
             self.handleOnMainActor(call, result: result)
         }
