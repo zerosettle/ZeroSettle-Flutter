@@ -86,13 +86,9 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
                 return
             }
-            guard let freeTrialDays = args?["freeTrialDays"] as? Int else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "freeTrialDays is required", details: nil))
-                return
-            }
             Task { @MainActor in
                 do {
-                    let catalog = try await ZeroSettle.shared.bootstrap(userId: userId, freeTrialDays: freeTrialDays)
+                    let catalog = try await ZeroSettle.shared.bootstrap(userId: userId)
                     result(catalog.toFlutterMap())
                 } catch {
                     result(error.toFlutterError())
@@ -123,10 +119,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
-            guard let freeTrialDays = args?["freeTrialDays"] as? Int else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "freeTrialDays is required", details: nil))
-                return
-            }
+            let freeTrialDays = args?["freeTrialDays"] as? Int ?? 0
             let userId = args?["userId"] as? String
             let dismissible = args?["dismissible"] as? Bool ?? true
 
@@ -171,10 +164,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
-            guard let freeTrialDays = args?["freeTrialDays"] as? Int else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "freeTrialDays is required", details: nil))
-                return
-            }
+            let freeTrialDays = args?["freeTrialDays"] as? Int ?? 0
             let userId = args?["userId"] as? String
             Task { @MainActor in
                 _ = await ZSPaymentSheet<EmptyView>.preload(productId: productId, userId: userId, freeTrialDays: freeTrialDays)
@@ -186,10 +176,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
-            guard let freeTrialDays = args?["freeTrialDays"] as? Int else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "freeTrialDays is required", details: nil))
-                return
-            }
+            let freeTrialDays = args?["freeTrialDays"] as? Int ?? 0
             let userId = args?["userId"] as? String
             Task { @MainActor in
                 await ZSPaymentSheet<EmptyView>.warmUp(productId: productId, userId: userId, freeTrialDays: freeTrialDays)

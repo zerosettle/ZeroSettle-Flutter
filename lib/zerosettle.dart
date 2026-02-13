@@ -52,16 +52,15 @@ class ZeroSettle {
 
   // -- Bootstrap --
 
-  /// Fetch products, warm up the payment sheet, and restore entitlements.
+  /// Fetch products and restore entitlements.
   ///
-  /// Convenience method equivalent to calling [fetchProducts], warming up,
-  /// and [restoreEntitlements] in sequence.
+  /// Convenience method equivalent to calling [fetchProducts] and
+  /// [restoreEntitlements] in sequence.
   ///
   /// - [userId]: Your app's user identifier
-  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions
-  Future<ProductCatalog> bootstrap({required String userId, required int freeTrialDays}) {
+  Future<ProductCatalog> bootstrap({required String userId}) {
     return _wrap(() async {
-      final map = await _platform.bootstrap(userId: userId, freeTrialDays: freeTrialDays);
+      final map = await _platform.bootstrap(userId: userId);
       return ProductCatalog.fromMap(map);
     });
   }

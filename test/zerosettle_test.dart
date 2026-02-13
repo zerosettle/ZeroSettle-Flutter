@@ -19,7 +19,7 @@ class MockZeroSettlePlatform
   }
 
   @override
-  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) async {
+  Future<Map<String, dynamic>> bootstrap({required String userId}) async {
     lastUserId = userId;
     return _sampleCatalogMap();
   }
@@ -169,7 +169,7 @@ void main() {
     });
 
     test('bootstrap returns ProductCatalog', () async {
-      final catalog = await ZeroSettle.instance.bootstrap(userId: 'user_42', freeTrialDays: 7);
+      final catalog = await ZeroSettle.instance.bootstrap(userId: 'user_42');
       expect(catalog.products, hasLength(1));
       expect(catalog.products.first.id, 'premium_monthly');
       expect(catalog.products.first.type, ZSProductType.autoRenewableSubscription);

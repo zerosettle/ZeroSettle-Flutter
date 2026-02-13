@@ -100,7 +100,7 @@ void main() {
   });
 
   test('bootstrap returns catalog map', () async {
-    final result = await platform.bootstrap(userId: 'user_42', freeTrialDays: 7);
+    final result = await platform.bootstrap(userId: 'user_42');
     expect(result['products'], isList);
     expect((result['products'] as List).length, 1);
   });

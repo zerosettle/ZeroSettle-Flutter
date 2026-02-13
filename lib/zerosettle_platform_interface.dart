@@ -24,7 +24,7 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   // -- Bootstrap --
 
-  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) {
+  Future<Map<String, dynamic>> bootstrap({required String userId}) {
     throw UnimplementedError('bootstrap() has not been implemented.');
   }
 

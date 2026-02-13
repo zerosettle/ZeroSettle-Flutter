@@ -27,10 +27,9 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- Bootstrap --
 
   @override
-  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) async {
+  Future<Map<String, dynamic>> bootstrap({required String userId}) async {
     final result = await methodChannel.invokeMethod<Map>('bootstrap', {
       'userId': userId,
-      'freeTrialDays': freeTrialDays,
     });
     return Map<String, dynamic>.from(result!);
   }
