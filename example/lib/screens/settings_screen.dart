@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 import '../app_state.dart';
+import '../iap_environment.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AppState appState;
+  final IAPEnvironmentNotifier envNotifier;
+  final Future<void> Function(IAPEnvironment) onSwitchEnvironment;
 
-  const SettingsScreen({super.key, required this.appState});
+  const SettingsScreen({
+    super.key,
+    required this.appState,
+    required this.envNotifier,
+    required this.onSwitchEnvironment,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -14,6 +22,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _userIdController = TextEditingController();
   bool _isSwitchingUser = false;
+  bool _isSwitchingEnv = false;
   bool _isRestoring = false;
   String? _restoreResult;
 
@@ -40,6 +49,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.all(16),
                     sliver: SliverList.list(
                       children: [
+                        // Environment section
+                        _buildSectionHeader(context, 'Environment'),
+                        ValueListenableBuilder<IAPEnvironment>(
+                          valueListenable: widget.envNotifier,
+                          builder: (context, currentEnv, _) {
+                            return Card(
+                              child: Column(
+                                children: [
+                                  for (final env in IAPEnvironment.values)
+                                    RadioListTile<IAPEnvironment>(
+                                      value: env,
+                                      groupValue: currentEnv,
+                                      title: Text(env.displayName),
+                                      subtitle: Text(env.description),
+                                      dense: true,
+                                      onChanged: _isSwitchingEnv
+                                          ? null
+                                          : (value) {
+                                              if (value != null &&
+                                                  value != currentEnv) {
+                                                _switchEnv(value);
+                                              }
+                                            },
+                                    ),
+                                  const Divider(height: 1),
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      children: [
+                                        _labeledRow(
+                                          context,
+                                          'Key',
+                                          currentEnv.truncatedKey,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        _labeledRow(
+                                          context,
+                                          'URL',
+                                          currentEnv.effectiveUrl,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        if (_isSwitchingEnv)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: LinearProgressIndicator(),
+                          ),
+
+                        const SizedBox(height: 24),
+
                         // User ID section
                         _buildSectionHeader(context, 'User Identity'),
                         Card(
@@ -291,6 +356,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  Future<void> _switchEnv(IAPEnvironment env) async {
+    setState(() => _isSwitchingEnv = true);
+    try {
+      await widget.onSwitchEnvironment(env);
+    } finally {
+      if (mounted) setState(() => _isSwitchingEnv = false);
+    }
   }
 
   Future<void> _switchUser(String newUserId) async {

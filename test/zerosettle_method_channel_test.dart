@@ -120,7 +120,6 @@ void main() {
     final result = await platform.presentPaymentSheet(
       productId: 'premium_monthly',
       userId: 'user_42',
-      freeTrialDays: 7,
     );
     expect(result['id'], 'txn_abc');
     expect(result['status'], 'completed');

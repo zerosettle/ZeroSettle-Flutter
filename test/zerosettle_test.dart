@@ -38,17 +38,17 @@ class MockZeroSettlePlatform
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
-    required int freeTrialDays,
+    int freeTrialDays = 0,
     bool dismissible = true,
   }) async {
     return _sampleTransactionMap();
   }
 
   @override
-  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {}
+  Future<void> preloadPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) async {}
 
   @override
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {}
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) async {}
 
   @override
   Future<List<Map<String, dynamic>>> restoreEntitlements({required String userId}) async {
@@ -193,7 +193,6 @@ void main() {
       final txn = await ZeroSettle.instance.presentPaymentSheet(
         productId: 'premium_monthly',
         userId: 'user_42',
-        freeTrialDays: 7,
       );
       expect(txn.id, 'txn_abc');
       expect(txn.status, TransactionStatus.completed);

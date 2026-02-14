@@ -18,6 +18,10 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   // -- Configuration --
 
+  Future<void> setBaseUrlOverride(String? url) {
+    throw UnimplementedError('setBaseUrlOverride() has not been implemented.');
+  }
+
   Future<void> configure({required String publishableKey, bool syncStoreKitTransactions = true}) {
     throw UnimplementedError('configure() has not been implemented.');
   }
@@ -43,17 +47,17 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
-    required int freeTrialDays,
+    int freeTrialDays = 0,
     bool dismissible = true,
   }) {
     throw UnimplementedError('presentPaymentSheet() has not been implemented.');
   }
 
-  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
+  Future<void> preloadPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) {
     throw UnimplementedError('preloadPaymentSheet() has not been implemented.');
   }
 
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) {
     throw UnimplementedError('warmUpPaymentSheet() has not been implemented.');
   }
 

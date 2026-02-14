@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
 import 'app_state.dart';
+import 'iap_environment.dart';
 import 'screens/home_screen.dart';
 import 'screens/store_screen.dart';
 import 'screens/entitlements_screen.dart';
@@ -44,48 +45,59 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  static const _publishableKey = String.fromEnvironment('ZS_PUBLISHABLE_KEY');
-
   final _appState = AppState();
+  late final IAPEnvironmentNotifier _envNotifier;
   int _currentTab = 0;
   StreamSubscription<List<Entitlement>>? _entitlementSub;
-  bool _initStarted = false;
+  bool _envLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _envNotifier = IAPEnvironmentNotifier(IAPEnvironment.sandbox);
+    _loadEnvironmentAndBoot();
   }
 
   @override
   void dispose() {
     _entitlementSub?.cancel();
+    _envNotifier.dispose();
     super.dispose();
   }
 
-  Future<void> _initialize() async {
-    if (_publishableKey.isEmpty || _initStarted) return;
-    _initStarted = true;
+  Future<void> _loadEnvironmentAndBoot() async {
+    final env = await IAPEnvironment.load();
+    _envNotifier.value = env;
+    setState(() => _envLoaded = true);
+    await _configureAndBootstrap(env);
+  }
+
+  Future<void> _configureAndBootstrap(IAPEnvironment env) async {
     _appState.setLoading(true);
+    _appState.setError(null);
 
     try {
-      // 1. Configure
-      await ZeroSettle.instance.configure(publishableKey: _publishableKey);
+      // 1. Set base URL override (before configure)
+      await ZeroSettle.instance.setBaseUrlOverride(env.baseUrlOverride);
 
-      // 2. Listen to entitlement updates
+      // 2. Configure
+      await ZeroSettle.instance.configure(publishableKey: env.publishableKey);
+
+      // 3. Listen to entitlement updates
+      _entitlementSub?.cancel();
       _entitlementSub =
           ZeroSettle.instance.entitlementUpdates.listen((entitlements) {
         _appState.setEntitlements(entitlements);
       });
 
-      // 3. Bootstrap
+      // 4. Bootstrap
       final catalog =
           await ZeroSettle.instance.bootstrap(userId: _appState.userId);
       _appState.setProducts(catalog.products);
       _appState.setRemoteConfig(catalog.config);
       _appState.setInitialized(true);
 
-      // 4. Restore entitlements
+      // 5. Restore entitlements
       try {
         final entitlements = await ZeroSettle.instance
             .restoreEntitlements(userId: _appState.userId);
@@ -100,10 +112,18 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Future<void> _switchEnvironment(IAPEnvironment env) async {
+    await _envNotifier.switchTo(env);
+    _appState.setInitialized(false);
+    _appState.setProducts([]);
+    _appState.setEntitlements([]);
+    await _configureAndBootstrap(env);
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_publishableKey.isEmpty) {
-      return _buildMissingKeyScreen(context);
+    if (!_envLoaded) {
+      return _buildLoadingScreen(context);
     }
 
     return ListenableBuilder(
@@ -123,7 +143,11 @@ class _AppShellState extends State<AppShell> {
               ),
               StoreScreen(appState: _appState),
               EntitlementsScreen(appState: _appState),
-              SettingsScreen(appState: _appState),
+              SettingsScreen(
+                appState: _appState,
+                envNotifier: _envNotifier,
+                onSwitchEnvironment: _switchEnvironment,
+              ),
             ],
           ),
           bottomNavigationBar: NavigationBar(
@@ -158,46 +182,45 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildMissingKeyScreen(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
+  Widget _buildLoadingScreen(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: Theme.of(context),
+      home: Scaffold(
+        body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.key_off,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.indigo, Colors.purple],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child:
+                    const Icon(Icons.diamond, size: 32, color: Colors.white),
               ),
               const SizedBox(height: 24),
               Text(
-                'Missing Publishable Key',
+                'ZeroSettle',
                 style: Theme.of(context)
                     .textTheme
-                    .headlineSmall
+                    .headlineMedium
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
               Text(
-                'Run the app with your ZeroSettle publishable key:',
+                'Initializing...',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const SelectableText(
-                  'flutter run --dart-define=ZS_PUBLISHABLE_KEY=zs_pk_test_xxx',
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 13),
-                ),
               ),
             ],
           ),
@@ -205,48 +228,4 @@ class _AppShellState extends State<AppShell> {
       ),
     );
   }
-
-  Widget _buildLoadingScreen(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.indigo, Colors.purple],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-              ),
-              child:
-                  const Icon(Icons.diamond, size: 32, color: Colors.white),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'ZeroSettle',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 24),
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              'Initializing...',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
 }

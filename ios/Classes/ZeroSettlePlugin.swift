@@ -65,6 +65,17 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
 
         // -- Configuration --
 
+        case "setBaseUrlOverride":
+            let urlString = args?["url"] as? String
+            #if DEBUG
+            if let urlString, let url = URL(string: urlString) {
+                ZeroSettle.baseURLOverride = url
+            } else {
+                ZeroSettle.baseURLOverride = nil
+            }
+            #endif
+            result(nil)
+
         case "configure":
             guard let publishableKey = args?["publishableKey"] as? String else {
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "publishableKey is required", details: nil))

@@ -38,6 +38,12 @@ class ZeroSettle {
 
   // -- Configuration --
 
+  /// Override the backend base URL for local development.
+  /// Set before calling [configure]. Pass `null` to clear.
+  Future<void> setBaseUrlOverride(String? url) {
+    return _wrap(() => _platform.setBaseUrlOverride(url));
+  }
+
   /// Configure the SDK with your publishable key.
   /// Must be called before any other methods.
   Future<void> configure({
@@ -93,12 +99,12 @@ class ZeroSettle {
   ///
   /// - [productId]: The product to purchase
   /// - [userId]: Optional user identifier
-  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions
+  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions (defaults to 0)
   /// - [dismissible]: Whether the sheet can be dismissed by the user
   Future<ZSTransaction> presentPaymentSheet({
     required String productId,
     String? userId,
-    required int freeTrialDays,
+    int freeTrialDays = 0,
     bool dismissible = true,
   }) {
     return _wrap(() async {
@@ -116,8 +122,8 @@ class ZeroSettle {
   ///
   /// - [productId]: The product to preload
   /// - [userId]: Optional user identifier
-  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions
-  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
+  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions (defaults to 0)
+  Future<void> preloadPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) {
     return _wrap(() => _platform.preloadPaymentSheet(
           productId: productId,
           userId: userId,
@@ -129,8 +135,8 @@ class ZeroSettle {
   ///
   /// - [productId]: The product to warm up
   /// - [userId]: Optional user identifier
-  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
+  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions (defaults to 0)
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) {
     return _wrap(() => _platform.warmUpPaymentSheet(
           productId: productId,
           userId: userId,

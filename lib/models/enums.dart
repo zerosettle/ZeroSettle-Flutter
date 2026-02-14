@@ -19,6 +19,7 @@ enum ZSProductType {
 /// The origin of a purchase/entitlement.
 enum EntitlementSource {
   storeKit('store_kit'),
+  playStore('play_store'),
   webCheckout('web_checkout');
 
   const EntitlementSource(this.rawValue);

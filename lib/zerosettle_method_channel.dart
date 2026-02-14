@@ -17,6 +17,13 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- Configuration --
 
   @override
+  Future<void> setBaseUrlOverride(String? url) async {
+    await methodChannel.invokeMethod('setBaseUrlOverride', {
+      'url': url,
+    });
+  }
+
+  @override
   Future<void> configure({required String publishableKey, bool syncStoreKitTransactions = true}) async {
     await methodChannel.invokeMethod('configure', {
       'publishableKey': publishableKey,
@@ -56,7 +63,7 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
-    required int freeTrialDays,
+    int freeTrialDays = 0,
     bool dismissible = true,
   }) async {
     final result = await methodChannel.invokeMethod<Map>('presentPaymentSheet', {
@@ -69,7 +76,7 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
-  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {
+  Future<void> preloadPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) async {
     await methodChannel.invokeMethod('preloadPaymentSheet', {
       'productId': productId,
       'userId': userId,
@@ -78,7 +85,7 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) async {
     await methodChannel.invokeMethod('warmUpPaymentSheet', {
       'productId': productId,
       'userId': userId,
