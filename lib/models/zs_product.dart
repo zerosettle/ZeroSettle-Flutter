@@ -8,7 +8,7 @@ class ZSProduct {
   final String displayName;
   final String productDescription;
   final ZSProductType type;
-  final Price webPrice;
+  final Price? webPrice;
   final Price? appStorePrice;
   final bool syncedToASC;
   final Promotion? promotion;
@@ -21,7 +21,7 @@ class ZSProduct {
     required this.displayName,
     required this.productDescription,
     required this.type,
-    required this.webPrice,
+    this.webPrice,
     this.appStorePrice,
     this.syncedToASC = false,
     this.promotion,
@@ -36,7 +36,9 @@ class ZSProduct {
       displayName: map['displayName'] as String,
       productDescription: map['productDescription'] as String,
       type: ZSProductType.fromRawValue(map['type'] as String),
-      webPrice: Price.fromMap(Map<String, dynamic>.from(map['webPrice'] as Map)),
+      webPrice: map['webPrice'] != null
+          ? Price.fromMap(Map<String, dynamic>.from(map['webPrice'] as Map))
+          : null,
       appStorePrice: map['appStorePrice'] != null
           ? Price.fromMap(Map<String, dynamic>.from(map['appStorePrice'] as Map))
           : null,
@@ -58,7 +60,7 @@ class ZSProduct {
       'displayName': displayName,
       'productDescription': productDescription,
       'type': type.rawValue,
-      'webPrice': webPrice.toMap(),
+      'webPrice': webPrice?.toMap(),
       'appStorePrice': appStorePrice?.toMap(),
       'syncedToASC': syncedToASC,
       'promotion': promotion?.toMap(),

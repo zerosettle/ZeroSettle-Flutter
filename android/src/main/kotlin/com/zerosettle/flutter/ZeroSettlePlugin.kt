@@ -441,10 +441,10 @@ private fun ZSProduct.toFlutterMap(): Map<String, Any?> {
         "displayName" to displayName,
         "productDescription" to productDescription,
         "type" to type.toRawValue(),
-        "webPrice" to webPrice.toFlutterMap(),
         "syncedToASC" to syncedToASC,
         "storeKitAvailable" to playStoreAvailable,
     )
+    webPrice?.let { map["webPrice"] = it.toFlutterMap() }
     appStorePrice?.let { map["appStorePrice"] = it.toFlutterMap() }
     promotion?.let { map["promotion"] = it.toFlutterMap() }
     playStorePrice?.let { map["storeKitPrice"] = it.toFlutterMap() }

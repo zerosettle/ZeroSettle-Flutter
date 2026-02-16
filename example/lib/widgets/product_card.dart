@@ -15,6 +15,108 @@ class ProductCard extends StatelessWidget {
 
   Color get _accentColor => Color(product.colorValue);
 
+  Widget _buildPricing(BuildContext context, ColorScheme cs) {
+    if (product.webCheckoutAvailable) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // StoreKit price (strikethrough)
+          if (product.formattedStoreKitPrice != null) ...[
+            Row(
+              children: [
+                Icon(
+                  Theme.of(context).platform == TargetPlatform.iOS
+                      ? Icons.apple
+                      : Icons.shopping_cart,
+                  size: 12,
+                  color: cs.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  product.formattedStoreKitPrice!,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: cs.onSurfaceVariant,
+                    decoration: TextDecoration.lineThrough,
+                  ),
+                ),
+                if (product.billingPeriod != null)
+                  Text(
+                    '/${product.billingPeriod}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: cs.onSurfaceVariant,
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 2),
+          ],
+          // Web price
+          Row(
+            children: [
+              Text(
+                product.formattedPrice,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              if (product.billingPeriod != null)
+                Text(
+                  '/${product.billingPeriod}',
+                  style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                ),
+              if (product.savingsPercent != null &&
+                  product.savingsPercent! > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Save ${product.savingsPercent}%',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      );
+    }
+
+    // StoreKit-only pricing
+    if (product.formattedStoreKitPrice != null) {
+      return Row(
+        children: [
+          Text(
+            product.formattedStoreKitPrice!,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          if (product.billingPeriod != null)
+            Text(
+              '/${product.billingPeriod}',
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+            ),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -102,78 +204,8 @@ class ProductCard extends StatelessWidget {
 
                               const SizedBox(height: 4),
 
-                              // Dual pricing
-                              if (product.formattedStoreKitPrice != null) ...[
-                                Row(
-                                  children: [
-                                    Icon(Icons.apple,
-                                        size: 12, color: cs.onSurfaceVariant),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      product.formattedStoreKitPrice!,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: cs.onSurfaceVariant,
-                                        decoration: TextDecoration.lineThrough,
-                                      ),
-                                    ),
-                                    if (product.billingPeriod != null)
-                                      Text(
-                                        '/${product.billingPeriod}',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: cs.onSurfaceVariant,
-                                          decoration:
-                                              TextDecoration.lineThrough,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                              ],
-
-                              // Web price
-                              Row(
-                                children: [
-                                  Text(
-                                    product.formattedPrice,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.bold),
-                                  ),
-                                  if (product.billingPeriod != null)
-                                    Text(
-                                      '/${product.billingPeriod}',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: cs.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  if (product.savingsPercent != null &&
-                                      product.savingsPercent! > 0) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green
-                                            .withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        'Save ${product.savingsPercent}%',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.green,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
+                              // Pricing
+                              _buildPricing(context, cs),
                             ],
                           ),
                         ),

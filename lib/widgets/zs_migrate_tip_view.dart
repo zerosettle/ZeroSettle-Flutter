@@ -42,13 +42,16 @@ class ZSMigrateTipView extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return UiKitView(
-      viewType: 'zerosettle/migrate_tip_view',
-      creationParams: {
-        'backgroundColor': backgroundColor.value,
-        'userId': userId,
-      },
-      creationParamsCodec: const StandardMessageCodec(),
+    return SizedBox(
+      height: 80,
+      child: UiKitView(
+        viewType: 'zerosettle/migrate_tip_view',
+        creationParams: {
+          'backgroundColor': backgroundColor.value,
+          'userId': userId,
+        },
+        creationParamsCodec: const StandardMessageCodec(),
+      ),
     );
   }
 }

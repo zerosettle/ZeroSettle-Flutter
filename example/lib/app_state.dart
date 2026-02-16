@@ -70,6 +70,7 @@ class StoreProduct {
   final int? gemAmount;
   final double? storeKitPrice;
   final bool storeKitAvailable;
+  final bool webCheckoutAvailable;
   final int? savingsPercent;
 
   const StoreProduct({
@@ -86,6 +87,7 @@ class StoreProduct {
     this.gemAmount,
     this.storeKitPrice,
     this.storeKitAvailable = false,
+    this.webCheckoutAvailable = false,
     this.savingsPercent,
   });
 
@@ -123,7 +125,9 @@ class StoreProduct {
     final skPrice = product.storeKitPrice != null
         ? product.storeKitPrice!.amountMicros / 1000000.0
         : null;
-    final webPrice = product.webPrice.amountMicros / 1000000.0;
+    final webPrice = product.webPrice != null
+        ? product.webPrice!.amountMicros / 1000000.0
+        : 0.0;
 
     switch (product.type) {
       case ZSProductType.consumable:
@@ -175,6 +179,7 @@ class StoreProduct {
       gemAmount: gemAmount,
       storeKitPrice: skPrice,
       storeKitAvailable: product.storeKitAvailable,
+      webCheckoutAvailable: product.webPrice != null,
       savingsPercent: product.savingsPercent,
     );
   }
@@ -419,8 +424,8 @@ class AppState extends ChangeNotifier {
     // Sync purchase history from entitlements
     final records = entitlements.map((ent) {
       final product = products.where((p) => p.id == ent.productId).firstOrNull;
-      final amount = product != null
-          ? product.webPrice.amountMicros / 1000000.0
+      final amount = product?.webPrice != null
+          ? product!.webPrice!.amountMicros / 1000000.0
           : 0.0;
       return PurchaseRecord(
         id: ent.id,

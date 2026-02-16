@@ -430,10 +430,12 @@ extension ZSProduct {
             "displayName": displayName,
             "productDescription": productDescription,
             "type": type.rawValue,
-            "webPrice": webPrice.toFlutterMap(),
             "syncedToASC": syncedToASC,
             "storeKitAvailable": storeKitAvailable,
         ]
+        if let webPrice {
+            map["webPrice"] = webPrice.toFlutterMap()
+        }
         if let appStorePrice {
             map["appStorePrice"] = appStorePrice.toFlutterMap()
         }
@@ -603,7 +605,7 @@ struct PaymentSheetHeader: View {
                     Text("Web Price")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(product.webPrice.formatted)
+                    Text(product.webPrice?.formatted ?? "—")
                         .font(.title2.weight(.bold))
                         .foregroundStyle(.primary)
                 }
