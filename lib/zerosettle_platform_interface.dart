@@ -105,6 +105,12 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('getDetectedJurisdiction() has not been implemented.');
   }
 
+  // -- Cancel Flow --
+
+  Future<String> presentCancelFlow({required String productId, required String userId}) {
+    throw UnimplementedError('presentCancelFlow() has not been implemented.');
+  }
+
   // -- Event Streams --
 
   Stream<List<Map<String, dynamic>>> get entitlementUpdates {

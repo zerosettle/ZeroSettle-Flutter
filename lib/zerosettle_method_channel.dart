@@ -160,6 +160,17 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return await methodChannel.invokeMethod<String>('getDetectedJurisdiction');
   }
 
+  // -- Cancel Flow --
+
+  @override
+  Future<String> presentCancelFlow({required String productId, required String userId}) async {
+    final result = await methodChannel.invokeMethod<String>('presentCancelFlow', {
+      'productId': productId,
+      'userId': userId,
+    });
+    return result ?? 'cancelled';
+  }
+
   // -- Event Streams --
 
   Stream<List<Map<String, dynamic>>>? _entitlementUpdatesStream;

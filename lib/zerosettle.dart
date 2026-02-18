@@ -8,6 +8,7 @@ import 'models/remote_config.dart';
 import 'models/enums.dart';
 import 'models/zs_product.dart';
 import 'models/zs_transaction.dart';
+import 'models/cancel_flow.dart';
 
 export 'models/price.dart';
 export 'models/enums.dart';
@@ -19,6 +20,7 @@ export 'models/product_catalog.dart';
 export 'models/remote_config.dart';
 export 'errors/zs_exception.dart';
 export 'widgets/zs_migrate_tip_view.dart';
+export 'models/cancel_flow.dart';
 
 /// Main entry point for the ZeroSettle Flutter SDK.
 ///
@@ -215,6 +217,29 @@ class ZeroSettle {
     return _wrap(() async {
       final raw = await _platform.getDetectedJurisdiction();
       return raw != null ? Jurisdiction.fromRawValue(raw) : null;
+    });
+  }
+
+  // -- Cancel Flow --
+
+  /// Present the cancel flow questionnaire for a subscription cancellation.
+  ///
+  /// Fetches the cancel flow configuration from the backend via the native
+  /// SDK, then presents a native questionnaire sheet. If the flow is disabled
+  /// or has no questions, returns [CancelFlowResult.cancelled] immediately.
+  ///
+  /// - [productId]: The product the user wants to cancel
+  /// - [userId]: Your app's user identifier
+  Future<CancelFlowResult> presentCancelFlow({
+    required String productId,
+    required String userId,
+  }) {
+    return _wrap(() async {
+      final resultString = await _platform.presentCancelFlow(
+        productId: productId,
+        userId: userId,
+      );
+      return CancelFlowResult.fromRawValue(resultString);
     });
   }
 

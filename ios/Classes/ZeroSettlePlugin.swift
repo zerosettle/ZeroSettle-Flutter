@@ -255,6 +255,26 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             let handled = ZeroSettle.shared.handleUniversalLink(url)
             result(handled)
 
+        // -- Cancel Flow --
+
+        case "presentCancelFlow":
+            guard let productId = args?["productId"] as? String,
+                  let userId = args?["userId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                let cancelResult = await ZeroSettle.shared.presentCancelFlow(
+                    productId: productId,
+                    userId: userId
+                )
+                switch cancelResult {
+                case .cancelled: result("cancelled")
+                case .retained: result("retained")
+                case .dismissed: result("dismissed")
+                }
+            }
+
         // -- State Queries --
 
         case "getIsConfigured":

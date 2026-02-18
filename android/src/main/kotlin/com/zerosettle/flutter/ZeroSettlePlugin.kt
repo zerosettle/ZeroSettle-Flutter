@@ -246,6 +246,30 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
                 }
             }
 
+            // -- Cancel Flow --
+
+            "presentCancelFlow" -> {
+                val productId = call.argument<String>("productId")
+                val userId = call.argument<String>("userId")
+                if (productId == null || userId == null) {
+                    result.error("INVALID_ARGUMENTS", "productId and userId are required", null)
+                    return
+                }
+                val currentActivity = activity
+                if (currentActivity == null) {
+                    result.error("no_activity", "No activity available", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        val cancelResult = ZeroSettle.presentCancelFlow(currentActivity, productId, userId)
+                        result.success(cancelResult.name.lowercase())
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
             // -- Deep Links --
 
             "handleUniversalLink" -> {
@@ -378,31 +402,31 @@ private fun Result.sendError(e: Exception) {
 
 // -- Enum Serialization --
 
-private fun ZSProductType.toRawValue(): String = when (this) {
-    ZSProductType.AUTO_RENEWABLE_SUBSCRIPTION -> "auto_renewable_subscription"
-    ZSProductType.NON_RENEWING_SUBSCRIPTION -> "non_renewing_subscription"
-    ZSProductType.CONSUMABLE -> "consumable"
-    ZSProductType.NON_CONSUMABLE -> "non_consumable"
+private fun ZSProduct.ProductType.toRawValue(): String = when (this) {
+    ZSProduct.ProductType.AUTO_RENEWABLE_SUBSCRIPTION -> "auto_renewable_subscription"
+    ZSProduct.ProductType.NON_RENEWING_SUBSCRIPTION -> "non_renewing_subscription"
+    ZSProduct.ProductType.CONSUMABLE -> "consumable"
+    ZSProduct.ProductType.NON_CONSUMABLE -> "non_consumable"
 }
 
-private fun EntitlementSource.toRawValue(): String = when (this) {
-    EntitlementSource.STORE_KIT -> "store_kit"
-    EntitlementSource.PLAY_STORE -> "play_store"
-    EntitlementSource.WEB_CHECKOUT -> "web_checkout"
+private fun Entitlement.Source.toRawValue(): String = when (this) {
+    Entitlement.Source.STORE_KIT -> "store_kit"
+    Entitlement.Source.PLAY_STORE -> "play_store"
+    Entitlement.Source.WEB_CHECKOUT -> "web_checkout"
 }
 
-private fun TransactionStatus.toRawValue(): String = when (this) {
-    TransactionStatus.COMPLETED -> "completed"
-    TransactionStatus.PENDING -> "pending"
-    TransactionStatus.PROCESSING -> "processing"
-    TransactionStatus.FAILED -> "failed"
-    TransactionStatus.REFUNDED -> "refunded"
+private fun ZSTransaction.Status.toRawValue(): String = when (this) {
+    ZSTransaction.Status.COMPLETED -> "completed"
+    ZSTransaction.Status.PENDING -> "pending"
+    ZSTransaction.Status.PROCESSING -> "processing"
+    ZSTransaction.Status.FAILED -> "failed"
+    ZSTransaction.Status.REFUNDED -> "refunded"
 }
 
-private fun PromotionType.toRawValue(): String = when (this) {
-    PromotionType.PERCENT_OFF -> "percent_off"
-    PromotionType.FIXED_AMOUNT -> "fixed_amount"
-    PromotionType.FREE_TRIAL -> "free_trial"
+private fun Promotion.Kind.toRawValue(): String = when (this) {
+    Promotion.Kind.PERCENT_OFF -> "percent_off"
+    Promotion.Kind.FIXED_AMOUNT -> "fixed_amount"
+    Promotion.Kind.FREE_TRIAL -> "free_trial"
 }
 
 private fun CheckoutType.toRawValue(): String = when (this) {
