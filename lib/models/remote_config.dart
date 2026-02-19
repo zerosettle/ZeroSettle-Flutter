@@ -91,20 +91,24 @@ class MigrationPrompt {
   final int discountPercent;
   final String title;
   final String message;
+  final String ctaText;
 
   const MigrationPrompt({
     required this.productId,
     required this.discountPercent,
     required this.title,
     required this.message,
+    required this.ctaText,
   });
 
   factory MigrationPrompt.fromMap(Map<String, dynamic> map) {
+    final discountPercent = map['discountPercent'] as int;
     return MigrationPrompt(
       productId: map['productId'] as String,
-      discountPercent: map['discountPercent'] as int,
+      discountPercent: discountPercent,
       title: map['title'] as String,
       message: map['message'] as String,
+      ctaText: map['ctaText'] as String? ?? 'Save $discountPercent% Forever',
     );
   }
 
@@ -114,6 +118,7 @@ class MigrationPrompt {
       'discountPercent': discountPercent,
       'title': title,
       'message': message,
+      'ctaText': ctaText,
     };
   }
 
@@ -124,10 +129,11 @@ class MigrationPrompt {
           productId == other.productId &&
           discountPercent == other.discountPercent &&
           title == other.title &&
-          message == other.message;
+          message == other.message &&
+          ctaText == other.ctaText;
 
   @override
-  int get hashCode => Object.hash(productId, discountPercent, title, message);
+  int get hashCode => Object.hash(productId, discountPercent, title, message, ctaText);
 }
 
 /// Remote configuration from the ZeroSettle backend.

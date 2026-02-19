@@ -293,6 +293,25 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         case "getDetectedJurisdiction":
             result(ZeroSettle.shared.detectedJurisdiction?.rawValue)
 
+        // -- Save the Sale --
+
+        case "presentSaveTheSaleSheet":
+            guard let viewController = Self.topViewController() else {
+                result(FlutterError(code: "no_view_controller", message: "Could not find root view controller", details: nil))
+                return
+            }
+
+            ZSSaveTheSaleSheet.present(from: viewController) { saveResult in
+                switch saveResult {
+                case .pauseAccount:
+                    result("pauseAccount")
+                case .stayWithDiscount:
+                    result("stayWithDiscount")
+                case .dismissed:
+                    result("dismissed")
+                }
+            }
+
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -546,6 +565,7 @@ extension MigrationPrompt {
             "discountPercent": discountPercent,
             "title": title,
             "message": message,
+            "ctaText": ctaText,
         ]
     }
 }
