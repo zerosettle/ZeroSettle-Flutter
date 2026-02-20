@@ -29,8 +29,8 @@ class ZSMigrateTipViewFlutterContainer: NSObject, FlutterPlatformView {
 
         // Create SwiftUI view
         let swiftUIView = ZSMigrateTipView(
-            backgroundColor: backgroundColor,
-            userId: userId
+            userId: userId,
+            backgroundColor: backgroundColor
         )
 
         // Wrap in UIHostingController

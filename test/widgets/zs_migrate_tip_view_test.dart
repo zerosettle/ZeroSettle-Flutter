@@ -13,8 +13,8 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: ZSMigrateTipView(
-              backgroundColor: Colors.black,
               userId: 'test_user',
+              backgroundColor: Colors.black,
             ),
           ),
         ),
@@ -34,8 +34,8 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: ZSMigrateTipView(
-              backgroundColor: Colors.black,
               userId: 'test_user',
+              backgroundColor: Colors.black,
             ),
           ),
         ),
@@ -59,8 +59,8 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: ZSMigrateTipView(
-              backgroundColor: testColor,
               userId: testUserId,
+              backgroundColor: testColor,
             ),
           ),
         ),
@@ -90,8 +90,8 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: ZSMigrateTipView(
-              backgroundColor: Colors.blue,
               userId: 'test',
+              backgroundColor: Colors.blue,
             ),
           ),
         ),
