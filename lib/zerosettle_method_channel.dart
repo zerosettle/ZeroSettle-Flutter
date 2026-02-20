@@ -17,13 +17,6 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- Configuration --
 
   @override
-  Future<void> setBaseUrlOverride(String? url) async {
-    await methodChannel.invokeMethod('setBaseUrlOverride', {
-      'url': url,
-    });
-  }
-
-  @override
   Future<void> configure({required String publishableKey, bool syncStoreKitTransactions = true}) async {
     await methodChannel.invokeMethod('configure', {
       'publishableKey': publishableKey,
@@ -34,9 +27,10 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- Bootstrap --
 
   @override
-  Future<Map<String, dynamic>> bootstrap({required String userId}) async {
+  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) async {
     final result = await methodChannel.invokeMethod<Map>('bootstrap', {
       'userId': userId,
+      'freeTrialDays': freeTrialDays,
     });
     return Map<String, dynamic>.from(result!);
   }
@@ -63,7 +57,7 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
-    int freeTrialDays = 0,
+    required int freeTrialDays,
     bool dismissible = true,
   }) async {
     final result = await methodChannel.invokeMethod<Map>('presentPaymentSheet', {
@@ -76,7 +70,7 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
-  Future<void> preloadPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) async {
+  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {
     await methodChannel.invokeMethod('preloadPaymentSheet', {
       'productId': productId,
       'userId': userId,
@@ -85,7 +79,7 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) async {
+  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {
     await methodChannel.invokeMethod('warmUpPaymentSheet', {
       'productId': productId,
       'userId': userId,
@@ -160,15 +154,12 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return await methodChannel.invokeMethod<String>('getDetectedJurisdiction');
   }
 
-  // -- Cancel Flow --
+  // -- Save the Sale --
 
   @override
-  Future<String> presentCancelFlow({required String productId, required String userId}) async {
-    final result = await methodChannel.invokeMethod<String>('presentCancelFlow', {
-      'productId': productId,
-      'userId': userId,
-    });
-    return result ?? 'cancelled';
+  Future<String> presentSaveTheSaleSheet() async {
+    final result = await methodChannel.invokeMethod<String>('presentSaveTheSaleSheet');
+    return result ?? 'dismissed';
   }
 
   // -- Event Streams --

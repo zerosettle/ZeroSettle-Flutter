@@ -250,6 +250,19 @@ class ZeroSettle {
     return _platform.checkoutEvents;
   }
 
+  // -- Save the Sale --
+
+  /// Present the save-the-sale retention sheet.
+  ///
+  /// Shows two options: Pause Account and Stay & Save 40%.
+  /// Returns the user's choice as a [ZSSaveTheSaleResult].
+  Future<ZSSaveTheSaleResult> presentSaveTheSaleSheet() {
+    return _wrap(() async {
+      final raw = await _platform.presentSaveTheSaleSheet();
+      return ZSSaveTheSaleResult.fromRawValue(raw);
+    });
+  }
+
   // -- Error wrapping --
 
   Future<T> _wrap<T>(Future<T> Function() fn) async {

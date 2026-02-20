@@ -86,6 +86,23 @@ enum CheckoutType {
   }
 }
 
+/// The user's choice from the save-the-sale retention sheet.
+enum ZSSaveTheSaleResult {
+  pauseAccount('pauseAccount'),
+  stayWithDiscount('stayWithDiscount'),
+  dismissed('dismissed');
+
+  const ZSSaveTheSaleResult(this.rawValue);
+  final String rawValue;
+
+  static ZSSaveTheSaleResult fromRawValue(String value) {
+    return ZSSaveTheSaleResult.values.firstWhere(
+      (e) => e.rawValue == value,
+      orElse: () => ZSSaveTheSaleResult.dismissed,
+    );
+  }
+}
+
 /// Geographic jurisdiction for checkout configuration.
 enum Jurisdiction {
   us('us'),
