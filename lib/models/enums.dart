@@ -71,9 +71,10 @@ enum PromotionType {
 
 /// The type of checkout UI to present.
 enum CheckoutType {
-  webview('webview'),
+  webView('webview'),
   safariVC('safari_vc'),
-  safari('safari');
+  safari('safari'),
+  nativePay('native_pay');
 
   const CheckoutType(this.rawValue);
   final String rawValue;

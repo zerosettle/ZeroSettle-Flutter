@@ -3,9 +3,9 @@ import UIKit
 import ZeroSettleKit
 import SwiftUI
 
-class ZSMigrateTipViewFlutterContainer: NSObject, FlutterPlatformView {
+class MigrationTipViewFlutterContainer: NSObject, FlutterPlatformView {
     private let containerView: UIView
-    private var hostingController: UIHostingController<ZSMigrateTipView>?
+    private var hostingController: UIHostingController<MigrationTipView>?
 
     init(frame: CGRect, arguments args: Any?) {
         containerView = UIView(frame: frame)
@@ -28,7 +28,7 @@ class ZSMigrateTipViewFlutterContainer: NSObject, FlutterPlatformView {
         }
 
         // Create SwiftUI view
-        let swiftUIView = ZSMigrateTipView(
+        let swiftUIView = MigrationTipView(
             userId: userId,
             backgroundColor: backgroundColor
         )

@@ -3,7 +3,7 @@ import 'zs_product.dart';
 
 /// The result of fetching the product catalog.
 class ProductCatalog {
-  final List<ZSProduct> products;
+  final List<Product> products;
   final RemoteConfig? config;
 
   const ProductCatalog({
@@ -13,7 +13,7 @@ class ProductCatalog {
 
   factory ProductCatalog.fromMap(Map<String, dynamic> map) {
     final productsList = (map['products'] as List)
-        .map((e) => ZSProduct.fromMap(Map<String, dynamic>.from(e as Map)))
+        .map((e) => Product.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
     return ProductCatalog(
       products: productsList,

@@ -13,6 +13,7 @@ class EntitlementsScreen extends StatefulWidget {
 
 class _EntitlementsScreenState extends State<EntitlementsScreen> {
   bool _isLoading = false;
+  bool _isCancelling = false;
   DateTime? _lastRefresh;
   final Set<String> _expandedIds = {};
 
@@ -59,6 +60,25 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
                           : const Icon(Icons.refresh),
                       label: const Text('Refresh Entitlements'),
                     ),
+                    const SizedBox(height: 8),
+
+                    // Cancel subscription button
+                    if (_entitlements.any((e) => e.isActive && e.expiresAt != null))
+                      FilledButton.icon(
+                        onPressed: _isCancelling ? null : _cancelSubscription,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        icon: _isCancelling
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.close),
+                        label: const Text('Cancel Subscription'),
+                      ),
                     const SizedBox(height: 24),
 
                     // Entitlements list
@@ -345,6 +365,45 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
       // Silently handle errors
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _cancelSubscription() async {
+    final activeSubscription = _entitlements
+        .where((e) => e.isActive && e.expiresAt != null)
+        .firstOrNull;
+    if (activeSubscription == null) return;
+
+    setState(() => _isCancelling = true);
+
+    try {
+      final result = await ZeroSettle.instance.presentCancelFlow(
+        productId: activeSubscription.productId,
+        userId: _appState.userId,
+      );
+
+      if (!mounted) return;
+
+      final label = switch (result) {
+        CancelFlowResult.cancelled => 'Subscription cancelled',
+        CancelFlowResult.retained => 'Subscription retained',
+        CancelFlowResult.dismissed => 'Cancel flow dismissed',
+      };
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(label)),
+      );
+
+      if (result == CancelFlowResult.cancelled) {
+        _appState.deactivateSubscription();
+      }
+    } on ZSException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.message}')),
+      );
+    } finally {
+      setState(() => _isCancelling = false);
     }
   }
 }

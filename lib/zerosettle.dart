@@ -9,6 +9,7 @@ import 'models/enums.dart';
 import 'models/zs_product.dart';
 import 'models/zs_transaction.dart';
 import 'models/cancel_flow.dart';
+import 'models/upgrade_offer.dart';
 
 export 'models/price.dart';
 export 'models/enums.dart';
@@ -21,6 +22,7 @@ export 'models/remote_config.dart';
 export 'errors/zs_exception.dart';
 export 'widgets/zs_migrate_tip_view.dart';
 export 'models/cancel_flow.dart';
+export 'models/upgrade_offer.dart';
 
 /// Main entry point for the ZeroSettle Flutter SDK.
 ///
@@ -84,10 +86,10 @@ class ZeroSettle {
   }
 
   /// Get the cached products from the last fetch.
-  Future<List<ZSProduct>> getProducts() {
+  Future<List<Product>> getProducts() {
     return _wrap(() async {
       final list = await _platform.getProducts();
-      return list.map((e) => ZSProduct.fromMap(e)).toList();
+      return list.map((e) => Product.fromMap(e)).toList();
     });
   }
 
@@ -95,7 +97,7 @@ class ZeroSettle {
 
   /// Present the payment sheet for a product.
   ///
-  /// Returns a [ZSTransaction] on successful payment.
+  /// Returns a [CheckoutTransaction] on successful payment.
   /// Throws [ZSCancelledException] if the user dismisses the sheet.
   /// Throws [ZSCheckoutFailedException] if the payment fails.
   ///
@@ -103,7 +105,7 @@ class ZeroSettle {
   /// - [userId]: Optional user identifier
   /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions (defaults to 0)
   /// - [dismissible]: Whether the sheet can be dismissed by the user
-  Future<ZSTransaction> presentPaymentSheet({
+  Future<CheckoutTransaction> presentPaymentSheet({
     required String productId,
     String? userId,
     int freeTrialDays = 0,
@@ -116,7 +118,7 @@ class ZeroSettle {
         freeTrialDays: freeTrialDays,
         dismissible: dismissible,
       );
-      return ZSTransaction.fromMap(map);
+      return CheckoutTransaction.fromMap(map);
     });
   }
 
@@ -178,7 +180,7 @@ class ZeroSettle {
     return _wrap(() => _platform.openCustomerPortal(userId: userId));
   }
 
-  /// Smart subscription management — routes to Stripe portal or Apple's
+  /// Smart subscription management -- routes to Stripe portal or Apple's
   /// native management UI based on entitlement sources.
   Future<void> showManageSubscription({required String userId}) {
     return _wrap(() => _platform.showManageSubscription(userId: userId));
@@ -226,7 +228,7 @@ class ZeroSettle {
   ///
   /// Fetches the cancel flow configuration from the backend via the native
   /// SDK, then presents a native questionnaire sheet. If the flow is disabled
-  /// or has no questions, returns [CancelFlowResult.cancelled] immediately.
+  /// or has no questions, returns [CancelFlowCancelled] immediately.
   ///
   /// - [productId]: The product the user wants to cancel
   /// - [userId]: Your app's user identifier
@@ -240,6 +242,109 @@ class ZeroSettle {
         userId: userId,
       );
       return CancelFlowResult.fromRawValue(resultString);
+    });
+  }
+
+  /// Fetch the cancel flow configuration without presenting any UI.
+  ///
+  /// Use this for headless/custom cancel flow implementations.
+  Future<CancelFlowConfig> fetchCancelFlowConfig() {
+    return _wrap(() async {
+      final map = await _platform.fetchCancelFlowConfig();
+      return CancelFlowConfig.fromMap(map);
+    });
+  }
+
+  /// Pause a subscription for the given user.
+  ///
+  /// Returns the resume date as a [DateTime] if the backend provides one,
+  /// or `null` if no specific resume date was set.
+  ///
+  /// - [productId]: The product to pause
+  /// - [userId]: Your app's user identifier
+  /// - [pauseOptionId]: The ID of the selected pause option
+  Future<DateTime?> pauseSubscription({
+    required String productId,
+    required String userId,
+    required int pauseOptionId,
+  }) {
+    return _wrap(() async {
+      final iso = await _platform.pauseSubscription(
+        productId: productId,
+        userId: userId,
+        pauseOptionId: pauseOptionId,
+      );
+      return iso != null ? DateTime.parse(iso) : null;
+    });
+  }
+
+  /// Resume a paused subscription for the given user.
+  ///
+  /// - [productId]: The product to resume
+  /// - [userId]: Your app's user identifier
+  Future<void> resumeSubscription({
+    required String productId,
+    required String userId,
+  }) {
+    return _wrap(() => _platform.resumeSubscription(
+          productId: productId,
+          userId: userId,
+        ));
+  }
+
+  /// Cancel a subscription for the given user (headless, no UI).
+  ///
+  /// - [productId]: The product to cancel
+  /// - [userId]: Your app's user identifier
+  Future<void> cancelSubscription({
+    required String productId,
+    required String userId,
+  }) {
+    return _wrap(() => _platform.cancelSubscription(
+          productId: productId,
+          userId: userId,
+        ));
+  }
+
+  // -- Upgrade Offer --
+
+  /// Present the upgrade offer sheet for a subscription upgrade.
+  ///
+  /// Fetches the upgrade offer configuration from the backend via the native
+  /// SDK, then presents a native upgrade sheet. If no upgrade is available,
+  /// returns [UpgradeOfferDismissed] immediately.
+  ///
+  /// - [productId]: The current product the user holds
+  /// - [userId]: Your app's user identifier
+  Future<UpgradeOfferResult> presentUpgradeOffer({
+    required String productId,
+    required String userId,
+  }) {
+    return _wrap(() async {
+      final resultString = await _platform.presentUpgradeOffer(
+        productId: productId,
+        userId: userId,
+      );
+      return UpgradeOfferResult.fromRawValue(resultString);
+    });
+  }
+
+  /// Fetch the upgrade offer configuration without presenting any UI.
+  ///
+  /// Use this for headless/custom upgrade offer implementations.
+  ///
+  /// - [productId]: The current product to check upgrades for
+  /// - [userId]: Your app's user identifier
+  Future<UpgradeOfferConfig> fetchUpgradeOfferConfig({
+    required String productId,
+    required String userId,
+  }) {
+    return _wrap(() async {
+      final map = await _platform.fetchUpgradeOfferConfig(
+        productId: productId,
+        userId: userId,
+      );
+      return UpgradeOfferConfig.fromMap(map);
     });
   }
 
@@ -269,7 +374,7 @@ class ZeroSettle {
     try {
       return await fn();
     } on PlatformException catch (e) {
-      throw ZSException.fromPlatformException(e);
+      throw ZeroSettleException.fromPlatformException(e);
     }
   }
 }

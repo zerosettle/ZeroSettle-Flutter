@@ -7,7 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.sdk.ZeroSettleDelegate
-import com.zerosettle.sdk.error.ZSError
+import com.zerosettle.sdk.error.ZeroSettleError
 import com.zerosettle.sdk.model.*
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -263,7 +263,82 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
                 scope.launch {
                     try {
                         val cancelResult = ZeroSettle.presentCancelFlow(currentActivity, productId, userId)
-                        result.success(cancelResult.name.lowercase())
+                        when (cancelResult) {
+                            is CancelFlowResult.Paused -> {
+                                val resumesAt = cancelResult.resumesAt
+                                if (resumesAt != null) {
+                                    result.success("paused:$resumesAt")
+                                } else {
+                                    result.success("paused:")
+                                }
+                            }
+                            is CancelFlowResult.Cancelled -> result.success("cancelled")
+                            is CancelFlowResult.Retained -> result.success("retained")
+                            is CancelFlowResult.Dismissed -> result.success("dismissed")
+                        }
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
+            "fetchCancelFlowConfig" -> {
+                scope.launch {
+                    try {
+                        val config = ZeroSettle.fetchCancelFlowConfig()
+                        result.success(config.toFlutterMap())
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
+            "pauseSubscription" -> {
+                val productId = call.argument<String>("productId")
+                val userId = call.argument<String>("userId")
+                val pauseOptionId = call.argument<Int>("pauseOptionId")
+                if (productId == null || userId == null || pauseOptionId == null) {
+                    result.error("INVALID_ARGUMENTS", "productId, userId, and pauseOptionId are required", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        val resumesAt = ZeroSettle.pauseSubscription(productId, userId, pauseOptionId)
+                        result.success(resumesAt)
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
+            "resumeSubscription" -> {
+                val productId = call.argument<String>("productId")
+                val userId = call.argument<String>("userId")
+                if (productId == null || userId == null) {
+                    result.error("INVALID_ARGUMENTS", "productId and userId are required", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        ZeroSettle.resumeSubscription(productId, userId)
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
+            "cancelSubscription" -> {
+                val productId = call.argument<String>("productId")
+                val userId = call.argument<String>("userId")
+                if (productId == null || userId == null) {
+                    result.error("INVALID_ARGUMENTS", "productId and userId are required", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        ZeroSettle.cancelSubscription(productId, userId)
+                        result.success(null)
                     } catch (e: Exception) {
                         result.sendError(e)
                     }
@@ -315,7 +390,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
         ))
     }
 
-    override fun zeroSettleCheckoutDidComplete(transaction: ZSTransaction) {
+    override fun zeroSettleCheckoutDidComplete(transaction: CheckoutTransaction) {
         checkoutStreamHandler.send(mapOf(
             "event" to "checkoutDidComplete",
             "transaction" to transaction.toFlutterMap(),
@@ -381,19 +456,19 @@ private class StreamHandler : EventChannel.StreamHandler {
 
 private fun Result.sendError(e: Exception) {
     when (e) {
-        is ZSError.NotConfigured ->
+        is ZeroSettleError.NotConfigured ->
             error("not_configured", e.message, null)
-        is ZSError.Cancelled ->
+        is ZeroSettleError.Cancelled ->
             error("cancelled", e.message, null)
-        is ZSError.ProductNotFound ->
+        is ZeroSettleError.ProductNotFound ->
             error("product_not_found", e.message, e.productId)
-        is ZSError.CheckoutFailed ->
+        is ZeroSettleError.CheckoutFailed ->
             error("checkout_failed", e.message, null)
-        is ZSError.ApiError ->
+        is ZeroSettleError.ApiError ->
             error("api_error", e.message, null)
-        is ZSError.UserIdRequired ->
+        is ZeroSettleError.UserIdRequired ->
             error("user_id_required", e.message, e.productId)
-        is ZSError.WebCheckoutDisabledForJurisdiction ->
+        is ZeroSettleError.WebCheckoutDisabledForJurisdiction ->
             error("web_checkout_disabled", e.message, e.jurisdiction.toRawValue())
         else ->
             error("api_error", e.message ?: "Unknown error", null)
@@ -402,11 +477,11 @@ private fun Result.sendError(e: Exception) {
 
 // -- Enum Serialization --
 
-private fun ZSProduct.ProductType.toRawValue(): String = when (this) {
-    ZSProduct.ProductType.AUTO_RENEWABLE_SUBSCRIPTION -> "auto_renewable_subscription"
-    ZSProduct.ProductType.NON_RENEWING_SUBSCRIPTION -> "non_renewing_subscription"
-    ZSProduct.ProductType.CONSUMABLE -> "consumable"
-    ZSProduct.ProductType.NON_CONSUMABLE -> "non_consumable"
+private fun Product.ProductType.toRawValue(): String = when (this) {
+    Product.ProductType.AUTO_RENEWABLE_SUBSCRIPTION -> "auto_renewable_subscription"
+    Product.ProductType.NON_RENEWING_SUBSCRIPTION -> "non_renewing_subscription"
+    Product.ProductType.CONSUMABLE -> "consumable"
+    Product.ProductType.NON_CONSUMABLE -> "non_consumable"
 }
 
 private fun Entitlement.Source.toRawValue(): String = when (this) {
@@ -415,12 +490,12 @@ private fun Entitlement.Source.toRawValue(): String = when (this) {
     Entitlement.Source.WEB_CHECKOUT -> "web_checkout"
 }
 
-private fun ZSTransaction.Status.toRawValue(): String = when (this) {
-    ZSTransaction.Status.COMPLETED -> "completed"
-    ZSTransaction.Status.PENDING -> "pending"
-    ZSTransaction.Status.PROCESSING -> "processing"
-    ZSTransaction.Status.FAILED -> "failed"
-    ZSTransaction.Status.REFUNDED -> "refunded"
+private fun CheckoutTransaction.Status.toRawValue(): String = when (this) {
+    CheckoutTransaction.Status.COMPLETED -> "completed"
+    CheckoutTransaction.Status.PENDING -> "pending"
+    CheckoutTransaction.Status.PROCESSING -> "processing"
+    CheckoutTransaction.Status.FAILED -> "failed"
+    CheckoutTransaction.Status.REFUNDED -> "refunded"
 }
 
 private fun Promotion.Kind.toRawValue(): String = when (this) {
@@ -430,7 +505,7 @@ private fun Promotion.Kind.toRawValue(): String = when (this) {
 }
 
 private fun CheckoutType.toRawValue(): String = when (this) {
-    CheckoutType.WEBVIEW -> "webview"
+    CheckoutType.WEB_VIEW -> "webview"
     CheckoutType.CUSTOM_TAB -> "safari_vc"
     CheckoutType.EXTERNAL_BROWSER -> "safari"
 }
@@ -444,7 +519,7 @@ private fun Jurisdiction.toRawValue(): String = when (this) {
 // -- Model Serialization --
 
 private fun Price.toFlutterMap(): Map<String, Any> = mapOf(
-    "amountMicros" to amountMicros,
+    "amountCents" to amountCents,
     "currencyCode" to currencyCode,
 )
 
@@ -459,13 +534,13 @@ private fun Promotion.toFlutterMap(): Map<String, Any?> {
     return map
 }
 
-private fun ZSProduct.toFlutterMap(): Map<String, Any?> {
+private fun Product.toFlutterMap(): Map<String, Any?> {
     val map = mutableMapOf<String, Any?>(
         "id" to id,
         "displayName" to displayName,
         "productDescription" to productDescription,
         "type" to type.toRawValue(),
-        "syncedToASC" to syncedToASC,
+        "syncedToAppStoreConnect" to syncedToAppStoreConnect,
         "storeKitAvailable" to playStoreAvailable,
     )
     webPrice?.let { map["webPrice"] = it.toFlutterMap() }
@@ -485,10 +560,13 @@ private fun Entitlement.toFlutterMap(): Map<String, Any?> {
         "purchasedAt" to purchasedAt,
     )
     expiresAt?.let { map["expiresAt"] = it }
+    status?.let { map["status"] = it }
+    pausedAt?.let { map["pausedAt"] = it }
+    pauseResumesAt?.let { map["pauseResumesAt"] = it }
     return map
 }
 
-private fun ZSTransaction.toFlutterMap(): Map<String, Any?> {
+private fun CheckoutTransaction.toFlutterMap(): Map<String, Any?> {
     val map = mutableMapOf<String, Any?>(
         "id" to id,
         "productId" to productId,
@@ -537,5 +615,66 @@ private fun RemoteConfig.toFlutterMap(): Map<String, Any?> {
         "checkout" to checkout.toFlutterMap(),
     )
     migration?.let { map["migration"] = it.toFlutterMap() }
+    return map
+}
+
+private fun CancelFlowConfig.toFlutterMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "enabled" to enabled,
+        "questions" to questions.map { it.toFlutterMap() },
+    )
+    offer?.let { map["offer"] = it.toFlutterMap() }
+    pause?.let { map["pause"] = it.toFlutterMap() }
+    return map
+}
+
+private fun CancelFlowQuestion.toFlutterMap(): Map<String, Any> = mapOf(
+    "id" to id,
+    "order" to order,
+    "questionText" to questionText,
+    "questionType" to questionType.toRawValue(),
+    "isRequired" to isRequired,
+    "options" to options.map { it.toFlutterMap() },
+)
+
+private fun CancelFlowQuestionType.toRawValue(): String = when (this) {
+    CancelFlowQuestionType.SINGLE_SELECT -> "single_select"
+    CancelFlowQuestionType.FREE_TEXT -> "free_text"
+}
+
+private fun CancelFlowOption.toFlutterMap(): Map<String, Any> = mapOf(
+    "id" to id,
+    "order" to order,
+    "label" to label,
+    "triggersOffer" to triggersOffer,
+    "triggersPause" to triggersPause,
+)
+
+private fun CancelFlowOffer.toFlutterMap(): Map<String, Any> = mapOf(
+    "enabled" to enabled,
+    "title" to title,
+    "body" to body,
+    "ctaText" to ctaText,
+    "type" to type,
+    "value" to value,
+)
+
+private fun CancelFlowPauseConfig.toFlutterMap(): Map<String, Any> = mapOf(
+    "enabled" to enabled,
+    "title" to title,
+    "body" to body,
+    "ctaText" to ctaText,
+    "options" to options.map { it.toFlutterMap() },
+)
+
+private fun CancelFlowPauseOption.toFlutterMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "id" to id,
+        "order" to order,
+        "label" to label,
+        "durationType" to durationType,
+    )
+    durationDays?.let { map["durationDays"] = it }
+    resumeDate?.let { map["resumeDate"] = it }
     return map
 }

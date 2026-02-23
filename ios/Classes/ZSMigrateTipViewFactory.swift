@@ -16,7 +16,7 @@ class ZSMigrateTipViewFactory: NSObject, FlutterPlatformViewFactory {
         viewIdentifier viewId: Int64,
         arguments args: Any?
     ) -> FlutterPlatformView {
-        return ZSMigrateTipViewFlutterContainer(
+        return MigrationTipViewFlutterContainer(
             frame: frame,
             arguments: args
         )

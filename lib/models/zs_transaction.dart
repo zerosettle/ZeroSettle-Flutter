@@ -1,7 +1,7 @@
 import 'enums.dart';
 
 /// Represents a completed or pending purchase transaction.
-class ZSTransaction {
+class CheckoutTransaction {
   final String id;
   final String productId;
   final TransactionStatus status;
@@ -9,7 +9,7 @@ class ZSTransaction {
   final DateTime purchasedAt;
   final DateTime? expiresAt;
 
-  const ZSTransaction({
+  const CheckoutTransaction({
     required this.id,
     required this.productId,
     required this.status,
@@ -18,8 +18,8 @@ class ZSTransaction {
     this.expiresAt,
   });
 
-  factory ZSTransaction.fromMap(Map<String, dynamic> map) {
-    return ZSTransaction(
+  factory CheckoutTransaction.fromMap(Map<String, dynamic> map) {
+    return CheckoutTransaction(
       id: map['id'] as String,
       productId: map['productId'] as String,
       status: TransactionStatus.fromRawValue(map['status'] as String),
@@ -45,7 +45,7 @@ class ZSTransaction {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ZSTransaction &&
+      other is CheckoutTransaction &&
           id == other.id &&
           productId == other.productId &&
           status == other.status &&
@@ -59,5 +59,9 @@ class ZSTransaction {
 
   @override
   String toString() =>
-      'ZSTransaction(id: $id, productId: $productId, status: ${status.rawValue})';
+      'CheckoutTransaction(id: $id, productId: $productId, status: ${status.rawValue})';
 }
+
+/// Backward-compatible typedef. Use [CheckoutTransaction] instead.
+@Deprecated('Use CheckoutTransaction instead')
+typedef ZSTransaction = CheckoutTransaction;

@@ -28,7 +28,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         checkoutEC.setStreamHandler(instance.checkoutStreamHandler)
         instance.checkoutEventChannel = checkoutEC
 
-        // Register ZSMigrateTipView PlatformView factory
+        // Register MigrationTipView PlatformView factory
         let migrateTipFactory = ZSMigrateTipViewFactory(messenger: registrar.messenger())
         registrar.register(migrateTipFactory, withId: "zerosettle/migrate_tip_view")
     }
@@ -144,7 +144,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 return
             }
 
-            ZSPaymentSheet<PaymentSheetHeader>.present(
+            CheckoutSheet<PaymentSheetHeader>.present(
                 from: viewController,
                 product: product,
                 userId: userId,
@@ -156,7 +156,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                     case .success(let transaction):
                         result(transaction.toFlutterMap())
                     case .failure(let error):
-                        if let zsError = error as? ZSError {
+                        if let zsError = error as? ZeroSettleError {
                             switch zsError {
                             case .cancelled:
                                 result(FlutterError(code: "cancelled", message: "User cancelled checkout", details: nil))
@@ -178,7 +178,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             let freeTrialDays = args?["freeTrialDays"] as? Int ?? 0
             let userId = args?["userId"] as? String
             Task { @MainActor in
-                _ = await ZSPaymentSheet<EmptyView>.preload(productId: productId, userId: userId, freeTrialDays: freeTrialDays)
+                _ = await CheckoutSheet<EmptyView>.preload(productId: productId, userId: userId, freeTrialDays: freeTrialDays)
                 result(nil)
             }
 
@@ -190,7 +190,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             let freeTrialDays = args?["freeTrialDays"] as? Int ?? 0
             let userId = args?["userId"] as? String
             Task { @MainActor in
-                await ZSPaymentSheet<EmptyView>.warmUp(productId: productId, userId: userId, freeTrialDays: freeTrialDays)
+                await CheckoutSheet<EmptyView>.warmUp(productId: productId, userId: userId, freeTrialDays: freeTrialDays)
                 result(nil)
             }
 
@@ -272,6 +272,82 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 case .cancelled: result("cancelled")
                 case .retained: result("retained")
                 case .dismissed: result("dismissed")
+                case .paused(let resumesAt):
+                    if let resumesAt {
+                        result("paused:" + iso8601Formatter.string(from: resumesAt))
+                    } else {
+                        result("paused:")
+                    }
+                }
+            }
+
+        case "fetchCancelFlowConfig":
+            Task { @MainActor in
+                do {
+                    let config = try await ZeroSettle.shared.fetchCancelFlowConfig()
+                    result(config.toFlutterMap())
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        case "pauseSubscription":
+            guard let productId = args?["productId"] as? String,
+                  let userId = args?["userId"] as? String,
+                  let pauseOptionId = args?["pauseOptionId"] as? Int else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId, userId, and pauseOptionId are required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    let resumesAt = try await ZeroSettle.shared.pauseSubscription(
+                        productId: productId,
+                        userId: userId,
+                        pauseOptionId: pauseOptionId
+                    )
+                    if let resumesAt {
+                        result(iso8601Formatter.string(from: resumesAt))
+                    } else {
+                        result(nil)
+                    }
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        case "resumeSubscription":
+            guard let productId = args?["productId"] as? String,
+                  let userId = args?["userId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    try await ZeroSettle.shared.resumeSubscription(
+                        productId: productId,
+                        userId: userId
+                    )
+                    result(nil)
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        case "cancelSubscription":
+            guard let productId = args?["productId"] as? String,
+                  let userId = args?["userId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    try await ZeroSettle.shared.cancelSubscription(
+                        productId: productId,
+                        userId: userId
+                    )
+                    result(nil)
+                } catch {
+                    result(error.toFlutterError())
                 }
             }
 
@@ -346,7 +422,7 @@ extension ZeroSettlePlugin: ZeroSettleDelegate {
         ])
     }
 
-    public func zeroSettleCheckoutDidComplete(transaction: ZSTransaction) {
+    public func zeroSettleCheckoutDidComplete(transaction: CheckoutTransaction) {
         checkoutStreamHandler.send([
             "event": "checkoutDidComplete",
             "transaction": transaction.toFlutterMap(),
@@ -441,7 +517,7 @@ private let iso8601Formatter: ISO8601DateFormatter = {
 extension Price {
     func toFlutterMap() -> [String: Any] {
         return [
-            "amountMicros": amountMicros,
+            "amountCents": amountCents,
             "currencyCode": currencyCode,
         ]
     }
@@ -462,14 +538,14 @@ extension Promotion {
     }
 }
 
-extension ZSProduct {
+extension ZeroSettleKit.Product {
     func toFlutterMap() -> [String: Any] {
         var map: [String: Any] = [
             "id": id,
             "displayName": displayName,
             "productDescription": productDescription,
             "type": type.rawValue,
-            "syncedToASC": syncedToASC,
+            "syncedToAppStoreConnect": syncedToAppStoreConnect,
             "storeKitAvailable": storeKitAvailable,
         ]
         if let webPrice {
@@ -503,11 +579,20 @@ extension Entitlement {
         if let expiresAt {
             map["expiresAt"] = iso8601Formatter.string(from: expiresAt)
         }
+        if let status {
+            map["status"] = status.rawString
+        }
+        if let pausedAt {
+            map["pausedAt"] = iso8601Formatter.string(from: pausedAt)
+        }
+        if let pauseResumesAt {
+            map["pauseResumesAt"] = iso8601Formatter.string(from: pauseResumesAt)
+        }
         return map
     }
 }
 
-extension ZSTransaction {
+extension CheckoutTransaction {
     func toFlutterMap() -> [String: Any] {
         var map: [String: Any] = [
             "id": id,
@@ -582,18 +667,102 @@ extension RemoteConfig {
     }
 }
 
+extension CancelFlow.Config {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "enabled": enabled,
+            "questions": questions.map { $0.toFlutterMap() },
+        ]
+        if let offer {
+            map["offer"] = offer.toFlutterMap()
+        }
+        if let pause {
+            map["pause"] = pause.toFlutterMap()
+        }
+        return map
+    }
+}
+
+extension CancelFlow.Question {
+    func toFlutterMap() -> [String: Any] {
+        return [
+            "id": id,
+            "order": order,
+            "questionText": questionText,
+            "questionType": questionType.rawValue,
+            "isRequired": isRequired,
+            "options": options.map { $0.toFlutterMap() },
+        ]
+    }
+}
+
+extension CancelFlow.Option {
+    func toFlutterMap() -> [String: Any] {
+        return [
+            "id": id,
+            "order": order,
+            "label": label,
+            "triggersOffer": triggersOffer,
+            "triggersPause": triggersPause,
+        ]
+    }
+}
+
+extension CancelFlow.Offer {
+    func toFlutterMap() -> [String: Any] {
+        return [
+            "enabled": enabled,
+            "title": title,
+            "body": body,
+            "ctaText": ctaText,
+            "type": type,
+            "value": value,
+        ]
+    }
+}
+
+extension CancelFlow.PauseConfig {
+    func toFlutterMap() -> [String: Any] {
+        return [
+            "enabled": enabled,
+            "title": title,
+            "body": body,
+            "ctaText": ctaText,
+            "options": options.map { $0.toFlutterMap() },
+        ]
+    }
+}
+
+extension CancelFlow.PauseOption {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "id": id,
+            "order": order,
+            "label": label,
+            "durationType": durationType,
+        ]
+        if let durationDays {
+            map["durationDays"] = durationDays
+        }
+        if let resumeDate {
+            map["resumeDate"] = iso8601Formatter.string(from: resumeDate)
+        }
+        return map
+    }
+}
+
 // MARK: - Error Mapping
 
 extension Error {
     func toFlutterError() -> FlutterError {
-        if let zsError = self as? ZSError {
+        if let zsError = self as? ZeroSettleError {
             return zsError.toFlutterError()
         }
         return FlutterError(code: "api_error", message: localizedDescription, details: nil)
     }
 }
 
-extension ZSError {
+extension ZeroSettleError {
     func toFlutterError() -> FlutterError {
         switch self {
         case .notConfigured:
@@ -620,7 +789,7 @@ extension ZSError {
 
 /// Custom native header displayed above the payment WebView in the sheet.
 struct PaymentSheetHeader: View {
-    let product: ZSProduct
+    let product: ZeroSettleKit.Product
 
     var body: some View {
         VStack(spacing: 0) {

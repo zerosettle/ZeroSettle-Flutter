@@ -107,6 +107,32 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('presentSaveTheSaleSheet() has not been implemented.');
   }
 
+  Future<Map<String, dynamic>> fetchCancelFlowConfig() {
+    throw UnimplementedError('fetchCancelFlowConfig() has not been implemented.');
+  }
+
+  Future<String?> pauseSubscription({required String productId, required String userId, required int pauseOptionId}) {
+    throw UnimplementedError('pauseSubscription() has not been implemented.');
+  }
+
+  Future<void> resumeSubscription({required String productId, required String userId}) {
+    throw UnimplementedError('resumeSubscription() has not been implemented.');
+  }
+
+  Future<void> cancelSubscription({required String productId, required String userId}) {
+    throw UnimplementedError('cancelSubscription() has not been implemented.');
+  }
+
+  // -- Upgrade Offer --
+
+  Future<String> presentUpgradeOffer({required String productId, required String userId}) {
+    throw UnimplementedError('presentUpgradeOffer() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>> fetchUpgradeOfferConfig({required String productId, required String userId}) {
+    throw UnimplementedError('fetchUpgradeOfferConfig() has not been implemented.');
+  }
+
   // -- Event Streams --
 
   Stream<List<Map<String, dynamic>>> get entitlementUpdates {

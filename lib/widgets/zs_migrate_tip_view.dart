@@ -17,19 +17,19 @@ import 'package:flutter/services.dart';
 ///
 /// Example:
 /// ```dart
-/// ZSMigrateTipView(
+/// MigrationTipView(
 ///   userId: 'user123',
 ///   backgroundColor: Color(0xFF000000),
 /// )
 /// ```
-class ZSMigrateTipView extends StatelessWidget {
+class MigrationTipView extends StatelessWidget {
   /// The user ID to pass to the native SDK.
   final String userId;
 
   /// The background color for the tip view. Defaults to black.
   final Color backgroundColor;
 
-  const ZSMigrateTipView({
+  const MigrationTipView({
     super.key,
     required this.userId,
     this.backgroundColor = const Color(0xFF000000),
@@ -55,3 +55,7 @@ class ZSMigrateTipView extends StatelessWidget {
     );
   }
 }
+
+/// Backward-compatible typedef. Use [MigrationTipView] instead.
+@Deprecated('Use MigrationTipView instead')
+typedef ZSMigrateTipView = MigrationTipView;

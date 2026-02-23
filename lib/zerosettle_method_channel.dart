@@ -162,6 +162,58 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return result ?? 'dismissed';
   }
 
+  @override
+  Future<Map<String, dynamic>> fetchCancelFlowConfig() async {
+    final result = await methodChannel.invokeMethod<Map>('fetchCancelFlowConfig');
+    return Map<String, dynamic>.from(result!);
+  }
+
+  @override
+  Future<String?> pauseSubscription({required String productId, required String userId, required int pauseOptionId}) async {
+    final result = await methodChannel.invokeMethod<String>('pauseSubscription', {
+      'productId': productId,
+      'userId': userId,
+      'pauseOptionId': pauseOptionId,
+    });
+    return result;
+  }
+
+  @override
+  Future<void> resumeSubscription({required String productId, required String userId}) async {
+    await methodChannel.invokeMethod('resumeSubscription', {
+      'productId': productId,
+      'userId': userId,
+    });
+  }
+
+  @override
+  Future<void> cancelSubscription({required String productId, required String userId}) async {
+    await methodChannel.invokeMethod('cancelSubscription', {
+      'productId': productId,
+      'userId': userId,
+    });
+  }
+
+  // -- Upgrade Offer --
+
+  @override
+  Future<String> presentUpgradeOffer({required String productId, required String userId}) async {
+    final result = await methodChannel.invokeMethod<String>('presentUpgradeOffer', {
+      'productId': productId,
+      'userId': userId,
+    });
+    return result ?? 'dismissed';
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchUpgradeOfferConfig({required String productId, required String userId}) async {
+    final result = await methodChannel.invokeMethod<Map>('fetchUpgradeOfferConfig', {
+      'productId': productId,
+      'userId': userId,
+    });
+    return Map<String, dynamic>.from(result!);
+  }
+
   // -- Event Streams --
 
   Stream<List<Map<String, dynamic>>>? _entitlementUpdatesStream;
