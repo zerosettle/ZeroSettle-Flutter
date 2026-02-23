@@ -328,7 +328,16 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
                 }
             }
 
-            "cancelSubscription" -> {
+            "getCancelFlowConfig" -> {
+                val config = ZeroSettle.cancelFlowConfig.value
+                if (config == null) {
+                    result.success(null)
+                } else {
+                    result.success(config.toFlutterMap())
+                }
+            }
+
+            "acceptSaveOffer" -> {
                 val productId = call.argument<String>("productId")
                 val userId = call.argument<String>("userId")
                 if (productId == null || userId == null) {
@@ -337,7 +346,70 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
                 }
                 scope.launch {
                     try {
-                        ZeroSettle.cancelSubscription(productId, userId)
+                        val offerResult = ZeroSettle.acceptSaveOffer(productId, userId)
+                        result.success(mapOf(
+                            "message" to offerResult.message,
+                            "discountPercent" to offerResult.discountPercent,
+                            "durationMonths" to offerResult.durationMonths,
+                        ))
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
+            "submitCancelFlowResponse" -> {
+                val responseMap = call.arguments as? Map<*, *>
+                if (responseMap == null) {
+                    result.error("INVALID_ARGUMENTS", "response map is required", null)
+                    return
+                }
+                val answers = (responseMap["answers"] as? List<*>)?.mapNotNull { item ->
+                    val answerMap = item as? Map<*, *> ?: return@mapNotNull null
+                    CancelFlowAnswer(
+                        questionId = (answerMap["questionId"] as? Number)?.toInt() ?: 0,
+                        selectedOptionId = (answerMap["selectedOptionId"] as? Number)?.toInt(),
+                        freeText = answerMap["freeText"] as? String,
+                    )
+                } ?: emptyList()
+
+                val outcome = when (responseMap["outcome"] as? String) {
+                    "cancelled" -> CancelFlowOutcome.CANCELLED
+                    "retained" -> CancelFlowOutcome.RETAINED
+                    "paused" -> CancelFlowOutcome.PAUSED
+                    "dismissed" -> CancelFlowOutcome.DISMISSED
+                    else -> CancelFlowOutcome.CANCELLED
+                }
+
+                val response = CancelFlowResponse(
+                    productId = responseMap["productId"] as? String ?: "",
+                    userId = responseMap["userId"] as? String ?: "",
+                    outcome = outcome,
+                    answers = answers,
+                    offerShown = responseMap["offerShown"] as? Boolean ?: false,
+                    offerAccepted = responseMap["offerAccepted"] as? Boolean ?: false,
+                    pauseShown = responseMap["pauseShown"] as? Boolean ?: false,
+                    pauseAccepted = responseMap["pauseAccepted"] as? Boolean ?: false,
+                    pauseDurationDays = (responseMap["pauseDurationDays"] as? Number)?.toInt(),
+                )
+
+                scope.launch {
+                    ZeroSettle.submitCancelFlowResponse(response)
+                    result.success(null)
+                }
+            }
+
+            "cancelSubscription" -> {
+                val productId = call.argument<String>("productId")
+                val userId = call.argument<String>("userId")
+                val immediate = call.argument<Boolean>("immediate") ?: false
+                if (productId == null || userId == null) {
+                    result.error("INVALID_ARGUMENTS", "productId and userId are required", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        ZeroSettle.cancelSubscription(productId, userId, immediate)
                         result.success(null)
                     } catch (e: Exception) {
                         result.sendError(e)
@@ -618,6 +690,8 @@ private fun RemoteConfig.toFlutterMap(): Map<String, Any?> {
     return map
 }
 
+// -- Cancel Flow Serialization --
+
 private fun CancelFlowConfig.toFlutterMap(): Map<String, Any?> {
     val map = mutableMapOf<String, Any?>(
         "enabled" to enabled,
@@ -677,4 +751,9 @@ private fun CancelFlowPauseOption.toFlutterMap(): Map<String, Any?> {
     durationDays?.let { map["durationDays"] = it }
     resumeDate?.let { map["resumeDate"] = it }
     return map
+}
+
+private fun CancelFlowPauseDurationType.toRawValue(): String = when (this) {
+    CancelFlowPauseDurationType.DAYS -> "days"
+    CancelFlowPauseDurationType.FIXED_DATE -> "fixed_date"
 }

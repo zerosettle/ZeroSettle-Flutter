@@ -333,7 +333,9 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 }
             }
 
-        case "cancelSubscription":
+        // -- Cancel Flow (Headless) --
+
+        case "acceptSaveOffer":
             guard let productId = args?["productId"] as? String,
                   let userId = args?["userId"] as? String else {
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
@@ -341,10 +343,74 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             }
             Task { @MainActor in
                 do {
-                    try await ZeroSettle.shared.cancelSubscription(
-                        productId: productId,
-                        userId: userId
-                    )
+                    let offerResult = try await ZeroSettle.shared.acceptSaveOffer(productId: productId, userId: userId)
+                    result([
+                        "message": offerResult.message,
+                        "discountPercent": offerResult.discountPercent,
+                        "durationMonths": offerResult.durationMonths,
+                    ] as [String: Any])
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        case "submitCancelFlowResponse":
+            guard let responseMap = args else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "response is required", details: nil))
+                return
+            }
+            let answers = (responseMap["answers"] as? [[String: Any]])?.map { answerMap in
+                CancelFlow.Answer(
+                    questionId: answerMap["questionId"] as! Int,
+                    selectedOptionId: answerMap["selectedOptionId"] as! Int,
+                    freeText: answerMap["freeText"] as? String
+                )
+            } ?? []
+            let outcome: CancelFlow.Outcome
+            switch responseMap["outcome"] as? String {
+            case "cancelled": outcome = .cancelled
+            case "retained": outcome = .retained
+            case "paused": outcome = .paused
+            case "dismissed": outcome = .dismissed
+            default: outcome = .cancelled
+            }
+            let response = CancelFlow.Response(
+                productId: responseMap["productId"] as! String,
+                userId: responseMap["userId"] as! String,
+                outcome: outcome,
+                answers: answers,
+                offerShown: responseMap["offerShown"] as? Bool ?? false,
+                offerAccepted: responseMap["offerAccepted"] as? Bool ?? false,
+                pauseShown: responseMap["pauseShown"] as? Bool ?? false,
+                pauseAccepted: responseMap["pauseAccepted"] as? Bool ?? false,
+                pauseDurationDays: responseMap["pauseDurationDays"] as? Int
+            )
+            Task { @MainActor in
+                do {
+                    try await ZeroSettle.shared.submitCancelFlowResponse(response)
+                    result(nil)
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        case "getCancelFlowConfig":
+            if let config = ZeroSettle.shared.cancelFlowConfig {
+                result(config.toFlutterMap())
+            } else {
+                result(nil)
+            }
+
+        case "cancelSubscription":
+            guard let productId = args?["productId"] as? String,
+                  let userId = args?["userId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
+                return
+            }
+            let immediate = args?["immediate"] as? Bool ?? false
+            Task { @MainActor in
+                do {
+                    try await ZeroSettle.shared.cancelSubscription(productId: productId, userId: userId, immediate: immediate)
                     result(nil)
                 } catch {
                     result(error.toFlutterError())

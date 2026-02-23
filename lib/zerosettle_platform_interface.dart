@@ -101,6 +101,24 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('getDetectedJurisdiction() has not been implemented.');
   }
 
+  // -- Cancel Flow (Headless) --
+
+  Future<Map<String, dynamic>> acceptSaveOffer({required String productId, required String userId}) {
+    throw UnimplementedError('acceptSaveOffer() has not been implemented.');
+  }
+
+  Future<void> submitCancelFlowResponse(Map<String, dynamic> response) {
+    throw UnimplementedError('submitCancelFlowResponse() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> getCancelFlowConfig() {
+    throw UnimplementedError('getCancelFlowConfig() has not been implemented.');
+  }
+
+  Future<void> cancelSubscription({required String productId, required String userId, bool immediate = false}) {
+    throw UnimplementedError('cancelSubscription() has not been implemented.');
+  }
+
   // -- Save the Sale --
 
   Future<String> presentSaveTheSaleSheet() {

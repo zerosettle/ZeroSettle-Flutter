@@ -154,6 +154,37 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return await methodChannel.invokeMethod<String>('getDetectedJurisdiction');
   }
 
+  // -- Cancel Flow (Headless) --
+
+  @override
+  Future<Map<String, dynamic>> acceptSaveOffer({required String productId, required String userId}) async {
+    final result = await methodChannel.invokeMethod<Map>('acceptSaveOffer', {
+      'productId': productId,
+      'userId': userId,
+    });
+    return Map<String, dynamic>.from(result!);
+  }
+
+  @override
+  Future<void> submitCancelFlowResponse(Map<String, dynamic> response) async {
+    await methodChannel.invokeMethod('submitCancelFlowResponse', response);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getCancelFlowConfig() async {
+    final result = await methodChannel.invokeMethod<Map>('getCancelFlowConfig');
+    return result != null ? Map<String, dynamic>.from(result) : null;
+  }
+
+  @override
+  Future<void> cancelSubscription({required String productId, required String userId, bool immediate = false}) async {
+    await methodChannel.invokeMethod('cancelSubscription', {
+      'productId': productId,
+      'userId': userId,
+      'immediate': immediate,
+    });
+  }
+
   // -- Save the Sale --
 
   @override

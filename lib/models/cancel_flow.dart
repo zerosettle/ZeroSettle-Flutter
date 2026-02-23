@@ -95,7 +95,7 @@ class CancelFlowOption {
     required this.order,
     required this.label,
     required this.triggersOffer,
-    this.triggersPause = false,
+    required this.triggersPause,
   });
 
   factory CancelFlowOption.fromMap(Map<String, dynamic> map) {
@@ -104,7 +104,7 @@ class CancelFlowOption {
       order: map['order'] as int,
       label: map['label'] as String,
       triggersOffer: map['triggersOffer'] as bool,
-      triggersPause: (map['triggersPause'] as bool?) ?? false,
+      triggersPause: map['triggersPause'] as bool,
     );
   }
 
@@ -354,5 +354,110 @@ class CancelFlowAnswerPayload {
       if (selectedOptionId != null) 'selectedOptionId': selectedOptionId,
       if (freeText != null) 'freeText': freeText,
     };
+  }
+}
+
+/// Result of accepting a save offer.
+class CancelFlowSaveOfferResult {
+  final String message;
+  final int discountPercent;
+  final int durationMonths;
+
+  CancelFlowSaveOfferResult({
+    required this.message,
+    required this.discountPercent,
+    required this.durationMonths,
+  });
+
+  factory CancelFlowSaveOfferResult.fromMap(Map<String, dynamic> map) {
+    return CancelFlowSaveOfferResult(
+      message: map['message'] as String,
+      discountPercent: map['discountPercent'] as int,
+      durationMonths: map['durationMonths'] as int,
+    );
+  }
+}
+
+/// The outcome of a cancel flow for analytics/reporting.
+enum CancelFlowOutcome {
+  cancelled('cancelled'),
+  retained('retained'),
+  paused('paused'),
+  dismissed('dismissed');
+
+  const CancelFlowOutcome(this.rawValue);
+  final String rawValue;
+
+  static CancelFlowOutcome fromRawValue(String value) {
+    return CancelFlowOutcome.values.firstWhere(
+      (e) => e.rawValue == value,
+      orElse: () => CancelFlowOutcome.cancelled,
+    );
+  }
+}
+
+/// A single answer in the cancel flow questionnaire.
+class CancelFlowAnswer {
+  final int questionId;
+  final int selectedOptionId;
+  final String? freeText;
+
+  CancelFlowAnswer({
+    required this.questionId,
+    required this.selectedOptionId,
+    this.freeText,
+  });
+
+  Map<String, dynamic> toMap() {
+    final map = <String, dynamic>{
+      'questionId': questionId,
+      'selectedOptionId': selectedOptionId,
+    };
+    if (freeText != null) {
+      map['freeText'] = freeText;
+    }
+    return map;
+  }
+}
+
+/// The complete response submitted at the end of a cancel flow.
+class CancelFlowResponse {
+  final String productId;
+  final String userId;
+  final CancelFlowOutcome outcome;
+  final List<CancelFlowAnswer> answers;
+  final bool offerShown;
+  final bool offerAccepted;
+  final bool pauseShown;
+  final bool pauseAccepted;
+  final int? pauseDurationDays;
+
+  CancelFlowResponse({
+    required this.productId,
+    required this.userId,
+    required this.outcome,
+    required this.answers,
+    required this.offerShown,
+    required this.offerAccepted,
+    required this.pauseShown,
+    required this.pauseAccepted,
+    this.pauseDurationDays,
+  });
+
+  Map<String, dynamic> toMap() {
+    final map = <String, dynamic>{
+      'productId': productId,
+      'userId': userId,
+      'outcome': outcome.rawValue,
+      'answers': answers.map((a) => a.toMap()).toList(),
+      'offerShown': offerShown,
+      'offerAccepted': offerAccepted,
+      'pauseShown': pauseShown,
+      'pauseAccepted': pauseAccepted,
+    };
+    if (pauseDurationDays != null) {
+      map['pauseDurationDays'] = pauseDurationDays;
+    }
+    return map;
   }
 }

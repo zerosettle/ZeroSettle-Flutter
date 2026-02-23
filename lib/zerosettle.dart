@@ -292,17 +292,58 @@ class ZeroSettle {
         ));
   }
 
-  /// Cancel a subscription for the given user (headless, no UI).
+  // -- Cancel Flow (Headless) --
+
+  /// Accept the save offer for a subscription about to be cancelled.
+  ///
+  /// Returns a [CancelFlowSaveOfferResult] with the discount details.
+  ///
+  /// - [productId]: The product the offer applies to
+  /// - [userId]: Your app's user identifier
+  Future<CancelFlowSaveOfferResult> acceptSaveOffer({
+    required String productId,
+    required String userId,
+  }) {
+    return _wrap(() async {
+      final map = await _platform.acceptSaveOffer(
+        productId: productId,
+        userId: userId,
+      );
+      return CancelFlowSaveOfferResult.fromMap(map);
+    });
+  }
+
+  /// Submit the complete cancel flow response for analytics and processing.
+  ///
+  /// - [response]: The cancel flow response containing answers and outcome
+  Future<void> submitCancelFlowResponse(CancelFlowResponse response) {
+    return _wrap(() => _platform.submitCancelFlowResponse(response.toMap()));
+  }
+
+  /// Get the cancel flow configuration from the cached config.
+  ///
+  /// Returns `null` if no config is available.
+  Future<CancelFlowConfig?> getCancelFlowConfig() {
+    return _wrap(() async {
+      final map = await _platform.getCancelFlowConfig();
+      return map != null ? CancelFlowConfig.fromMap(map) : null;
+    });
+  }
+
+  /// Cancel a subscription immediately or at end of period.
   ///
   /// - [productId]: The product to cancel
   /// - [userId]: Your app's user identifier
+  /// - [immediate]: Whether to cancel immediately (default: false, cancels at period end)
   Future<void> cancelSubscription({
     required String productId,
     required String userId,
+    bool immediate = false,
   }) {
     return _wrap(() => _platform.cancelSubscription(
           productId: productId,
           userId: userId,
+          immediate: immediate,
         ));
   }
 
@@ -347,6 +388,7 @@ class ZeroSettle {
       return UpgradeOfferConfig.fromMap(map);
     });
   }
+
 
   // -- Checkout Events --
 
