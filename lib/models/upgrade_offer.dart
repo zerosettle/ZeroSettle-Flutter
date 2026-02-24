@@ -9,6 +9,9 @@ class UpgradeOfferConfig {
   final UpgradeOfferProration? proration;
   final UpgradeOfferDisplay? display;
 
+  /// A/B experiment variant identifier, if this config is part of an experiment.
+  final int? variantId;
+
   UpgradeOfferConfig({
     required this.available,
     this.reason,
@@ -18,6 +21,7 @@ class UpgradeOfferConfig {
     this.upgradeType,
     this.proration,
     this.display,
+    this.variantId,
   });
 
   factory UpgradeOfferConfig.fromMap(Map<String, dynamic> map) {
@@ -42,6 +46,7 @@ class UpgradeOfferConfig {
           ? UpgradeOfferDisplay.fromMap(
               Map<String, dynamic>.from(map['display'] as Map))
           : null,
+      variantId: map['variantId'] as int?,
     );
   }
 
@@ -55,6 +60,7 @@ class UpgradeOfferConfig {
       if (upgradeType != null) 'upgradeType': upgradeType,
       if (proration != null) 'proration': proration!.toMap(),
       if (display != null) 'display': display!.toMap(),
+      if (variantId != null) 'variantId': variantId,
     };
   }
 }
@@ -259,12 +265,16 @@ class UpgradeOfferResponsePayload {
   final String outcome;
   final String upgradeType;
 
+  /// A/B experiment variant identifier echoed back from the config.
+  final int? variantId;
+
   UpgradeOfferResponsePayload({
     required this.userId,
     required this.currentProductId,
     required this.targetProductId,
     required this.outcome,
     required this.upgradeType,
+    this.variantId,
   });
 
   Map<String, dynamic> toMap() {
@@ -274,6 +284,7 @@ class UpgradeOfferResponsePayload {
       'targetProductId': targetProductId,
       'outcome': outcome,
       'upgradeType': upgradeType,
+      if (variantId != null) 'variantId': variantId,
     };
   }
 }

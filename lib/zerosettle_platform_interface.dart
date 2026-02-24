@@ -24,7 +24,7 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   // -- Bootstrap --
 
-  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) {
+  Future<Map<String, dynamic>> bootstrap({required String userId}) {
     throw UnimplementedError('bootstrap() has not been implemented.');
   }
 
@@ -43,17 +43,16 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
-    required int freeTrialDays,
     bool dismissible = true,
   }) {
     throw UnimplementedError('presentPaymentSheet() has not been implemented.');
   }
 
-  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
+  Future<void> preloadPaymentSheet({required String productId, String? userId}) {
     throw UnimplementedError('preloadPaymentSheet() has not been implemented.');
   }
 
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) {
+  Future<void> warmUpPaymentSheet({required String productId, String? userId}) {
     throw UnimplementedError('warmUpPaymentSheet() has not been implemented.');
   }
 
@@ -101,6 +100,12 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('getDetectedJurisdiction() has not been implemented.');
   }
 
+  // -- Base URL Override --
+
+  Future<void> setBaseUrlOverride(String? url) {
+    throw UnimplementedError('setBaseUrlOverride() has not been implemented.');
+  }
+
   // -- Cancel Flow (Headless) --
 
   Future<Map<String, dynamic>> acceptSaveOffer({required String productId, required String userId}) {
@@ -125,7 +130,19 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('presentSaveTheSaleSheet() has not been implemented.');
   }
 
-  Future<Map<String, dynamic>> fetchCancelFlowConfig() {
+  // -- Cancel Flow --
+
+  Future<String> presentCancelFlow({required String productId, required String userId}) {
+    throw UnimplementedError('presentCancelFlow() has not been implemented.');
+  }
+
+  // -- Transaction History --
+
+  Future<List<Map<String, dynamic>>> fetchTransactionHistory({required String userId}) {
+    throw UnimplementedError('fetchTransactionHistory() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>> fetchCancelFlowConfig({String? userId}) {
     throw UnimplementedError('fetchCancelFlowConfig() has not been implemented.');
   }
 
@@ -137,18 +154,37 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('resumeSubscription() has not been implemented.');
   }
 
-  Future<void> cancelSubscription({required String productId, required String userId}) {
-    throw UnimplementedError('cancelSubscription() has not been implemented.');
-  }
-
   // -- Upgrade Offer --
 
-  Future<String> presentUpgradeOffer({required String productId, required String userId}) {
+  Future<String> presentUpgradeOffer({String? productId, required String userId}) {
     throw UnimplementedError('presentUpgradeOffer() has not been implemented.');
   }
 
-  Future<Map<String, dynamic>> fetchUpgradeOfferConfig({required String productId, required String userId}) {
+  Future<Map<String, dynamic>> fetchUpgradeOfferConfig({String? productId, required String userId}) {
     throw UnimplementedError('fetchUpgradeOfferConfig() has not been implemented.');
+  }
+
+  // -- Migration Tracking --
+
+  Future<void> trackMigrationConversion({required String userId}) {
+    throw UnimplementedError('trackMigrationConversion() has not been implemented.');
+  }
+
+  // -- Migration Tip --
+
+  Future<void> resetMigrateTipState() {
+    throw UnimplementedError('resetMigrateTipState() has not been implemented.');
+  }
+
+  // -- Funnel Analytics --
+
+  Future<void> trackEvent({
+    required String eventType,
+    required String productId,
+    String? screenName,
+    Map<String, String>? metadata,
+  }) {
+    throw UnimplementedError('trackEvent() has not been implemented.');
   }
 
   // -- Event Streams --

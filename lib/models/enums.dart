@@ -17,9 +17,21 @@ enum ZSProductType {
 }
 
 /// The origin of a purchase/entitlement.
+///
+/// A single user can hold entitlements from multiple sources simultaneously
+/// (e.g., a StoreKit subscription and a web checkout consumable).
+/// [ZeroSettle.showManageSubscription] uses these values to route to the
+/// appropriate management UI.
 enum EntitlementSource {
+  /// Purchased through Apple StoreKit (App Store billing).
+  /// On Android, this represents a cross-platform entitlement from an iOS purchase.
   storeKit('store_kit'),
+
+  /// Purchased through Google Play Store billing.
+  /// On iOS, this represents a cross-platform entitlement from an Android purchase.
   playStore('play_store'),
+
+  /// Purchased through ZeroSettle's web checkout (Stripe billing).
   webCheckout('web_checkout');
 
   const EntitlementSource(this.rawValue);

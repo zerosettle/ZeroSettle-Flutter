@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import com.zerosettle.sdk.FunnelEventType
 import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.sdk.ZeroSettleDelegate
 import com.zerosettle.sdk.error.ZeroSettleError
@@ -246,6 +247,24 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
                 }
             }
 
+            // -- Transaction History --
+
+            "fetchTransactionHistory" -> {
+                val userId = call.argument<String>("userId")
+                if (userId == null) {
+                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        val transactions = ZeroSettle.fetchTransactionHistory(userId)
+                        result.success(transactions.map { it.toFlutterMap() })
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
             // -- Cancel Flow --
 
             "presentCancelFlow" -> {
@@ -283,9 +302,10 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             }
 
             "fetchCancelFlowConfig" -> {
+                val userId = call.argument<String>("userId")
                 scope.launch {
                     try {
-                        val config = ZeroSettle.fetchCancelFlowConfig()
+                        val config = ZeroSettle.fetchCancelFlowConfig(userId = userId)
                         result.success(config.toFlutterMap())
                     } catch (e: Exception) {
                         result.sendError(e)
@@ -410,6 +430,88 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
                 scope.launch {
                     try {
                         ZeroSettle.cancelSubscription(productId, userId, immediate)
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
+            // -- Upgrade Offer --
+
+            "presentUpgradeOffer" -> {
+                val userId = call.argument<String>("userId")
+                if (userId == null) {
+                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    return
+                }
+                val productId = call.argument<String>("productId")
+                val currentActivity = activity
+                if (currentActivity == null) {
+                    result.error("no_activity", "No activity available", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        val upgradeResult = ZeroSettle.presentUpgradeOffer(currentActivity, productId, userId)
+                        result.success(upgradeResult.outcomeName)
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
+            "fetchUpgradeOfferConfig" -> {
+                val userId = call.argument<String>("userId")
+                if (userId == null) {
+                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    return
+                }
+                val productId = call.argument<String>("productId")
+                scope.launch {
+                    try {
+                        val config = ZeroSettle.fetchUpgradeOffer(productId, userId)
+                        result.success(config.toFlutterMap())
+                    } catch (e: Exception) {
+                        result.sendError(e)
+                    }
+                }
+            }
+
+            // -- Funnel Analytics --
+
+            "trackEvent" -> {
+                val eventType = call.argument<String>("eventType")
+                val productId = call.argument<String>("productId")
+                if (eventType == null || productId == null) {
+                    result.error("INVALID_ARGUMENTS", "eventType and productId are required", null)
+                    return
+                }
+                val screenName = call.argument<String>("screenName")
+                @Suppress("UNCHECKED_CAST")
+                val metadata = call.argument<Map<String, String>>("metadata")
+
+                val funnelType = FunnelEventType.entries.firstOrNull { it.value == eventType }
+                if (funnelType == null) {
+                    result.error("INVALID_ARGUMENTS", "Unknown event type: $eventType", null)
+                    return
+                }
+
+                ZeroSettle.trackEvent(funnelType, productId, screenName, metadata)
+                result.success(null)
+            }
+
+            // -- Migration Tracking --
+
+            "trackMigrationConversion" -> {
+                val userId = call.argument<String>("userId")
+                if (userId == null) {
+                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        ZeroSettle.trackMigrationConversion(userId)
                         result.success(null)
                     } catch (e: Exception) {
                         result.sendError(e)
@@ -635,6 +737,10 @@ private fun Entitlement.toFlutterMap(): Map<String, Any?> {
     status?.let { map["status"] = it }
     pausedAt?.let { map["pausedAt"] = it }
     pauseResumesAt?.let { map["pauseResumesAt"] = it }
+    map["willRenew"] = willRenew
+    map["isTrial"] = isTrial
+    trialEndsAt?.let { map["trialEndsAt"] = it }
+    cancelledAt?.let { map["cancelledAt"] = it }
     return map
 }
 
@@ -647,6 +753,9 @@ private fun CheckoutTransaction.toFlutterMap(): Map<String, Any?> {
         "purchasedAt" to purchasedAt,
     )
     expiresAt?.let { map["expiresAt"] = it }
+    productName?.let { map["productName"] = it }
+    amountCents?.let { map["amountCents"] = it }
+    currency?.let { map["currency"] = it }
     return map
 }
 
@@ -699,6 +808,7 @@ private fun CancelFlowConfig.toFlutterMap(): Map<String, Any?> {
     )
     offer?.let { map["offer"] = it.toFlutterMap() }
     pause?.let { map["pause"] = it.toFlutterMap() }
+    variantId?.let { map["variantId"] = it }
     return map
 }
 
@@ -756,4 +866,53 @@ private fun CancelFlowPauseOption.toFlutterMap(): Map<String, Any?> {
 private fun CancelFlowPauseDurationType.toRawValue(): String = when (this) {
     CancelFlowPauseDurationType.DAYS -> "days"
     CancelFlowPauseDurationType.FIXED_DATE -> "fixed_date"
+}
+
+private fun UpgradeOfferConfig.toFlutterMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>("available" to available)
+    reason?.let { map["reason"] = it }
+    currentProduct?.let {
+        map["currentProduct"] = mapOf(
+            "referenceId" to it.referenceId,
+            "name" to it.name,
+            "priceCents" to it.priceCents,
+            "currency" to it.currency,
+            "durationDays" to it.durationDays,
+            "billingLabel" to it.billingLabel,
+        )
+    }
+    targetProduct?.let {
+        map["targetProduct"] = mapOf(
+            "referenceId" to it.referenceId,
+            "name" to it.name,
+            "priceCents" to it.priceCents,
+            "currency" to it.currency,
+            "durationDays" to it.durationDays,
+            "billingLabel" to it.billingLabel,
+            "monthlyEquivalentCents" to it.monthlyEquivalentCents,
+        )
+    }
+    savingsPercent?.let { map["savingsPercent"] = it }
+    upgradeType?.let { map["upgradeType"] = it.name.lowercase() }
+    proration?.let {
+        val pMap = mutableMapOf<String, Any>(
+            "prorationAmountCents" to it.prorationAmountCents,
+            "currency" to it.currency,
+        )
+        it.nextBillingDate?.let { nbd -> pMap["nextBillingDate"] = nbd }
+        map["proration"] = pMap
+    }
+    display?.let {
+        val dMap = mutableMapOf<String, Any>(
+            "title" to it.title,
+            "body" to it.body,
+            "ctaText" to it.ctaText,
+            "dismissText" to it.dismissText,
+        )
+        it.storekitMigrationBody?.let { smb -> dMap["storekitMigrationBody"] = smb }
+        it.cancelInstructions?.let { ci -> dMap["cancelInstructions"] = ci }
+        map["display"] = dMap
+    }
+    variantId?.let { map["variantId"] = it }
+    return map
 }

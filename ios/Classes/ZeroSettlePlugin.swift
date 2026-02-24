@@ -130,7 +130,6 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
-            let freeTrialDays = args?["freeTrialDays"] as? Int ?? 0
             let userId = args?["userId"] as? String
             let dismissible = args?["dismissible"] as? Bool ?? true
 
@@ -148,7 +147,6 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 from: viewController,
                 product: product,
                 userId: userId,
-                freeTrialDays: freeTrialDays,
                 dismissible: dismissible,
                 header: { PaymentSheetHeader(product: product) },
                 onComplete: { completionResult in
@@ -175,10 +173,9 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
-            let freeTrialDays = args?["freeTrialDays"] as? Int ?? 0
             let userId = args?["userId"] as? String
             Task { @MainActor in
-                _ = await CheckoutSheet<EmptyView>.preload(productId: productId, userId: userId, freeTrialDays: freeTrialDays)
+                _ = await CheckoutSheet<EmptyView>.preload(productId: productId, userId: userId)
                 result(nil)
             }
 
@@ -187,10 +184,9 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
-            let freeTrialDays = args?["freeTrialDays"] as? Int ?? 0
             let userId = args?["userId"] as? String
             Task { @MainActor in
-                await CheckoutSheet<EmptyView>.warmUp(productId: productId, userId: userId, freeTrialDays: freeTrialDays)
+                await CheckoutSheet<EmptyView>.warmUp(productId: productId, userId: userId)
                 result(nil)
             }
 
@@ -255,6 +251,22 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             let handled = ZeroSettle.shared.handleUniversalLink(url)
             result(handled)
 
+        // -- Transaction History --
+
+        case "fetchTransactionHistory":
+            guard let userId = args?["userId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    let transactions = try await ZeroSettle.shared.fetchTransactionHistory(userId: userId)
+                    result(transactions.map { $0.toFlutterMap() })
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
         // -- Cancel Flow --
 
         case "presentCancelFlow":
@@ -282,9 +294,10 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             }
 
         case "fetchCancelFlowConfig":
+            let userId = args?["userId"] as? String
             Task { @MainActor in
                 do {
-                    let config = try await ZeroSettle.shared.fetchCancelFlowConfig()
+                    let config = try await ZeroSettle.shared.fetchCancelFlowConfig(userId: userId)
                     result(config.toFlutterMap())
                 } catch {
                     result(error.toFlutterError())
@@ -417,6 +430,47 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 }
             }
 
+        // -- Funnel Analytics --
+
+        case "trackEvent":
+            guard let eventType = args?["eventType"] as? String,
+                  let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "eventType and productId are required", details: nil))
+                return
+            }
+            let screenName = args?["screenName"] as? String
+            let metadata = args?["metadata"] as? [String: String]
+
+            guard let funnelType = FunnelEventType(rawValue: eventType) else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "Unknown event type: \(eventType)", details: nil))
+                return
+            }
+
+            ZeroSettle.trackEvent(funnelType, productId: productId, screenName: screenName, metadata: metadata)
+            result(nil)
+
+        // -- Migration Tracking --
+
+        case "trackMigrationConversion":
+            guard let userId = args?["userId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    try await ZeroSettle.shared.trackMigrationConversion(userId: userId)
+                    result(nil)
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        // -- Migration Tip --
+
+        case "resetMigrateTipState":
+            MigrationManager.resetDismissedState()
+            result(nil)
+
         // -- State Queries --
 
         case "getIsConfigured":
@@ -434,6 +488,44 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
 
         case "getDetectedJurisdiction":
             result(ZeroSettle.shared.detectedJurisdiction?.rawValue)
+
+        // -- Upgrade Offer --
+
+        case "presentUpgradeOffer":
+            let productId = args?["productId"] as? String
+            guard let userId = args?["userId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                let upgradeResult = await ZeroSettle.shared.presentUpgradeOffer(
+                    productId: productId,
+                    userId: userId
+                )
+                switch upgradeResult {
+                case .upgraded: result("upgraded")
+                case .declined: result("declined")
+                case .dismissed: result("dismissed")
+                }
+            }
+
+        case "fetchUpgradeOfferConfig":
+            let productId = args?["productId"] as? String
+            guard let userId = args?["userId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    let config = try await ZeroSettle.shared.fetchUpgradeOfferConfig(
+                        productId: productId,
+                        userId: userId
+                    )
+                    result(config.toFlutterMap())
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
 
         // -- Save the Sale --
 
@@ -654,6 +746,14 @@ extension Entitlement {
         if let pauseResumesAt {
             map["pauseResumesAt"] = iso8601Formatter.string(from: pauseResumesAt)
         }
+        map["willRenew"] = willRenew
+        map["isTrial"] = isTrial
+        if let trialEndsAt {
+            map["trialEndsAt"] = iso8601Formatter.string(from: trialEndsAt)
+        }
+        if let cancelledAt {
+            map["cancelledAt"] = iso8601Formatter.string(from: cancelledAt)
+        }
         return map
     }
 }
@@ -669,6 +769,15 @@ extension CheckoutTransaction {
         ]
         if let expiresAt {
             map["expiresAt"] = iso8601Formatter.string(from: expiresAt)
+        }
+        if let productName {
+            map["productName"] = productName
+        }
+        if let amountCents {
+            map["amountCents"] = amountCents
+        }
+        if let currency {
+            map["currency"] = currency
         }
         return map
     }
@@ -745,6 +854,9 @@ extension CancelFlow.Config {
         if let pause {
             map["pause"] = pause.toFlutterMap()
         }
+        if let variantId {
+            map["variantId"] = variantId
+        }
         return map
     }
 }
@@ -813,6 +925,67 @@ extension CancelFlow.PauseOption {
         if let resumeDate {
             map["resumeDate"] = iso8601Formatter.string(from: resumeDate)
         }
+        return map
+    }
+}
+
+// MARK: - Upgrade Offer Flutter Map
+
+extension UpgradeOffer.Config {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = ["available": available]
+        if let reason { map["reason"] = reason.rawString }
+        if let currentProduct { map["currentProduct"] = currentProduct.toFlutterMap() }
+        if let targetProduct { map["targetProduct"] = targetProduct.toFlutterMap() }
+        if let savingsPercent { map["savingsPercent"] = savingsPercent }
+        if let upgradeType { map["upgradeType"] = upgradeType.rawValue }
+        if let proration { map["proration"] = proration.toFlutterMap() }
+        if let display { map["display"] = display.toFlutterMap() }
+        if let variantId { map["variantId"] = variantId }
+        return map
+    }
+}
+
+extension UpgradeOffer.ProductInfo {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "referenceId": referenceId,
+            "name": name,
+            "priceCents": price.cents,
+            "currency": price.currency,
+            "durationDays": 0, // Not directly available on iOS ProductInfo
+            "billingLabel": billingLabel,
+        ]
+        if let monthlyEquivalent {
+            map["monthlyEquivalentCents"] = monthlyEquivalent.cents
+        }
+        return map
+    }
+}
+
+extension UpgradeOffer.Proration {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "prorationAmountCents": amountCents,
+            "currency": currency,
+        ]
+        if let nextBillingDate {
+            map["nextBillingDate"] = Int(nextBillingDate.timeIntervalSince1970)
+        }
+        return map
+    }
+}
+
+extension UpgradeOffer.Display {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "title": title,
+            "body": body,
+            "ctaText": ctaText,
+            "dismissText": dismissText,
+        ]
+        if let storekitMigrationBody { map["storekitMigrationBody"] = storekitMigrationBody }
+        if let storekitCancelInstructions { map["cancelInstructions"] = storekitCancelInstructions }
         return map
     }
 }

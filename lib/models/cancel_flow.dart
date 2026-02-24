@@ -5,11 +5,15 @@ class CancelFlowConfig {
   final CancelFlowOffer? offer;
   final CancelFlowPauseConfig? pause;
 
+  /// A/B experiment variant identifier, if this config is part of an experiment.
+  final int? variantId;
+
   CancelFlowConfig({
     required this.enabled,
     required this.questions,
     this.offer,
     this.pause,
+    this.variantId,
   });
 
   factory CancelFlowConfig.fromMap(Map<String, dynamic> map) {
@@ -25,6 +29,7 @@ class CancelFlowConfig {
       pause: map['pause'] != null
           ? CancelFlowPauseConfig.fromMap(Map<String, dynamic>.from(map['pause'] as Map))
           : null,
+      variantId: map['variantId'] as int?,
     );
   }
 
@@ -34,6 +39,7 @@ class CancelFlowConfig {
       'questions': questions.map((e) => e.toMap()).toList(),
       if (offer != null) 'offer': offer!.toMap(),
       if (pause != null) 'pause': pause!.toMap(),
+      if (variantId != null) 'variantId': variantId,
     };
   }
 }
@@ -307,6 +313,9 @@ class CancelFlowResponsePayload {
   final int lastStepSeen;
   final List<CancelFlowAnswerPayload> answers;
 
+  /// A/B experiment variant identifier echoed back from the config.
+  final int? variantId;
+
   CancelFlowResponsePayload({
     required this.userId,
     required this.productId,
@@ -318,6 +327,7 @@ class CancelFlowResponsePayload {
     this.pauseDurationDays,
     required this.lastStepSeen,
     required this.answers,
+    this.variantId,
   });
 
   Map<String, dynamic> toMap() {
@@ -332,6 +342,7 @@ class CancelFlowResponsePayload {
       if (pauseDurationDays != null) 'pauseDurationDays': pauseDurationDays,
       'lastStepSeen': lastStepSeen,
       'answers': answers.map((e) => e.toMap()).toList(),
+      if (variantId != null) 'variantId': variantId,
     };
   }
 }

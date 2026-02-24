@@ -38,17 +38,16 @@ class MockZeroSettlePlatform
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
-    int freeTrialDays = 0,
     bool dismissible = true,
   }) async {
     return _sampleTransactionMap();
   }
 
   @override
-  Future<void> preloadPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) async {}
+  Future<void> preloadPaymentSheet({required String productId, String? userId}) async {}
 
   @override
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) async {}
+  Future<void> warmUpPaymentSheet({required String productId, String? userId}) async {}
 
   @override
   Future<List<Map<String, dynamic>>> restoreEntitlements({required String userId}) async {
@@ -90,6 +89,81 @@ class MockZeroSettlePlatform
   @override
   Stream<Map<String, dynamic>> get checkoutEvents =>
       Stream.value({'event': 'checkoutDidBegin', 'productId': 'premium'});
+
+  @override
+  Future<void> setBaseUrlOverride(String? url) async {}
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchTransactionHistory({required String userId}) async {
+    return [
+      _sampleTransactionMap(),
+      {
+        'id': 'txn_def',
+        'productId': 'coins_100',
+        'status': 'completed',
+        'source': 'store_kit',
+        'purchasedAt': '2025-02-01T12:00:00.000Z',
+        'productName': '100 Coins',
+        'amountCents': 99,
+        'currency': 'USD',
+      },
+    ];
+  }
+
+  @override
+  Future<String> presentCancelFlow({required String productId, required String userId}) async {
+    return 'cancelled';
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchCancelFlowConfig({String? userId}) async {
+    return {
+      'enabled': true,
+      'questions': <Map<String, dynamic>>[],
+    };
+  }
+
+  @override
+  Future<String?> pauseSubscription({
+    required String productId,
+    required String userId,
+    required int pauseOptionId,
+  }) async {
+    return '2026-04-01T00:00:00.000Z';
+  }
+
+  @override
+  Future<void> resumeSubscription({required String productId, required String userId}) async {}
+
+  @override
+  Future<void> cancelSubscription({required String productId, required String userId}) async {}
+
+  @override
+  Future<String> presentUpgradeOffer({String? productId, required String userId}) async {
+    return 'upgraded';
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchUpgradeOfferConfig({String? productId, required String userId}) async {
+    return {'available': false};
+  }
+
+  @override
+  Future<void> trackMigrationConversion({required String userId}) async {}
+
+  @override
+  Future<void> resetMigrateTipState() async {}
+
+  @override
+  Future<void> trackEvent({
+    required String eventType,
+    required String productId,
+    String? screenName,
+    Map<String, String>? metadata,
+  }) async {}
+
+  @override
+  Future<String> presentSaveTheSaleSheet() async => 'dismissed';
 }
 
 // -- Sample Data Helpers --
@@ -99,11 +173,11 @@ Map<String, dynamic> _sampleProductMap() => {
   'displayName': 'Premium Monthly',
   'productDescription': 'Unlock all features',
   'type': 'auto_renewable_subscription',
-  'webPrice': {'amountMicros': 4990000, 'currencyCode': 'USD'},
-  'appStorePrice': {'amountMicros': 5990000, 'currencyCode': 'USD'},
-  'syncedToASC': true,
+  'webPrice': {'amountCents': 499, 'currencyCode': 'USD'},
+  'appStorePrice': {'amountCents': 599, 'currencyCode': 'USD'},
+  'syncedToAppStoreConnect': true,
   'storeKitAvailable': true,
-  'storeKitPrice': {'amountMicros': 5990000, 'currencyCode': 'USD'},
+  'storeKitPrice': {'amountCents': 599, 'currencyCode': 'USD'},
   'savingsPercent': 17,
 };
 
@@ -138,6 +212,7 @@ Map<String, dynamic> _sampleRemoteConfigMap() => {
     'discountPercent': 20,
     'title': 'Switch & Save',
     'message': 'Save 20% by switching to web checkout',
+    'ctaText': 'Save 20% Forever',
   },
 };
 
@@ -180,16 +255,16 @@ void main() {
     test('fetchProducts returns ProductCatalog', () async {
       final catalog = await ZeroSettle.instance.fetchProducts(userId: 'user_42');
       expect(catalog.products, hasLength(1));
-      expect(catalog.products.first.webPrice.amountMicros, 4990000);
+      expect(catalog.products.first.webPrice!.amountCents, 499);
     });
 
-    test('getProducts returns list of ZSProduct', () async {
+    test('getProducts returns list of Product', () async {
       final products = await ZeroSettle.instance.getProducts();
       expect(products, hasLength(1));
       expect(products.first.displayName, 'Premium Monthly');
     });
 
-    test('presentPaymentSheet returns ZSTransaction', () async {
+    test('presentPaymentSheet returns CheckoutTransaction', () async {
       final txn = await ZeroSettle.instance.presentPaymentSheet(
         productId: 'premium_monthly',
         userId: 'user_42',
@@ -225,7 +300,7 @@ void main() {
     test('getRemoteConfig returns RemoteConfig', () async {
       final config = await ZeroSettle.instance.getRemoteConfig();
       expect(config, isNotNull);
-      expect(config!.checkout.sheetType, CheckoutType.webview);
+      expect(config!.checkout.sheetType, CheckoutType.webView);
       expect(config.checkout.isEnabled, isTrue);
       expect(config.checkout.jurisdictions[Jurisdiction.eu]!.isEnabled, isFalse);
     });
@@ -249,6 +324,67 @@ void main() {
     test('checkoutEvents emits events', () async {
       final event = await ZeroSettle.instance.checkoutEvents.first;
       expect(event['event'], 'checkoutDidBegin');
+    });
+
+    test('fetchTransactionHistory returns list of CheckoutTransaction', () async {
+      final transactions = await ZeroSettle.instance.fetchTransactionHistory(userId: 'user_42');
+      expect(transactions, hasLength(2));
+      expect(transactions.first.id, 'txn_abc');
+      expect(transactions.first.status, TransactionStatus.completed);
+      expect(transactions.first.source, EntitlementSource.webCheckout);
+      // Second transaction has the new optional fields
+      expect(transactions.last.id, 'txn_def');
+      expect(transactions.last.productName, '100 Coins');
+      expect(transactions.last.amountCents, 99);
+      expect(transactions.last.currency, 'USD');
+      expect(transactions.last.source, EntitlementSource.storeKit);
+    });
+
+    test('presentCancelFlow returns CancelFlowCancelled', () async {
+      final result = await ZeroSettle.instance.presentCancelFlow(
+        productId: 'premium_monthly',
+        userId: 'user_42',
+      );
+      expect(result, isA<CancelFlowCancelled>());
+    });
+
+    test('pauseSubscription returns parsed DateTime', () async {
+      final resumeDate = await ZeroSettle.instance.pauseSubscription(
+        productId: 'premium_monthly',
+        userId: 'user_42',
+        pauseOptionId: 100,
+      );
+      expect(resumeDate, isNotNull);
+      expect(resumeDate!.year, 2026);
+      expect(resumeDate.month, 4);
+      expect(resumeDate.day, 1);
+    });
+
+    test('presentUpgradeOffer returns UpgradeOfferUpgraded', () async {
+      final result = await ZeroSettle.instance.presentUpgradeOffer(
+        productId: 'premium_monthly',
+        userId: 'user_42',
+      );
+      expect(result, isA<UpgradeOfferUpgraded>());
+    });
+
+    test('trackMigrationConversion completes without error', () async {
+      await expectLater(
+        ZeroSettle.instance.trackMigrationConversion(userId: 'user_42'),
+        completes,
+      );
+    });
+
+    test('trackEvent does not throw', () async {
+      await expectLater(
+        ZeroSettle.trackEvent(
+          FunnelEventType.paywallViewed,
+          productId: 'premium_monthly',
+          screenName: 'home',
+          metadata: {'variant': 'A'},
+        ),
+        completes,
+      );
     });
   });
 }

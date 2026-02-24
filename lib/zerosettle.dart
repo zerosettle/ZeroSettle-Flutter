@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'zerosettle_platform_interface.dart';
 import 'errors/zs_exception.dart';
 import 'models/entitlement.dart';
+import 'models/funnel_event.dart';
 import 'models/product_catalog.dart';
 import 'models/remote_config.dart';
 import 'models/enums.dart';
@@ -23,6 +24,7 @@ export 'errors/zs_exception.dart';
 export 'widgets/zs_migrate_tip_view.dart';
 export 'models/cancel_flow.dart';
 export 'models/upgrade_offer.dart';
+export 'models/funnel_event.dart';
 
 /// Main entry point for the ZeroSettle Flutter SDK.
 ///
@@ -75,6 +77,8 @@ class ZeroSettle {
     });
   }
 
+
+
   // -- Products --
 
   /// Fetch the product catalog from ZeroSettle.
@@ -108,14 +112,12 @@ class ZeroSettle {
   Future<CheckoutTransaction> presentPaymentSheet({
     required String productId,
     String? userId,
-    int freeTrialDays = 0,
     bool dismissible = true,
   }) {
     return _wrap(() async {
       final map = await _platform.presentPaymentSheet(
         productId: productId,
         userId: userId,
-        freeTrialDays: freeTrialDays,
         dismissible: dismissible,
       );
       return CheckoutTransaction.fromMap(map);
@@ -127,11 +129,10 @@ class ZeroSettle {
   /// - [productId]: The product to preload
   /// - [userId]: Optional user identifier
   /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions (defaults to 0)
-  Future<void> preloadPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) {
+  Future<void> preloadPaymentSheet({required String productId, String? userId}) {
     return _wrap(() => _platform.preloadPaymentSheet(
           productId: productId,
           userId: userId,
-          freeTrialDays: freeTrialDays,
         ));
   }
 
@@ -140,11 +141,10 @@ class ZeroSettle {
   /// - [productId]: The product to warm up
   /// - [userId]: Optional user identifier
   /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions (defaults to 0)
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, int freeTrialDays = 0}) {
+  Future<void> warmUpPaymentSheet({required String productId, String? userId}) {
     return _wrap(() => _platform.warmUpPaymentSheet(
           productId: productId,
           userId: userId,
-          freeTrialDays: freeTrialDays,
         ));
   }
 
@@ -173,9 +173,31 @@ class ZeroSettle {
     );
   }
 
+  // -- Transaction History --
+
+  /// Fetch the full transaction history for a user.
+  ///
+  /// Unlike [restoreEntitlements] which only returns **active** entitlements,
+  /// this method returns all transactions regardless of status — including
+  /// consumed consumables, expired subscriptions, refunds, and failed
+  /// transactions.
+  ///
+  /// - [userId]: Your app's user identifier
+  Future<List<CheckoutTransaction>> fetchTransactionHistory({required String userId}) {
+    return _wrap(() async {
+      final list = await _platform.fetchTransactionHistory(userId: userId);
+      return list.map((e) => CheckoutTransaction.fromMap(e)).toList();
+    });
+  }
+
   // -- Subscription Management --
 
   /// Open the Stripe customer portal for subscription management.
+  ///
+  /// **Deprecated:** Use [showManageSubscription] instead — it auto-routes
+  /// between Stripe and the native store's management UI based on entitlement
+  /// sources.
+  @Deprecated('Use showManageSubscription() instead — it auto-routes between Stripe and native store management based on entitlement sources.')
   Future<void> openCustomerPortal({required String userId}) {
     return _wrap(() => _platform.openCustomerPortal(userId: userId));
   }
@@ -248,9 +270,11 @@ class ZeroSettle {
   /// Fetch the cancel flow configuration without presenting any UI.
   ///
   /// Use this for headless/custom cancel flow implementations.
-  Future<CancelFlowConfig> fetchCancelFlowConfig() {
+  ///
+  /// - [userId]: Optional user ID for A/B experiment targeting
+  Future<CancelFlowConfig> fetchCancelFlowConfig({String? userId}) {
     return _wrap(() async {
-      final map = await _platform.fetchCancelFlowConfig();
+      final map = await _platform.fetchCancelFlowConfig(userId: userId);
       return CancelFlowConfig.fromMap(map);
     });
   }
@@ -358,7 +382,7 @@ class ZeroSettle {
   /// - [productId]: The current product the user holds
   /// - [userId]: Your app's user identifier
   Future<UpgradeOfferResult> presentUpgradeOffer({
-    required String productId,
+    String? productId,
     required String userId,
   }) {
     return _wrap(() async {
@@ -377,7 +401,7 @@ class ZeroSettle {
   /// - [productId]: The current product to check upgrades for
   /// - [userId]: Your app's user identifier
   Future<UpgradeOfferConfig> fetchUpgradeOfferConfig({
-    required String productId,
+    String? productId,
     required String userId,
   }) {
     return _wrap(() async {
@@ -408,6 +432,58 @@ class ZeroSettle {
       final raw = await _platform.presentSaveTheSaleSheet();
       return ZSSaveTheSaleResult.fromRawValue(raw);
     });
+  }
+
+  // -- Migration Tracking --
+
+  /// Track a successful migration conversion.
+  ///
+  /// Call this after a user successfully completes a web checkout purchase
+  /// as part of a migration campaign (switching from native store billing to
+  /// web checkout).
+  ///
+  /// - [userId]: Your app's user identifier
+  Future<void> trackMigrationConversion({required String userId}) {
+    return _wrap(() => _platform.trackMigrationConversion(userId: userId));
+  }
+
+  // -- Migration Tip --
+
+  /// Resets the persisted dismissal state for the migration tip view.
+  /// After calling this, the migration tip will appear again for eligible users.
+  ///
+  /// This is primarily useful during development and testing.
+  Future<void> resetMigrateTipState() {
+    return _wrap(() => _platform.resetMigrateTipState());
+  }
+
+  // -- Funnel Analytics --
+
+  /// Fire-and-forget analytics event for paywall and checkout funnel tracking.
+  ///
+  /// Sends the event to the ZeroSettle backend asynchronously via the native
+  /// SDK. Errors are silently swallowed and never thrown.
+  ///
+  /// - [type]: The funnel event type
+  /// - [productId]: The product identifier associated with this event
+  /// - [screenName]: Optional screen name where the event occurred
+  /// - [metadata]: Optional key-value pairs for additional context
+  static Future<void> trackEvent(
+    FunnelEventType type, {
+    required String productId,
+    String? screenName,
+    Map<String, String>? metadata,
+  }) async {
+    try {
+      await ZeroSettlePlatform.instance.trackEvent(
+        eventType: type.value,
+        productId: productId,
+        screenName: screenName,
+        metadata: metadata,
+      );
+    } catch (_) {
+      // Silent failure — fire-and-forget
+    }
   }
 
   // -- Error wrapping --

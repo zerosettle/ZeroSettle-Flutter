@@ -27,10 +27,9 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- Bootstrap --
 
   @override
-  Future<Map<String, dynamic>> bootstrap({required String userId, required int freeTrialDays}) async {
+  Future<Map<String, dynamic>> bootstrap({required String userId}) async {
     final result = await methodChannel.invokeMethod<Map>('bootstrap', {
       'userId': userId,
-      'freeTrialDays': freeTrialDays,
     });
     return Map<String, dynamic>.from(result!);
   }
@@ -57,33 +56,29 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
-    required int freeTrialDays,
     bool dismissible = true,
   }) async {
     final result = await methodChannel.invokeMethod<Map>('presentPaymentSheet', {
       'productId': productId,
       'userId': userId,
-      'freeTrialDays': freeTrialDays,
       'dismissible': dismissible,
     });
     return Map<String, dynamic>.from(result!);
   }
 
   @override
-  Future<void> preloadPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {
+  Future<void> preloadPaymentSheet({required String productId, String? userId}) async {
     await methodChannel.invokeMethod('preloadPaymentSheet', {
       'productId': productId,
       'userId': userId,
-      'freeTrialDays': freeTrialDays,
     });
   }
 
   @override
-  Future<void> warmUpPaymentSheet({required String productId, String? userId, required int freeTrialDays}) async {
+  Future<void> warmUpPaymentSheet({required String productId, String? userId}) async {
     await methodChannel.invokeMethod('warmUpPaymentSheet', {
       'productId': productId,
       'userId': userId,
-      'freeTrialDays': freeTrialDays,
     });
   }
 
@@ -193,9 +188,21 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return result ?? 'dismissed';
   }
 
+  // -- Transaction History --
+
   @override
-  Future<Map<String, dynamic>> fetchCancelFlowConfig() async {
-    final result = await methodChannel.invokeMethod<Map>('fetchCancelFlowConfig');
+  Future<List<Map<String, dynamic>>> fetchTransactionHistory({required String userId}) async {
+    final result = await methodChannel.invokeMethod<List>('fetchTransactionHistory', {
+      'userId': userId,
+    });
+    return result!.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchCancelFlowConfig({String? userId}) async {
+    final result = await methodChannel.invokeMethod<Map>('fetchCancelFlowConfig', {
+      if (userId != null) 'userId': userId,
+    });
     return Map<String, dynamic>.from(result!);
   }
 
@@ -217,32 +224,58 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     });
   }
 
-  @override
-  Future<void> cancelSubscription({required String productId, required String userId}) async {
-    await methodChannel.invokeMethod('cancelSubscription', {
-      'productId': productId,
-      'userId': userId,
-    });
-  }
 
   // -- Upgrade Offer --
 
   @override
-  Future<String> presentUpgradeOffer({required String productId, required String userId}) async {
+  Future<String> presentUpgradeOffer({String? productId, required String userId}) async {
     final result = await methodChannel.invokeMethod<String>('presentUpgradeOffer', {
-      'productId': productId,
+      if (productId != null) 'productId': productId,
       'userId': userId,
     });
     return result ?? 'dismissed';
   }
 
   @override
-  Future<Map<String, dynamic>> fetchUpgradeOfferConfig({required String productId, required String userId}) async {
+  Future<Map<String, dynamic>> fetchUpgradeOfferConfig({String? productId, required String userId}) async {
     final result = await methodChannel.invokeMethod<Map>('fetchUpgradeOfferConfig', {
-      'productId': productId,
+      if (productId != null) 'productId': productId,
       'userId': userId,
     });
     return Map<String, dynamic>.from(result!);
+  }
+
+  // -- Migration Tracking --
+
+  @override
+  Future<void> trackMigrationConversion({required String userId}) async {
+    await methodChannel.invokeMethod('trackMigrationConversion', {
+      'userId': userId,
+    });
+  }
+
+  // -- Migration Tip --
+
+  @override
+  Future<void> resetMigrateTipState() async {
+    await methodChannel.invokeMethod('resetMigrateTipState');
+  }
+
+  // -- Funnel Analytics --
+
+  @override
+  Future<void> trackEvent({
+    required String eventType,
+    required String productId,
+    String? screenName,
+    Map<String, String>? metadata,
+  }) async {
+    await methodChannel.invokeMethod('trackEvent', {
+      'eventType': eventType,
+      'productId': productId,
+      if (screenName != null) 'screenName': screenName,
+      if (metadata != null) 'metadata': metadata,
+    });
   }
 
   // -- Event Streams --

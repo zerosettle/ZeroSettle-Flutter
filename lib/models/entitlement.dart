@@ -11,6 +11,10 @@ class Entitlement {
   final String? status;
   final DateTime? pausedAt;
   final DateTime? pauseResumesAt;
+  final bool willRenew;
+  final bool isTrial;
+  final DateTime? trialEndsAt;
+  final DateTime? cancelledAt;
 
   const Entitlement({
     required this.id,
@@ -22,6 +26,10 @@ class Entitlement {
     this.status,
     this.pausedAt,
     this.pauseResumesAt,
+    this.willRenew = true,
+    this.isTrial = false,
+    this.trialEndsAt,
+    this.cancelledAt,
   });
 
   /// Whether this entitlement is currently paused.
@@ -44,6 +52,14 @@ class Entitlement {
       pauseResumesAt: map['pauseResumesAt'] != null
           ? DateTime.parse(map['pauseResumesAt'] as String)
           : null,
+      willRenew: map['willRenew'] as bool? ?? true,
+      isTrial: map['isTrial'] as bool? ?? false,
+      trialEndsAt: map['trialEndsAt'] != null
+          ? DateTime.parse(map['trialEndsAt'] as String)
+          : null,
+      cancelledAt: map['cancelledAt'] != null
+          ? DateTime.parse(map['cancelledAt'] as String)
+          : null,
     );
   }
 
@@ -58,6 +74,10 @@ class Entitlement {
       if (status != null) 'status': status,
       if (pausedAt != null) 'pausedAt': pausedAt!.toIso8601String(),
       if (pauseResumesAt != null) 'pauseResumesAt': pauseResumesAt!.toIso8601String(),
+      'willRenew': willRenew,
+      'isTrial': isTrial,
+      if (trialEndsAt != null) 'trialEndsAt': trialEndsAt!.toIso8601String(),
+      if (cancelledAt != null) 'cancelledAt': cancelledAt!.toIso8601String(),
     };
   }
 
@@ -73,11 +93,15 @@ class Entitlement {
           purchasedAt == other.purchasedAt &&
           status == other.status &&
           pausedAt == other.pausedAt &&
-          pauseResumesAt == other.pauseResumesAt;
+          pauseResumesAt == other.pauseResumesAt &&
+          willRenew == other.willRenew &&
+          isTrial == other.isTrial &&
+          trialEndsAt == other.trialEndsAt &&
+          cancelledAt == other.cancelledAt;
 
   @override
   int get hashCode =>
-      Object.hash(id, productId, source, isActive, expiresAt, purchasedAt, status, pausedAt, pauseResumesAt);
+      Object.hash(id, productId, source, isActive, expiresAt, purchasedAt, status, pausedAt, pauseResumesAt, willRenew, isTrial, trialEndsAt, cancelledAt);
 
   @override
   String toString() =>
