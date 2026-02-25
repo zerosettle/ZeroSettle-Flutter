@@ -47,6 +47,6 @@ android {
 }
 
 dependencies {
-    api 'io.zerosettle:zerosettle-android:0.10.0'
+    api 'io.zerosettle:zerosettle-android:0.15.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
 }

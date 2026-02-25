@@ -78,6 +78,21 @@ When `zerosettle-android` bumps its version:
 * Local iOS SDK development: The example Podfile can point to a local ZeroSettleKit checkout via `pod 'ZeroSettleKit', :path => '/path/to/ZeroSettleKit'`
 * Local Android SDK development: Add `mavenLocal()` to example app's `settings.gradle.kts` repositories and `publishToMavenLocal` the SDK
 
+## Backward Compatibility
+**Never introduce breaking changes unless explicitly approved by the user.** This plugin is consumed by third-party Flutter apps.
+
+Safe (non-breaking) changes:
+* Adding new optional fields with defaults (`null`/`false`/`0`)
+* Adding new API response fields (old clients ignore unknown keys)
+* Adding new methods or types
+* Adding new optional parameters with defaults to existing methods
+
+Breaking changes (require explicit approval):
+* Removing or renaming public classes, methods, fields, or enum values
+* Changing method signatures or `fromMap()`/`toMap()` keys
+* Removing fields that clients depend on
+* Changing default values in ways that alter existing behavior
+
 ## Coding Standards
 * Models use `fromMap()`/`toMap()` with `==`/`hashCode` overrides
 * Enums use `rawValue` string mapping with `fromRawValue()` factory

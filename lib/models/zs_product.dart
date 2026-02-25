@@ -12,6 +12,7 @@ class Product {
   final Price? appStorePrice;
   final bool syncedToAppStoreConnect;
   final Promotion? promotion;
+  final int? subscriptionGroupId;
   final bool storeKitAvailable;
   final Price? storeKitPrice;
   final int? savingsPercent;
@@ -25,6 +26,7 @@ class Product {
     this.appStorePrice,
     this.syncedToAppStoreConnect = false,
     this.promotion,
+    this.subscriptionGroupId,
     this.storeKitAvailable = false,
     this.storeKitPrice,
     this.savingsPercent,
@@ -43,6 +45,7 @@ class Product {
           ? Price.fromMap(Map<String, dynamic>.from(map['appStorePrice'] as Map))
           : null,
       syncedToAppStoreConnect: map['syncedToAppStoreConnect'] as bool? ?? false,
+      subscriptionGroupId: map['subscription_group_id'] as int?,
       promotion: map['promotion'] != null
           ? Promotion.fromMap(Map<String, dynamic>.from(map['promotion'] as Map))
           : null,
@@ -63,6 +66,7 @@ class Product {
       'webPrice': webPrice?.toMap(),
       'appStorePrice': appStorePrice?.toMap(),
       'syncedToAppStoreConnect': syncedToAppStoreConnect,
+      'subscriptionGroupId': subscriptionGroupId,
       'promotion': promotion?.toMap(),
       'storeKitAvailable': storeKitAvailable,
       'storeKitPrice': storeKitPrice?.toMap(),
@@ -81,12 +85,13 @@ class Product {
           webPrice == other.webPrice &&
           appStorePrice == other.appStorePrice &&
           syncedToAppStoreConnect == other.syncedToAppStoreConnect &&
-          promotion == other.promotion;
+          promotion == other.promotion &&
+          subscriptionGroupId == other.subscriptionGroupId;
 
   @override
   int get hashCode => Object.hash(
         id, displayName, productDescription, type,
-        webPrice, appStorePrice, syncedToAppStoreConnect, promotion,
+        webPrice, appStorePrice, syncedToAppStoreConnect, promotion, subscriptionGroupId,
       );
 
   @override
