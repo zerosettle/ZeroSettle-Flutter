@@ -78,6 +78,25 @@ When `zerosettle-android` bumps its version:
 * Local iOS SDK development: The example Podfile can point to a local ZeroSettleKit checkout via `pod 'ZeroSettleKit', :path => '/path/to/ZeroSettleKit'`
 * Local Android SDK development: Add `mavenLocal()` to example app's `settings.gradle.kts` repositories and `publishToMavenLocal` the SDK
 
+## Release Propagation
+This repo must be updated whenever a new tag is pushed to either core native SDK:
+
+**ZeroSettleKit tag pushed →**
+1. Bump `ios/zerosettle.podspec` → `s.dependency 'ZeroSettleKit', '~> X.Y.Z'`
+2. Update `ios/Classes/ZeroSettlePlugin.swift` bridge code if the public API changed
+3. Update Dart models in `lib/models/` to match new serialization
+4. Bump `pubspec.yaml` → `version` and `ios/zerosettle.podspec` → `s.version`
+5. Commit, tag, and push
+6. Update docs at `/Users/ryanelliott/dev/docs/iap/installation.mdx`
+
+**ZeroSettle-Android tag pushed →**
+1. Bump `android/build.gradle` → `implementation 'io.zerosettle:zerosettle-android:X.Y.Z'`
+2. Update `android/.../ZeroSettlePlugin.kt` bridge code if the public API changed
+3. Update Dart models in `lib/models/` to match new serialization
+4. Bump `pubspec.yaml` → `version`
+5. Commit, tag, and push
+6. Update docs at `/Users/ryanelliott/dev/docs/iap/installation.mdx`
+
 ## Backward Compatibility
 **Never introduce breaking changes unless explicitly approved by the user.** This plugin is consumed by third-party Flutter apps.
 
