@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'zerosettle'
-  s.version          = '0.3.4'
+  s.version          = '0.4.0'
   s.summary          = 'Flutter plugin for ZeroSettleKit — Merchant of Record web checkout.'
   s.description      = <<-DESC
     Flutter wrapper for ZeroSettleKit. Provides web checkout, entitlements,
@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*'
   s.dependency 'Flutter'
-  s.dependency 'ZeroSettleKit', '~> 1.2.3'
+  s.dependency 'ZeroSettleKit', '~> 1.2.5'
   s.platform         = :ios, '18.0'
 
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }

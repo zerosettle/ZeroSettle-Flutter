@@ -123,10 +123,10 @@ class StoreProduct {
     int? gemAmount;
 
     final skPrice = product.storeKitPrice != null
-        ? product.storeKitPrice!.amountMicros / 1000000.0
+        ? product.storeKitPrice!.amountCents / 100.0
         : null;
     final webPrice = product.webPrice != null
-        ? product.webPrice!.amountMicros / 1000000.0
+        ? product.webPrice!.amountCents / 100.0
         : 0.0;
 
     switch (product.type) {
@@ -425,7 +425,7 @@ class AppState extends ChangeNotifier {
     final records = entitlements.map((ent) {
       final product = products.where((p) => p.id == ent.productId).firstOrNull;
       final amount = product?.webPrice != null
-          ? product!.webPrice!.amountMicros / 1000000.0
+          ? product!.webPrice!.amountCents / 100.0
           : 0.0;
       return PurchaseRecord(
         id: ent.id,

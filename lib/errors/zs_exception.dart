@@ -18,6 +18,7 @@ sealed class ZeroSettleException implements Exception {
       'api_error' => ZSApiException(e.message ?? 'API error'),
       'user_id_required' => ZSUserIdRequiredException(e.message ?? 'User ID required'),
       'web_checkout_disabled' => ZSWebCheckoutDisabledException(e.message ?? 'Web checkout disabled'),
+      'checkout_not_started' => ZSCheckoutNotStartedException(e.message ?? 'Checkout not started'),
       _ => ZSApiException(e.message ?? 'Unknown error: ${e.code}'),
     };
   }
@@ -56,6 +57,12 @@ class ZSUserIdRequiredException extends ZeroSettleException {
 /// Web checkout is disabled for the user's jurisdiction.
 class ZSWebCheckoutDisabledException extends ZeroSettleException {
   const ZSWebCheckoutDisabledException(super.message);
+}
+
+/// Checkout could not start (e.g. backend failed to create the payment intent).
+/// Distinct from terminal errors that occur after checkout is in flight.
+class ZSCheckoutNotStartedException extends ZeroSettleException {
+  const ZSCheckoutNotStartedException(super.message);
 }
 
 /// Backward-compatible typedef. Use [ZeroSettleException] instead.

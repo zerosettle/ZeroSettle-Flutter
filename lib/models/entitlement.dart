@@ -15,6 +15,8 @@ class Entitlement {
   final bool isTrial;
   final DateTime? trialEndsAt;
   final DateTime? cancelledAt;
+  final String? storekitOriginalTransactionId;
+  final DateTime? originalPurchaseDate;
 
   const Entitlement({
     required this.id,
@@ -30,6 +32,8 @@ class Entitlement {
     this.isTrial = false,
     this.trialEndsAt,
     this.cancelledAt,
+    this.storekitOriginalTransactionId,
+    this.originalPurchaseDate,
   });
 
   /// Whether this entitlement is currently paused.
@@ -60,6 +64,10 @@ class Entitlement {
       cancelledAt: map['cancelledAt'] != null
           ? DateTime.parse(map['cancelledAt'] as String)
           : null,
+      storekitOriginalTransactionId: map['storekitOriginalTransactionId'] as String?,
+      originalPurchaseDate: map['originalPurchaseDate'] != null
+          ? DateTime.parse(map['originalPurchaseDate'] as String)
+          : null,
     );
   }
 
@@ -78,6 +86,8 @@ class Entitlement {
       'isTrial': isTrial,
       if (trialEndsAt != null) 'trialEndsAt': trialEndsAt!.toIso8601String(),
       if (cancelledAt != null) 'cancelledAt': cancelledAt!.toIso8601String(),
+      if (storekitOriginalTransactionId != null) 'storekitOriginalTransactionId': storekitOriginalTransactionId,
+      if (originalPurchaseDate != null) 'originalPurchaseDate': originalPurchaseDate!.toIso8601String(),
     };
   }
 
@@ -97,11 +107,13 @@ class Entitlement {
           willRenew == other.willRenew &&
           isTrial == other.isTrial &&
           trialEndsAt == other.trialEndsAt &&
-          cancelledAt == other.cancelledAt;
+          cancelledAt == other.cancelledAt &&
+          storekitOriginalTransactionId == other.storekitOriginalTransactionId &&
+          originalPurchaseDate == other.originalPurchaseDate;
 
   @override
   int get hashCode =>
-      Object.hash(id, productId, source, isActive, expiresAt, purchasedAt, status, pausedAt, pauseResumesAt, willRenew, isTrial, trialEndsAt, cancelledAt);
+      Object.hash(id, productId, source, isActive, expiresAt, purchasedAt, status, pausedAt, pauseResumesAt, willRenew, isTrial, trialEndsAt, cancelledAt, storekitOriginalTransactionId, originalPurchaseDate);
 
   @override
   String toString() =>

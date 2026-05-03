@@ -28,6 +28,37 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('bootstrap() has not been implemented.');
   }
 
+  // -- Identity --
+
+  Future<Map<String, dynamic>?> identify({
+    required String type,
+    String? id,
+    String? name,
+    String? email,
+  }) {
+    throw UnimplementedError('identify() has not been implemented.');
+  }
+
+  Future<void> logout() {
+    throw UnimplementedError('logout() has not been implemented.');
+  }
+
+  Future<void> setCustomer({String? name, String? email}) {
+    throw UnimplementedError('setCustomer() has not been implemented.');
+  }
+
+  Future<void> transferStoreKitOwnershipToCurrentUser({required String productId}) {
+    throw UnimplementedError('transferStoreKitOwnershipToCurrentUser() has not been implemented.');
+  }
+
+  Future<bool> hasActiveEntitlement({required String productId}) {
+    throw UnimplementedError('hasActiveEntitlement() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> product({required String productId}) {
+    throw UnimplementedError('product() has not been implemented.');
+  }
+
   // -- Products --
 
   Future<Map<String, dynamic>> fetchProducts({String? userId}) {

@@ -106,6 +106,80 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 }
             }
 
+        case "identify":
+            guard let type = args?["type"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "type is required", details: nil))
+                return
+            }
+            let identity: Identity
+            switch type {
+            case "user":
+                guard let id = args?["id"] as? String else {
+                    result(FlutterError(code: "INVALID_ARGUMENTS", message: "id is required for user identity", details: nil))
+                    return
+                }
+                identity = .user(id: id, name: args?["name"] as? String, email: args?["email"] as? String)
+            case "anonymous":
+                identity = .anonymous
+            case "deferred":
+                identity = .deferred
+            default:
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "unknown identity type: \(type)", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    let catalog = try await ZeroSettle.shared.identify(identity)
+                    result(catalog?.toFlutterMap())
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        case "logout":
+            Task { @MainActor in
+                ZeroSettle.shared.logout()
+                result(nil)
+            }
+
+        case "setCustomer":
+            Task { @MainActor in
+                ZeroSettle.shared.setCustomer(name: args?["name"] as? String, email: args?["email"] as? String)
+                result(nil)
+            }
+
+        case "transferStoreKitOwnershipToCurrentUser":
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    try await ZeroSettle.shared.transferStoreKitOwnershipToCurrentUser(productId: productId)
+                    result(nil)
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        case "hasActiveEntitlement":
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                result(ZeroSettle.shared.hasActiveEntitlement(for: productId))
+            }
+
+        case "product":
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                result(ZeroSettle.shared.product(for: productId)?.toFlutterMap())
+            }
+
         // -- Products --
 
         case "fetchProducts":
@@ -212,33 +286,14 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
 
         // -- Subscription Management --
 
-        case "openCustomerPortal":
-            guard let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
-                return
-            }
-            Task { @MainActor in
-                do {
-                    try await ZeroSettle.shared.openCustomerPortal(userId: userId)
-                    result(nil)
-                } catch {
-                    result(error.toFlutterError())
-                }
-            }
-
-        case "showManageSubscription":
-            guard let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
-                return
-            }
-            Task { @MainActor in
-                do {
-                    try await ZeroSettle.shared.showManageSubscription(userId: userId)
-                    result(nil)
-                } catch {
-                    result(error.toFlutterError())
-                }
-            }
+        case "openCustomerPortal", "showManageSubscription":
+            // Both APIs were removed in ZeroSettleKit. Apps should call presentCancelFlow
+            // for cancellation, or use StoreKit's AppStore.showManageSubscriptions directly.
+            result(FlutterError(
+                code: "not_implemented",
+                message: "openCustomerPortal/showManageSubscription were removed; use presentCancelFlow for cancel, or StoreKit directly for Apple billing management",
+                details: nil
+            ))
 
         // -- Universal Links --
 
@@ -530,21 +585,9 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // -- Save the Sale --
 
         case "presentSaveTheSaleSheet":
-            guard let viewController = Self.topViewController() else {
-                result(FlutterError(code: "no_view_controller", message: "Could not find root view controller", details: nil))
-                return
-            }
-
-            ZSSaveTheSaleSheet.present(from: viewController) { saveResult in
-                switch saveResult {
-                case .pauseAccount:
-                    result("pauseAccount")
-                case .stayWithDiscount:
-                    result("stayWithDiscount")
-                case .dismissed:
-                    result("dismissed")
-                }
-            }
+            // ZSSaveTheSaleSheet was removed in ZeroSettleKit; the modern flow is
+            // presentCancelFlow which surfaces save offers via CancelFlowConfig.
+            result(FlutterError(code: "not_implemented", message: "presentSaveTheSaleSheet was removed; use presentCancelFlow instead", details: nil))
 
         default:
             result(FlutterMethodNotImplemented)
@@ -696,7 +739,7 @@ extension Promotion {
     }
 }
 
-extension ZeroSettleKit.Product {
+extension ZeroSettleKit.ZSProduct {
     func toFlutterMap() -> [String: Any] {
         var map: [String: Any] = [
             "id": id,
@@ -721,6 +764,18 @@ extension ZeroSettleKit.Product {
         if let savingsPercent {
             map["savingsPercent"] = savingsPercent
         }
+        if let subscriptionGroupId {
+            map["subscriptionGroupId"] = subscriptionGroupId
+        }
+        if let billingInterval {
+            map["billingInterval"] = billingInterval
+        }
+        if let freeTrialDuration {
+            map["freeTrialDuration"] = freeTrialDuration
+        }
+        if let isTrialEligible {
+            map["isTrialEligible"] = isTrialEligible
+        }
         return map
     }
 }
@@ -737,9 +792,7 @@ extension Entitlement {
         if let expiresAt {
             map["expiresAt"] = iso8601Formatter.string(from: expiresAt)
         }
-        if let status {
-            map["status"] = status.rawString
-        }
+        map["status"] = status.rawString
         if let pausedAt {
             map["pausedAt"] = iso8601Formatter.string(from: pausedAt)
         }
@@ -753,6 +806,12 @@ extension Entitlement {
         }
         if let cancelledAt {
             map["cancelledAt"] = iso8601Formatter.string(from: cancelledAt)
+        }
+        if let storekitOriginalTransactionId {
+            map["storekitOriginalTransactionId"] = storekitOriginalTransactionId
+        }
+        if let originalPurchaseDate {
+            map["originalPurchaseDate"] = iso8601Formatter.string(from: originalPurchaseDate)
         }
         return map
     }
@@ -778,6 +837,9 @@ extension CheckoutTransaction {
         }
         if let currency {
             map["currency"] = currency
+        }
+        if let storekitStatus {
+            map["storekitStatus"] = storekitStatus
         }
         return map
     }
@@ -951,13 +1013,13 @@ extension UpgradeOffer.ProductInfo {
         var map: [String: Any] = [
             "referenceId": referenceId,
             "name": name,
-            "priceCents": price.cents,
-            "currency": price.currency,
+            "priceCents": price.amountCents,
+            "currency": price.currencyCode,
             "durationDays": 0, // Not directly available on iOS ProductInfo
             "billingLabel": billingLabel,
         ]
         if let monthlyEquivalent {
-            map["monthlyEquivalentCents"] = monthlyEquivalent.cents
+            map["monthlyEquivalentCents"] = monthlyEquivalent.amountCents
         }
         return map
     }
@@ -1018,6 +1080,8 @@ extension ZeroSettleError {
             return FlutterError(code: "user_id_required", message: errorDescription, details: productId)
         case .webCheckoutDisabledForJurisdiction(let jurisdiction):
             return FlutterError(code: "web_checkout_disabled", message: errorDescription, details: jurisdiction.rawValue)
+        case .checkoutNotStarted:
+            return FlutterError(code: "checkout_not_started", message: errorDescription, details: nil)
         default:
             return FlutterError(code: "api_error", message: errorDescription, details: nil)
         }
@@ -1028,7 +1092,7 @@ extension ZeroSettleError {
 
 /// Custom native header displayed above the payment WebView in the sheet.
 struct PaymentSheetHeader: View {
-    let product: ZeroSettleKit.Product
+    let product: ZeroSettleKit.ZSProduct
 
     var body: some View {
         VStack(spacing: 0) {

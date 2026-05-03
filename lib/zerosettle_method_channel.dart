@@ -34,6 +34,58 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return Map<String, dynamic>.from(result!);
   }
 
+  @override
+  Future<Map<String, dynamic>?> identify({
+    required String type,
+    String? id,
+    String? name,
+    String? email,
+  }) async {
+    final result = await methodChannel.invokeMethod<Map>('identify', {
+      'type': type,
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (email != null) 'email': email,
+    });
+    return result == null ? null : Map<String, dynamic>.from(result);
+  }
+
+  @override
+  Future<void> logout() async {
+    await methodChannel.invokeMethod('logout');
+  }
+
+  @override
+  Future<void> setCustomer({String? name, String? email}) async {
+    await methodChannel.invokeMethod('setCustomer', {
+      if (name != null) 'name': name,
+      if (email != null) 'email': email,
+    });
+  }
+
+  @override
+  Future<void> transferStoreKitOwnershipToCurrentUser({required String productId}) async {
+    await methodChannel.invokeMethod('transferStoreKitOwnershipToCurrentUser', {
+      'productId': productId,
+    });
+  }
+
+  @override
+  Future<bool> hasActiveEntitlement({required String productId}) async {
+    final result = await methodChannel.invokeMethod<bool>('hasActiveEntitlement', {
+      'productId': productId,
+    });
+    return result ?? false;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> product({required String productId}) async {
+    final result = await methodChannel.invokeMethod<Map>('product', {
+      'productId': productId,
+    });
+    return result == null ? null : Map<String, dynamic>.from(result);
+  }
+
   // -- Products --
 
   @override

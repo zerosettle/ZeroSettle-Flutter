@@ -11,6 +11,7 @@ class CheckoutTransaction {
   final String? productName;
   final int? amountCents;
   final String? currency;
+  final int? storekitStatus;
 
   const CheckoutTransaction({
     required this.id,
@@ -22,6 +23,7 @@ class CheckoutTransaction {
     this.productName,
     this.amountCents,
     this.currency,
+    this.storekitStatus,
   });
 
   factory CheckoutTransaction.fromMap(Map<String, dynamic> map) {
@@ -37,6 +39,7 @@ class CheckoutTransaction {
       productName: map['productName'] as String?,
       amountCents: map['amountCents'] as int?,
       currency: map['currency'] as String?,
+      storekitStatus: map['storekitStatus'] as int?,
     );
   }
 
@@ -51,6 +54,7 @@ class CheckoutTransaction {
       'productName': productName,
       'amountCents': amountCents,
       'currency': currency,
+      'storekitStatus': storekitStatus,
     };
   }
 
@@ -66,12 +70,13 @@ class CheckoutTransaction {
           expiresAt == other.expiresAt &&
           productName == other.productName &&
           amountCents == other.amountCents &&
-          currency == other.currency;
+          currency == other.currency &&
+          storekitStatus == other.storekitStatus;
 
   @override
   int get hashCode =>
       Object.hash(id, productId, status, source, purchasedAt, expiresAt,
-          productName, amountCents, currency);
+          productName, amountCents, currency, storekitStatus);
 
   @override
   String toString() =>

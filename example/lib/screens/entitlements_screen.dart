@@ -385,16 +385,17 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
       if (!mounted) return;
 
       final label = switch (result) {
-        CancelFlowResult.cancelled => 'Subscription cancelled',
-        CancelFlowResult.retained => 'Subscription retained',
-        CancelFlowResult.dismissed => 'Cancel flow dismissed',
+        CancelFlowCancelled() => 'Subscription cancelled',
+        CancelFlowRetained() => 'Subscription retained',
+        CancelFlowPaused() => 'Subscription paused',
+        CancelFlowDismissed() => 'Cancel flow dismissed',
       };
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(label)),
       );
 
-      if (result == CancelFlowResult.cancelled) {
+      if (result is CancelFlowCancelled) {
         _appState.deactivateSubscription();
       }
     } on ZSException catch (e) {

@@ -1,6 +1,6 @@
 name: zerosettle
 description: "ZeroSettle SDK for Flutter — Merchant of Record web checkout."
-version: 0.3.4
+version: 0.4.0
 homepage: https://zerosettle.io
 repository: https://github.com/zerosettle/ZeroSettle-Flutter
 

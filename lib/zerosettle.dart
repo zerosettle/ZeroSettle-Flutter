@@ -11,6 +11,7 @@ import 'models/zs_product.dart';
 import 'models/zs_transaction.dart';
 import 'models/cancel_flow.dart';
 import 'models/upgrade_offer.dart';
+import 'models/identity.dart';
 
 export 'models/price.dart';
 export 'models/enums.dart';
@@ -25,6 +26,7 @@ export 'widgets/zs_migrate_tip_view.dart';
 export 'models/cancel_flow.dart';
 export 'models/upgrade_offer.dart';
 export 'models/funnel_event.dart';
+export 'models/identity.dart';
 
 /// Main entry point for the ZeroSettle Flutter SDK.
 ///
@@ -77,6 +79,46 @@ class ZeroSettle {
     });
   }
 
+  /// Identify the current session. Mirrors native `identify(_:)`.
+  ///
+  /// Returns the product catalog for [Identity.user] / [Identity.anonymous],
+  /// or `null` for [Identity.deferred] (no fetch performed yet).
+  Future<ProductCatalog?> identify(Identity identity) {
+    return _wrap(() async {
+      final m = identity.toMap();
+      final map = await _platform.identify(
+        type: m['type'] as String,
+        id: m['id'] as String?,
+        name: m['name'] as String?,
+        email: m['email'] as String?,
+      );
+      return map == null ? null : ProductCatalog.fromMap(map);
+    });
+  }
+
+  /// Clear user-scoped state. Call when the user logs out of your app.
+  Future<void> logout() => _wrap(() => _platform.logout());
+
+  /// Update the Stripe customer's name/email metadata.
+  Future<void> setCustomer({String? name, String? email}) =>
+      _wrap(() => _platform.setCustomer(name: name, email: email));
+
+  /// Transfer a StoreKit-originated entitlement to the currently identified user.
+  /// Replaces the deprecated `claimEntitlement`.
+  Future<void> transferStoreKitOwnershipToCurrentUser({required String productId}) =>
+      _wrap(() => _platform.transferStoreKitOwnershipToCurrentUser(productId: productId));
+
+  /// Quick check: does the user have an active entitlement for [productId]?
+  Future<bool> hasActiveEntitlement({required String productId}) =>
+      _wrap(() => _platform.hasActiveEntitlement(productId: productId));
+
+  /// Look up a single cached product by ID. Returns `null` if not in the catalog.
+  Future<Product?> product({required String productId}) {
+    return _wrap(() async {
+      final map = await _platform.product(productId: productId);
+      return map == null ? null : Product.fromMap(map);
+    });
+  }
 
 
   // -- Products --

@@ -16,6 +16,9 @@ class Product {
   final bool storeKitAvailable;
   final Price? storeKitPrice;
   final int? savingsPercent;
+  final String? billingInterval;
+  final String? freeTrialDuration;
+  final bool? isTrialEligible;
 
   const Product({
     required this.id,
@@ -30,6 +33,9 @@ class Product {
     this.storeKitAvailable = false,
     this.storeKitPrice,
     this.savingsPercent,
+    this.billingInterval,
+    this.freeTrialDuration,
+    this.isTrialEligible,
   });
 
   factory Product.fromMap(Map<String, dynamic> map) {
@@ -45,7 +51,7 @@ class Product {
           ? Price.fromMap(Map<String, dynamic>.from(map['appStorePrice'] as Map))
           : null,
       syncedToAppStoreConnect: map['syncedToAppStoreConnect'] as bool? ?? false,
-      subscriptionGroupId: map['subscription_group_id'] as int?,
+      subscriptionGroupId: map['subscriptionGroupId'] as int?,
       promotion: map['promotion'] != null
           ? Promotion.fromMap(Map<String, dynamic>.from(map['promotion'] as Map))
           : null,
@@ -54,6 +60,9 @@ class Product {
           ? Price.fromMap(Map<String, dynamic>.from(map['storeKitPrice'] as Map))
           : null,
       savingsPercent: map['savingsPercent'] as int?,
+      billingInterval: map['billingInterval'] as String?,
+      freeTrialDuration: map['freeTrialDuration'] as String?,
+      isTrialEligible: map['isTrialEligible'] as bool?,
     );
   }
 
@@ -71,6 +80,9 @@ class Product {
       'storeKitAvailable': storeKitAvailable,
       'storeKitPrice': storeKitPrice?.toMap(),
       'savingsPercent': savingsPercent,
+      'billingInterval': billingInterval,
+      'freeTrialDuration': freeTrialDuration,
+      'isTrialEligible': isTrialEligible,
     };
   }
 
@@ -86,12 +98,16 @@ class Product {
           appStorePrice == other.appStorePrice &&
           syncedToAppStoreConnect == other.syncedToAppStoreConnect &&
           promotion == other.promotion &&
-          subscriptionGroupId == other.subscriptionGroupId;
+          subscriptionGroupId == other.subscriptionGroupId &&
+          billingInterval == other.billingInterval &&
+          freeTrialDuration == other.freeTrialDuration &&
+          isTrialEligible == other.isTrialEligible;
 
   @override
   int get hashCode => Object.hash(
         id, displayName, productDescription, type,
         webPrice, appStorePrice, syncedToAppStoreConnect, promotion, subscriptionGroupId,
+        billingInterval, freeTrialDuration, isTrialEligible,
       );
 
   @override
