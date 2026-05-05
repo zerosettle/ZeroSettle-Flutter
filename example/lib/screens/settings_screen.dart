@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 import '../app_state.dart';
+import '../debug/debug_account.dart';
 import '../iap_environment.dart';
 import '../identity_choice.dart';
+import 'debug_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AppState appState;
@@ -11,6 +14,19 @@ class SettingsScreen extends StatefulWidget {
   final Future<void> Function() onSwitchIdentity;
   final Future<void> Function() onSignOut;
 
+  /// Debug-only callback: re-bootstrap the SDK in [env] and optionally
+  /// re-identify as [restoreIdentity], skipping the user-facing identity
+  /// sheet. Only consumed when [kDebugMode] is true.
+  final Future<void> Function(IAPEnvironment env, {Identity? restoreIdentity})
+      onApplyDebugEnv;
+
+  /// Debug-only callback: logout, identify as [account], persist via
+  /// [IdentityChoiceStore].
+  final Future<void> Function(DebugAccount account) onSwitchToDebugAccount;
+
+  /// Debug-only callback: logout + clear local identity without re-prompting.
+  final Future<void> Function() onDebugClearIdentity;
+
   const SettingsScreen({
     super.key,
     required this.appState,
@@ -18,6 +34,9 @@ class SettingsScreen extends StatefulWidget {
     required this.onSwitchEnvironment,
     required this.onSwitchIdentity,
     required this.onSignOut,
+    required this.onApplyDebugEnv,
+    required this.onSwitchToDebugAccount,
+    required this.onDebugClearIdentity,
   });
 
   @override
@@ -87,6 +106,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
+
+                        // Debug Tools — only visible in debug builds. The
+                        // entire section disappears in release because
+                        // kDebugMode is a const-folded compile-time bool.
+                        if (kDebugMode) ...[
+                          _buildSectionHeader(context, 'Developer'),
+                          Card(
+                            child: ListTile(
+                              leading: const Icon(Icons.bug_report_outlined),
+                              title: const Text('Debug Tools'),
+                              subtitle: const Text(
+                                  'Test accounts, environment switching, claim entitlements'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => DebugSettingsScreen(
+                                    appState: _appState,
+                                    envNotifier: widget.envNotifier,
+                                    onApplyDebugEnv: widget.onApplyDebugEnv,
+                                    onSwitchToDebugAccount:
+                                        widget.onSwitchToDebugAccount,
+                                    onDebugClearIdentity:
+                                        widget.onDebugClearIdentity,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
                       ],
                     ),
                   ),

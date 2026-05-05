@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
 import 'app_state.dart';
+import 'debug/debug_account.dart';
 import 'iap_environment.dart';
 import 'identity_choice.dart';
 import 'screens/entitlements_screen.dart';
@@ -217,6 +218,65 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  // -- Debug-only callbacks (consumed by DebugSettingsScreen). --
+  //
+  // These bypass the user-facing identity sheet so engineers can rebootstrap
+  // the SDK at runtime without UI noise. The methods are still safe in
+  // release because the screen that calls them is gated behind kDebugMode.
+
+  /// Switch env without auto-restoring the current identity, then optionally
+  /// identify as [restoreIdentity]. Does NOT trigger the identity sheet.
+  Future<void> _applyDebugEnv(
+    IAPEnvironment env, {
+    Identity? restoreIdentity,
+  }) async {
+    // Tear down current identity locally so the next configure starts clean.
+    try {
+      await ZeroSettle.instance.logout();
+    } on ZeroSettleException {
+      // Non-fatal — we still want to swap env.
+    }
+    await IdentityChoiceStore.clear();
+    _appState.setIdentity(null);
+    _appState.setInitialized(false);
+    _appState.setProducts([]);
+    _appState.setEntitlements([]);
+
+    await _envNotifier.switchTo(env);
+    await _configureSdk(env);
+
+    if (restoreIdentity != null) {
+      await _applyIdentity(restoreIdentity);
+    }
+  }
+
+  /// Logout and identify as the user described by [account]. Persists via
+  /// [IdentityChoiceStore].
+  Future<void> _switchToDebugAccount(DebugAccount account) async {
+    try {
+      await ZeroSettle.instance.logout();
+    } on ZeroSettleException {
+      // Non-fatal — proceed to identify.
+    }
+    await _applyIdentity(
+      Identity.user(id: account.id, name: account.label),
+    );
+  }
+
+  /// Logout and clear local state without showing the identity sheet.
+  Future<void> _debugClearIdentity() async {
+    try {
+      await ZeroSettle.instance.logout();
+    } on ZeroSettleException {
+      // Non-fatal — clear local state regardless.
+    }
+    await IdentityChoiceStore.clear();
+    _appState.setIdentity(null);
+    _appState.setInitialized(false);
+    _appState.setProducts([]);
+    _appState.setEntitlements([]);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_envLoaded) {
@@ -248,6 +308,9 @@ class _AppShellState extends State<AppShell> {
                 onSwitchEnvironment: _switchEnvironment,
                 onSwitchIdentity: switchIdentity,
                 onSignOut: signOut,
+                onApplyDebugEnv: _applyDebugEnv,
+                onSwitchToDebugAccount: _switchToDebugAccount,
+                onDebugClearIdentity: _debugClearIdentity,
               ),
             ],
           ),
