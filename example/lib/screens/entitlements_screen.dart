@@ -129,10 +129,42 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
                 '${_lastRefresh!.hour}:${_lastRefresh!.minute.toString().padLeft(2, '0')}',
               ),
             ],
+            const SizedBox(height: 12),
+            // 1.3.0 demo: hasActiveEntitlement convenience accessor.
+            // Checks the first product in the catalog and shows the bool result.
+            OutlinedButton.icon(
+              onPressed: _appState.products.isEmpty ? null : _checkFirstProductEntitlement,
+              icon: const Icon(Icons.verified_outlined, size: 18),
+              label: Text(
+                _appState.products.isEmpty
+                    ? 'Check entitlement (no products yet)'
+                    : 'Check ${_appState.products.first.id} entitlement',
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _checkFirstProductEntitlement() async {
+    final productId = _appState.products.firstOrNull?.id;
+    if (productId == null) return;
+    try {
+      final active = await ZeroSettle.instance.hasActiveEntitlement(productId: productId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('hasActiveEntitlement($productId) = $active'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on ZSException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.message}')),
+      );
+    }
   }
 
   Widget _summaryRow(BuildContext context, String label, String value,
@@ -357,8 +389,7 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final entitlements =
-          await ZeroSettle.instance.restoreEntitlements(userId: _appState.userId);
+      final entitlements = await ZeroSettle.instance.restoreEntitlements();
       _appState.setEntitlements(entitlements);
       setState(() => _lastRefresh = DateTime.now());
     } on ZSException {
@@ -379,7 +410,6 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
     try {
       final result = await ZeroSettle.instance.presentCancelFlow(
         productId: activeSubscription.productId,
-        userId: _appState.userId,
       );
 
       if (!mounted) return;

@@ -90,17 +90,19 @@ class _AppShellState extends State<AppShell> {
         _appState.setEntitlements(entitlements);
       });
 
-      // 4. Bootstrap
-      final catalog =
-          await ZeroSettle.instance.bootstrap(userId: _appState.userId);
-      _appState.setProducts(catalog.products);
-      _appState.setRemoteConfig(catalog.config);
+      // 4. Identify (1.3.0 canonical entry point — replaces bootstrap)
+      final catalog = await ZeroSettle.instance.identify(
+        Identity.user(id: _appState.userId),
+      );
+      if (catalog != null) {
+        _appState.setProducts(catalog.products);
+        _appState.setRemoteConfig(catalog.config);
+      }
       _appState.setInitialized(true);
 
-      // 5. Restore entitlements
+      // 5. Restore entitlements (no userId — read from internal identity state)
       try {
-        final entitlements = await ZeroSettle.instance
-            .restoreEntitlements(userId: _appState.userId);
+        final entitlements = await ZeroSettle.instance.restoreEntitlements();
         _appState.setEntitlements(entitlements);
       } catch (_) {
         // Non-fatal: entitlements may be empty for new users

@@ -374,15 +374,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _appState.resetForUser(newUserId);
 
     try {
-      // Re-bootstrap with new user
-      final catalog =
-          await ZeroSettle.instance.bootstrap(userId: newUserId);
-      _appState.setProducts(catalog.products);
-      _appState.setRemoteConfig(catalog.config);
+      // Re-identify with new user (1.3.0 — replaces bootstrap)
+      final catalog = await ZeroSettle.instance.identify(
+        Identity.user(id: newUserId),
+      );
+      if (catalog != null) {
+        _appState.setProducts(catalog.products);
+        _appState.setRemoteConfig(catalog.config);
+      }
 
-      // Restore entitlements
-      final entitlements =
-          await ZeroSettle.instance.restoreEntitlements(userId: newUserId);
+      // Restore entitlements (no userId — read from identity)
+      final entitlements = await ZeroSettle.instance.restoreEntitlements();
       _appState.setEntitlements(entitlements);
     } on ZSException {
       // Silently handle errors
@@ -408,8 +410,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      final entitlements =
-          await ZeroSettle.instance.restoreEntitlements(userId: _appState.userId);
+      final entitlements = await ZeroSettle.instance.restoreEntitlements();
       _appState.setEntitlements(entitlements);
 
       setState(() {

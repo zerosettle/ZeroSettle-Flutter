@@ -245,7 +245,6 @@ class _StoreScreenState extends State<StoreScreen> {
     try {
       await ZeroSettle.instance.presentPaymentSheet(
         productId: product.id,
-        userId: _appState.userId,
       );
 
       if (!mounted) return;
@@ -262,8 +261,7 @@ class _StoreScreenState extends State<StoreScreen> {
 
       // Refresh entitlements
       try {
-        final entitlements = await ZeroSettle.instance
-            .restoreEntitlements(userId: _appState.userId);
+        final entitlements = await ZeroSettle.instance.restoreEntitlements();
         _appState.setEntitlements(entitlements);
       } catch (_) {}
 
