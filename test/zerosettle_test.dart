@@ -350,6 +350,70 @@ class MockZeroSettlePlatform
 
   @override
   Future<String> presentSaveTheSaleSheet() async => 'dismissed';
+
+  // ---- 1.3.0 new primitives ----
+
+  /// Test-controlled return values for the new 1.3.0 primitives.
+  Map<String, dynamic> purchaseReturnValue = _samplePurchaseTransactionMap();
+  Map<String, dynamic> purchaseViaStoreKitReturnValue = _sampleStoreKitTransactionMap();
+  String? currentUserIdReturn;
+  bool isBootstrappedReturn = false;
+  List<Map<String, dynamic>> pendingClaimsReturn = const [];
+  String recommendedAppAccountTokenReturn =
+      '00000000-0000-5000-a000-000000000000';
+
+  @override
+  Future<Map<String, dynamic>> purchase({
+    required String productId,
+    String? presentation,
+  }) async {
+    _record('purchase', {
+      'productId': productId,
+      if (presentation != null) 'presentation': presentation,
+    });
+    return purchaseReturnValue;
+  }
+
+  @override
+  Future<Map<String, dynamic>> purchaseViaStoreKit({
+    required String productId,
+  }) async {
+    _record('purchaseViaStoreKit', {'productId': productId});
+    return purchaseViaStoreKitReturnValue;
+  }
+
+  @override
+  Future<String?> getCurrentUserId() async {
+    _record('getCurrentUserId');
+    return currentUserIdReturn;
+  }
+
+  @override
+  Future<bool> getIsBootstrapped() async {
+    _record('getIsBootstrapped');
+    return isBootstrappedReturn;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getPendingClaims() async {
+    _record('getPendingClaims');
+    return pendingClaimsReturn;
+  }
+
+  @override
+  Future<String> recommendedAppAccountToken() async {
+    _record('recommendedAppAccountToken');
+    return recommendedAppAccountTokenReturn;
+  }
+
+  // Backed by a controllable subject so tests can assert subscription wiring.
+  final List<List<Map<String, dynamic>>> pendingClaimsUpdatesValues = [
+    const [],
+  ];
+
+  @override
+  Stream<List<Map<String, dynamic>>> get pendingClaimsUpdates =>
+      Stream.fromIterable(pendingClaimsUpdatesValues);
 }
 
 // -- Sample Data Helpers --
@@ -405,6 +469,24 @@ Map<String, dynamic> _sampleRemoteConfigMap() => {
 Map<String, dynamic> _sampleCatalogMap() => {
   'products': [_sampleProductMap()],
   'config': _sampleRemoteConfigMap(),
+};
+
+Map<String, dynamic> _samplePurchaseTransactionMap() => {
+  'id': 'txn_purchase',
+  'productId': 'premium_monthly',
+  'status': 'completed',
+  'source': 'web_checkout',
+  'purchasedAt': '2025-03-01T08:00:00.000Z',
+};
+
+Map<String, dynamic> _sampleStoreKitTransactionMap() => {
+  // Mirrors the iOS bridge's StoreKit.Transaction → Flutter map shape.
+  'id': '2000000000000001',
+  'productId': 'premium_monthly',
+  'status': 'completed',
+  'source': 'store_kit',
+  'purchasedAt': '2025-03-01T08:00:00.000Z',
+  'originalTransactionId': '2000000000000000',
 };
 
 // -- Tests --
@@ -759,6 +841,101 @@ void main() {
       // Once Agent 2 wires through, these would also be captured. Until then,
       // this asserts the call at least went through.
       expect(mockPlatform.configured, isTrue);
+    });
+
+    // ==== 1.3.0: Six new primitives ====
+
+    test('purchase() forwards productId and returns CheckoutTransaction', () async {
+      final txn = await ZeroSettle.instance.purchase(productId: 'premium_monthly');
+      expect(txn, isA<CheckoutTransaction>());
+      expect(txn.id, 'txn_purchase');
+      expect(txn.source, EntitlementSource.webCheckout);
+      expect(mockPlatform.calls.last['method'], 'purchase');
+      expect(mockPlatform.calls.last['productId'], 'premium_monthly');
+      expect(mockPlatform.calls.last.containsKey('presentation'), isFalse);
+    });
+
+    test('purchase() forwards presentation as raw value', () async {
+      await ZeroSettle.instance.purchase(
+        productId: 'premium_monthly',
+        presentation: CheckoutType.nativePay,
+      );
+      expect(mockPlatform.calls.last['presentation'], 'native_pay');
+    });
+
+    test('purchaseViaStoreKit() returns CheckoutTransaction sourced from StoreKit', () async {
+      final txn = await ZeroSettle.instance.purchaseViaStoreKit(productId: 'premium_monthly');
+      expect(txn, isA<CheckoutTransaction>());
+      expect(txn.source, EntitlementSource.storeKit);
+      expect(mockPlatform.calls.last['method'], 'purchaseViaStoreKit');
+      expect(mockPlatform.calls.last['productId'], 'premium_monthly');
+    });
+
+    test('getCurrentUserId() returns the platform-reported user id', () async {
+      mockPlatform.currentUserIdReturn = 'u_42';
+      final userId = await ZeroSettle.instance.getCurrentUserId();
+      expect(userId, 'u_42');
+      expect(mockPlatform.calls.last['method'], 'getCurrentUserId');
+    });
+
+    test('getCurrentUserId() returns null when no user is identified', () async {
+      mockPlatform.currentUserIdReturn = null;
+      expect(await ZeroSettle.instance.getCurrentUserId(), isNull);
+    });
+
+    test('getIsBootstrapped() returns bool', () async {
+      mockPlatform.isBootstrappedReturn = true;
+      expect(await ZeroSettle.instance.getIsBootstrapped(), isTrue);
+      mockPlatform.isBootstrappedReturn = false;
+      expect(await ZeroSettle.instance.getIsBootstrapped(), isFalse);
+    });
+
+    test('getPendingClaims() returns parsed PendingClaim list', () async {
+      mockPlatform.pendingClaimsReturn = [
+        {
+          'productId': 'premium_monthly',
+          'originalTransactionId': '2000000000000000',
+          'existingOwnerHint': 'abc123',
+        },
+      ];
+      final claims = await ZeroSettle.instance.getPendingClaims();
+      expect(claims, hasLength(1));
+      expect(claims.first, isA<PendingClaim>());
+      expect(claims.first.productId, 'premium_monthly');
+      expect(claims.first.originalTransactionId, '2000000000000000');
+      expect(claims.first.existingOwnerHint, 'abc123');
+    });
+
+    test('getPendingClaims() returns empty list when no claims', () async {
+      mockPlatform.pendingClaimsReturn = const [];
+      expect(await ZeroSettle.instance.getPendingClaims(), isEmpty);
+    });
+
+    test('pendingClaimsUpdates stream emits parsed PendingClaim lists', () async {
+      mockPlatform.pendingClaimsUpdatesValues
+        ..clear()
+        ..add(const [])
+        ..add([
+          {
+            'productId': 'premium_monthly',
+            'originalTransactionId': '2000000000000000',
+            'existingOwnerHint': 'abc123',
+          },
+        ]);
+      final emissions = await ZeroSettle.instance.pendingClaimsUpdates.toList();
+      expect(emissions, hasLength(2));
+      expect(emissions.first, isEmpty);
+      expect(emissions.last, hasLength(1));
+      expect(emissions.last.first, isA<PendingClaim>());
+      expect(emissions.last.first.productId, 'premium_monthly');
+    });
+
+    test('recommendedAppAccountToken() returns UUID string', () async {
+      mockPlatform.recommendedAppAccountTokenReturn =
+          '550e8400-e29b-41d4-a716-446655440000';
+      final token = await ZeroSettle.instance.recommendedAppAccountToken();
+      expect(token, '550e8400-e29b-41d4-a716-446655440000');
+      expect(mockPlatform.calls.last['method'], 'recommendedAppAccountToken');
     });
   });
 }

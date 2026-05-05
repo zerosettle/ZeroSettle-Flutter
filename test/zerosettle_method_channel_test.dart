@@ -130,6 +130,32 @@ void main() {
             return null;
           case 'presentSaveTheSaleSheet':
             return 'dismissed';
+          // 1.3.0 new primitives
+          case 'purchase':
+            return sampleTransaction;
+          case 'purchaseViaStoreKit':
+            return {
+              'id': '2000000000000001',
+              'productId': 'premium_monthly',
+              'status': 'completed',
+              'source': 'store_kit',
+              'purchasedAt': '2025-03-01T08:00:00.000Z',
+              'originalTransactionId': '2000000000000000',
+            };
+          case 'getCurrentUserId':
+            return 'u_42';
+          case 'getIsBootstrapped':
+            return true;
+          case 'getPendingClaims':
+            return [
+              {
+                'productId': 'premium_monthly',
+                'originalTransactionId': '2000000000000000',
+                'existingOwnerHint': 'abc123',
+              },
+            ];
+          case 'recommendedAppAccountToken':
+            return '550e8400-e29b-41d4-a716-446655440000';
           default:
             return null;
         }
@@ -425,5 +451,66 @@ void main() {
     final call = channelCalls.firstWhere((c) => c.method == 'configure');
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['publishableKey'], 'zs_pk_test_123');
+  });
+
+  // ==== 1.3.0 new primitives ====
+
+  test('purchase channel call carries productId only (no presentation)', () async {
+    final result = await platform.purchase(productId: 'premium_monthly');
+    expect(result['id'], 'txn_abc');
+    final call = channelCalls.firstWhere((c) => c.method == 'purchase');
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args['productId'], 'premium_monthly');
+    expect(args.containsKey('userId'), isFalse);
+    expect(args.containsKey('presentation'), isFalse);
+  });
+
+  test('purchase channel call forwards presentation raw value', () async {
+    await platform.purchase(productId: 'premium_monthly', presentation: 'native_pay');
+    final call = channelCalls.firstWhere((c) => c.method == 'purchase');
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args['productId'], 'premium_monthly');
+    expect(args['presentation'], 'native_pay');
+  });
+
+  test('purchaseViaStoreKit channel call carries productId only', () async {
+    final result = await platform.purchaseViaStoreKit(productId: 'premium_monthly');
+    expect(result['id'], '2000000000000001');
+    expect(result['source'], 'store_kit');
+    final call = channelCalls.firstWhere((c) => c.method == 'purchaseViaStoreKit');
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args['productId'], 'premium_monthly');
+    expect(args.containsKey('userId'), isFalse);
+  });
+
+  test('getCurrentUserId returns user id string', () async {
+    expect(await platform.getCurrentUserId(), 'u_42');
+    final call = channelCalls.firstWhere((c) => c.method == 'getCurrentUserId');
+    expect(call.arguments, isNull);
+  });
+
+  test('getIsBootstrapped returns bool', () async {
+    expect(await platform.getIsBootstrapped(), isTrue);
+    final call = channelCalls.firstWhere((c) => c.method == 'getIsBootstrapped');
+    expect(call.arguments, isNull);
+  });
+
+  test('getPendingClaims returns claim list', () async {
+    final result = await platform.getPendingClaims();
+    expect(result, hasLength(1));
+    expect(result.first['productId'], 'premium_monthly');
+    expect(result.first['originalTransactionId'], '2000000000000000');
+    expect(result.first['existingOwnerHint'], 'abc123');
+    final call = channelCalls.firstWhere((c) => c.method == 'getPendingClaims');
+    expect(call.arguments, isNull);
+  });
+
+  test('recommendedAppAccountToken returns UUID string', () async {
+    final token = await platform.recommendedAppAccountToken();
+    expect(token, '550e8400-e29b-41d4-a716-446655440000');
+    final call = channelCalls.firstWhere(
+      (c) => c.method == 'recommendedAppAccountToken',
+    );
+    expect(call.arguments, isNull);
   });
 }
