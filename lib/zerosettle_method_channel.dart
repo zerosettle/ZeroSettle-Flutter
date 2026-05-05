@@ -17,6 +17,13 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- Configuration --
 
   @override
+  Future<void> setBaseUrlOverride(String? url) async {
+    await methodChannel.invokeMethod('setBaseUrlOverride', {
+      if (url != null) 'url': url,
+    });
+  }
+
+  @override
   Future<void> configure({
     required String publishableKey,
     bool syncStoreKitTransactions = true,

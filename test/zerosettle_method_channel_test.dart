@@ -146,6 +146,22 @@ void main() {
     await platform.configure(publishableKey: 'zs_pk_test_123');
   });
 
+  // Regression: setBaseUrlOverride was missing its concrete @override in
+  // MethodChannelZeroSettle, falling through to the abstract default that
+  // throws UnimplementedError. This broke any env with a baseUrlOverride
+  // (staging, internalSandbox, internalLive). See c1696f1.
+  test('setBaseUrlOverride is implemented by MethodChannelZeroSettle', () async {
+    await platform.setBaseUrlOverride('https://example.test/v1');
+    final call = channelCalls.firstWhere((c) => c.method == 'setBaseUrlOverride');
+    expect((call.arguments as Map)['url'], 'https://example.test/v1');
+  });
+
+  test('setBaseUrlOverride with null url omits the url key', () async {
+    await platform.setBaseUrlOverride(null);
+    final call = channelCalls.firstWhere((c) => c.method == 'setBaseUrlOverride');
+    expect((call.arguments as Map).containsKey('url'), isFalse);
+  });
+
   test('bootstrap returns catalog map', () async {
     final result = await platform.bootstrap(userId: 'user_42');
     expect(result['products'], isList);
