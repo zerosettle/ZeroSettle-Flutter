@@ -47,6 +47,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSwitchingEnv = false;
   bool _isSwitchingIdentity = false;
   bool _isSigningOut = false;
+  // Pending env selection from the picker — null while picker matches live env.
+  IAPEnvironment? _pendingEnv;
   bool _isUpdatingProfile = false;
   bool _isRestoring = false;
   String? _restoreResult;
@@ -178,16 +180,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ValueListenableBuilder<IAPEnvironment>(
       valueListenable: widget.envNotifier,
       builder: (context, currentEnv, _) {
+        // The picker tracks a *pending* selection that doesn't take effect
+        // until the user taps "Apply". Default to the live env so the radio
+        // matches reality on first paint and after a successful apply.
+        final pending = _pendingEnv ?? currentEnv;
+        final hasPendingChange = pending != currentEnv;
         return Card(
           child: Column(
             children: [
               IgnorePointer(
                 ignoring: _isSwitchingEnv,
                 child: RadioGroup<IAPEnvironment>(
-                  groupValue: currentEnv,
+                  groupValue: pending,
                   onChanged: (value) {
-                    if (value != null && value != currentEnv) {
-                      _switchEnv(value);
+                    if (value != null) {
+                      setState(() => _pendingEnv = value);
                     }
                   },
                   child: Column(
@@ -208,10 +215,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   children: [
-                    _labeledRow(context, 'Key', currentEnv.truncatedKey),
+                    _labeledRow(context, 'Key', pending.truncatedKey),
                     const SizedBox(height: 4),
-                    _labeledRow(context, 'URL', currentEnv.effectiveUrl),
+                    _labeledRow(context, 'URL', pending.effectiveUrl),
                   ],
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: (_isSwitchingEnv || !hasPendingChange)
+                        ? null
+                        : () => _applyEnv(pending),
+                    icon: _isSwitchingEnv
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.cloud_sync),
+                    label: Text(
+                      _isSwitchingEnv
+                          ? 'Applying — re-identifying…'
+                          : hasPendingChange
+                              ? 'Apply ${pending.displayName}'
+                              : 'No changes to apply',
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -221,12 +257,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _switchEnv(IAPEnvironment env) async {
+  Future<void> _applyEnv(IAPEnvironment env) async {
     setState(() => _isSwitchingEnv = true);
     try {
       await widget.onSwitchEnvironment(env);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Switched to ${env.displayName}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _isSwitchingEnv = false);
+      if (mounted) {
+        setState(() {
+          _isSwitchingEnv = false;
+          _pendingEnv = null; // collapse back onto the live env
+        });
+      }
     }
   }
 

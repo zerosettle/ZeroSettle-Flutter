@@ -14,6 +14,18 @@ enum IAPEnvironment {
     publishableKey: 'zs_pk_live_4b96dfe517998cda605845f6562e70c17fa9cd914073b1cd',
     baseUrlOverride: null,
   ),
+  stagingSandbox(
+    displayName: 'Sandbox (Staging)',
+    description: 'Staging backend with Stripe test mode',
+    publishableKey: 'zs_pk_test_68314ca8d4a87a4c44adc978aef6523deae4296cc1a325a3',
+    baseUrlOverride: 'https://api-staging.zerosettle.io/v1',
+  ),
+  stagingLive(
+    displayName: 'Live (Staging)',
+    description: 'Staging backend with live payment processing',
+    publishableKey: 'zs_pk_live_893e511699f82bb6453d7cefcfbd33e0b7e14a3cf5baa3b2',
+    baseUrlOverride: 'https://api-staging.zerosettle.io/v1',
+  ),
   internalSandbox(
     displayName: 'Sandbox (Internal)',
     description: 'Internal development with ngrok URLs (sandbox)',
