@@ -17,10 +17,19 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- Configuration --
 
   @override
-  Future<void> configure({required String publishableKey, bool syncStoreKitTransactions = true}) async {
+  Future<void> configure({
+    required String publishableKey,
+    bool syncStoreKitTransactions = true,
+    String? appleMerchantId,
+    bool preloadCheckout = false,
+    int? maxPreloadedWebViews,
+  }) async {
     await methodChannel.invokeMethod('configure', {
       'publishableKey': publishableKey,
       'syncStoreKitTransactions': syncStoreKitTransactions,
+      if (appleMerchantId != null) 'appleMerchantId': appleMerchantId,
+      'preloadCheckout': preloadCheckout,
+      if (maxPreloadedWebViews != null) 'maxPreloadedWebViews': maxPreloadedWebViews,
     });
   }
 
@@ -145,6 +154,12 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> restoreEntitlementsForCurrentUser() async {
+    final result = await methodChannel.invokeMethod<List>('restoreEntitlements');
+    return result!.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> getEntitlements() async {
     final result = await methodChannel.invokeMethod<List>('getEntitlements');
     return result!.map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -213,6 +228,14 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
+  Future<Map<String, dynamic>> acceptSaveOfferForCurrentUser({required String productId}) async {
+    final result = await methodChannel.invokeMethod<Map>('acceptSaveOffer', {
+      'productId': productId,
+    });
+    return Map<String, dynamic>.from(result!);
+  }
+
+  @override
   Future<void> submitCancelFlowResponse(Map<String, dynamic> response) async {
     await methodChannel.invokeMethod('submitCancelFlowResponse', response);
   }
@@ -232,12 +255,38 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     });
   }
 
+  @override
+  Future<void> cancelSubscriptionForCurrentUser({required String productId, bool immediate = false}) async {
+    await methodChannel.invokeMethod('cancelSubscription', {
+      'productId': productId,
+      'immediate': immediate,
+    });
+  }
+
   // -- Save the Sale --
 
   @override
   Future<String> presentSaveTheSaleSheet() async {
     final result = await methodChannel.invokeMethod<String>('presentSaveTheSaleSheet');
     return result ?? 'dismissed';
+  }
+
+  // -- Cancel Flow --
+
+  @override
+  Future<String> presentCancelFlow({required String productId, required String userId}) async {
+    final result = await methodChannel.invokeMethod<String>('presentCancelFlow', {
+      'productId': productId,
+      'userId': userId,
+    });
+    return result ?? 'dismissed';
+  }
+
+  @override
+  Future<String?> presentCancelFlowForCurrentUser({required String productId}) async {
+    return await methodChannel.invokeMethod<String>('presentCancelFlow', {
+      'productId': productId,
+    });
   }
 
   // -- Transaction History --
@@ -247,6 +296,12 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     final result = await methodChannel.invokeMethod<List>('fetchTransactionHistory', {
       'userId': userId,
     });
+    return result!.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchTransactionHistoryForCurrentUser() async {
+    final result = await methodChannel.invokeMethod<List>('fetchTransactionHistory');
     return result!.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
@@ -269,10 +324,26 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
+  Future<String?> pauseSubscriptionForCurrentUser({required String productId, int? pauseDurationDays}) async {
+    final result = await methodChannel.invokeMethod<String>('pauseSubscription', {
+      'productId': productId,
+      if (pauseDurationDays != null) 'pauseDurationDays': pauseDurationDays,
+    });
+    return result;
+  }
+
+  @override
   Future<void> resumeSubscription({required String productId, required String userId}) async {
     await methodChannel.invokeMethod('resumeSubscription', {
       'productId': productId,
       'userId': userId,
+    });
+  }
+
+  @override
+  Future<void> resumeSubscriptionForCurrentUser({required String productId}) async {
+    await methodChannel.invokeMethod('resumeSubscription', {
+      'productId': productId,
     });
   }
 
@@ -289,10 +360,26 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
+  Future<String> presentUpgradeOfferForCurrentUser({String? productId}) async {
+    final result = await methodChannel.invokeMethod<String>('presentUpgradeOffer', {
+      if (productId != null) 'productId': productId,
+    });
+    return result ?? 'dismissed';
+  }
+
+  @override
   Future<Map<String, dynamic>> fetchUpgradeOfferConfig({String? productId, required String userId}) async {
     final result = await methodChannel.invokeMethod<Map>('fetchUpgradeOfferConfig', {
       if (productId != null) 'productId': productId,
       'userId': userId,
+    });
+    return Map<String, dynamic>.from(result!);
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchUpgradeOfferConfigForCurrentUser({String? productId}) async {
+    final result = await methodChannel.invokeMethod<Map>('fetchUpgradeOfferConfig', {
+      if (productId != null) 'productId': productId,
     });
     return Map<String, dynamic>.from(result!);
   }
@@ -304,6 +391,11 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     await methodChannel.invokeMethod('trackMigrationConversion', {
       'userId': userId,
     });
+  }
+
+  @override
+  Future<void> trackMigrationConversionForCurrentUser() async {
+    await methodChannel.invokeMethod('trackMigrationConversion');
   }
 
   // -- Migration Tip --
