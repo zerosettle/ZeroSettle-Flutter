@@ -12,6 +12,7 @@ import 'models/zs_transaction.dart';
 import 'models/cancel_flow.dart';
 import 'models/upgrade_offer.dart';
 import 'models/identity.dart';
+import 'models/pending_claim.dart';
 
 export 'models/price.dart';
 export 'models/enums.dart';
@@ -27,6 +28,7 @@ export 'models/cancel_flow.dart';
 export 'models/upgrade_offer.dart';
 export 'models/funnel_event.dart';
 export 'models/identity.dart';
+export 'models/pending_claim.dart';
 
 /// Main entry point for the ZeroSettle Flutter SDK.
 ///
@@ -215,6 +217,57 @@ class ZeroSettle {
         ));
   }
 
+  // -- Purchase (1.3.0) --
+
+  /// Unified purchase entry point. Routes to web checkout (Stripe) or native
+  /// StoreKit depending on jurisdiction, remote config, and the per-call
+  /// [presentation] override.
+  ///
+  /// Returns a [CheckoutTransaction] on successful payment.
+  /// Throws a [ZeroSettleException] on cancellation, failure, or when web
+  /// checkout is disabled for the user's jurisdiction.
+  ///
+  /// Identity comes from the prior [identify] call; this method does not take
+  /// a `userId` parameter.
+  ///
+  /// - [productId]: The product identifier to purchase.
+  /// - [presentation]: Optional override for the checkout sheet style (e.g.
+  ///   `CheckoutType.nativePay` to force Apple Pay). When omitted the SDK
+  ///   uses the global default from remote config.
+  Future<CheckoutTransaction> purchase({
+    required String productId,
+    CheckoutType? presentation,
+  }) {
+    return _wrap(() async {
+      final map = await _platform.purchase(
+        productId: productId,
+        presentation: presentation?.rawValue,
+      );
+      return CheckoutTransaction.fromMap(map);
+    });
+  }
+
+  /// Force a StoreKit (App Store IAP) purchase, bypassing web checkout. Use
+  /// for jurisdictions where web checkout is disabled or when the app wants
+  /// explicit control over the purchase channel.
+  ///
+  /// Returns a [CheckoutTransaction] populated from the underlying
+  /// `StoreKit.Transaction`. Note: `amountCents` and `currency` may be `null`
+  /// because Apple's `StoreKit.Transaction` doesn't carry localized price
+  /// information directly — read it from the `Product` catalog if needed.
+  ///
+  /// Identity comes from the prior [identify] call; this method does not take
+  /// a `userId` parameter.
+  ///
+  /// Throws a [ZeroSettleException] on cancellation, verification failure, or
+  /// when no StoreKit product is available for [productId].
+  Future<CheckoutTransaction> purchaseViaStoreKit({required String productId}) {
+    return _wrap(() async {
+      final map = await _platform.purchaseViaStoreKit(productId: productId);
+      return CheckoutTransaction.fromMap(map);
+    });
+  }
+
   // -- Entitlements --
 
   /// Restore entitlements from both web checkout and StoreKit.
@@ -327,6 +380,63 @@ class ZeroSettle {
       final raw = await _platform.getDetectedJurisdiction();
       return raw != null ? Jurisdiction.fromRawValue(raw) : null;
     });
+  }
+
+  /// The currently identified user ID, or `null` if [identify] hasn't been
+  /// called yet (or has been cleared via [logout]).
+  ///
+  /// Use this for conditional UI ("Logged in as ...") or to gate user-scoped
+  /// flows.
+  Future<String?> getCurrentUserId() {
+    return _wrap(() => _platform.getCurrentUserId());
+  }
+
+  /// Whether [identify] (or the deprecated [bootstrap]) has completed and
+  /// entitlements have been fetched.
+  ///
+  /// Adopters can poll this to know when the SDK is ready for purchase /
+  /// entitlement-gated features after a fresh app launch.
+  Future<bool> getIsBootstrapped() {
+    return _wrap(() => _platform.getIsBootstrapped());
+  }
+
+  // -- Pending Claims (1.3.0) --
+
+  /// Returns the list of [PendingClaim]s currently surfaced by the SDK —
+  /// StoreKit purchases the current user could claim from a different
+  /// ZeroSettle account.
+  ///
+  /// To act on a claim, render the appropriate UX and call
+  /// [transferStoreKitOwnershipToCurrentUser] with the [PendingClaim]'s
+  /// `productId`. The SDK never auto-claims.
+  Future<List<PendingClaim>> getPendingClaims() {
+    return _wrap(() async {
+      final list = await _platform.getPendingClaims();
+      return list.map((e) => PendingClaim.fromMap(e)).toList();
+    });
+  }
+
+  /// Stream of [PendingClaim] list snapshots, emitting whenever the SDK's
+  /// pending-claim list mutates (claim added or removed).
+  Stream<List<PendingClaim>> get pendingClaimsUpdates {
+    return _platform.pendingClaimsUpdates.map(
+      (list) => list.map((e) => PendingClaim.fromMap(e)).toList(),
+    );
+  }
+
+  // -- StoreKit Helpers (1.3.0) --
+
+  /// Returns the recommended `appAccountToken` to use when calling StoreKit
+  /// directly (e.g. `StoreKit.Product.purchase(options: [.appAccountToken(...)])`).
+  ///
+  /// The token is derived deterministically from the currently identified
+  /// user ID via UUIDv5, so non-UUID user IDs (Firebase, Auth0, etc.) hash
+  /// correctly. Returned as a UUID string.
+  ///
+  /// Throws a [ZeroSettleException] (`user_not_identified`) if [identify]
+  /// hasn't been called.
+  Future<String> recommendedAppAccountToken() {
+    return _wrap(() => _platform.recommendedAppAccountToken());
   }
 
   // -- Cancel Flow --

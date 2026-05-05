@@ -14,6 +14,10 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   @visibleForTesting
   final checkoutEventChannel = const EventChannel('zerosettle/checkout_events');
 
+  @visibleForTesting
+  final pendingClaimsEventChannel =
+      const EventChannel('zerosettle/pending_claims_updates');
+
   // -- Configuration --
 
   @override
@@ -134,6 +138,30 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return Map<String, dynamic>.from(result!);
   }
 
+  // -- Purchase (1.3.0) --
+
+  @override
+  Future<Map<String, dynamic>> purchase({
+    required String productId,
+    String? presentation,
+  }) async {
+    final result = await methodChannel.invokeMethod<Map>('purchase', {
+      'productId': productId,
+      if (presentation != null) 'presentation': presentation,
+    });
+    return Map<String, dynamic>.from(result!);
+  }
+
+  @override
+  Future<Map<String, dynamic>> purchaseViaStoreKit({
+    required String productId,
+  }) async {
+    final result = await methodChannel.invokeMethod<Map>('purchaseViaStoreKit', {
+      'productId': productId,
+    });
+    return Map<String, dynamic>.from(result!);
+  }
+
   @override
   Future<void> preloadPaymentSheet({required String productId, String? userId}) async {
     await methodChannel.invokeMethod('preloadPaymentSheet', {
@@ -221,6 +249,38 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   @override
   Future<String?> getDetectedJurisdiction() async {
     return await methodChannel.invokeMethod<String>('getDetectedJurisdiction');
+  }
+
+  // -- State Queries (1.3.0) --
+
+  @override
+  Future<String?> getCurrentUserId() async {
+    return await methodChannel.invokeMethod<String>('getCurrentUserId');
+  }
+
+  @override
+  Future<bool> getIsBootstrapped() async {
+    final result = await methodChannel.invokeMethod<bool>('getIsBootstrapped');
+    return result ?? false;
+  }
+
+  // -- Pending Claims (1.3.0) --
+
+  @override
+  Future<List<Map<String, dynamic>>> getPendingClaims() async {
+    final result = await methodChannel.invokeMethod<List>('getPendingClaims');
+    if (result == null) return const [];
+    return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  // -- StoreKit Helpers (1.3.0) --
+
+  @override
+  Future<String> recommendedAppAccountToken() async {
+    final result = await methodChannel.invokeMethod<String>(
+      'recommendedAppAccountToken',
+    );
+    return result!;
   }
 
   // -- Cancel Flow (Headless) --
@@ -451,5 +511,17 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
         .receiveBroadcastStream()
         .map((event) => Map<String, dynamic>.from(event as Map));
     return _checkoutEventsStream!;
+  }
+
+  Stream<List<Map<String, dynamic>>>? _pendingClaimsUpdatesStream;
+
+  @override
+  Stream<List<Map<String, dynamic>>> get pendingClaimsUpdates {
+    _pendingClaimsUpdatesStream ??= pendingClaimsEventChannel
+        .receiveBroadcastStream()
+        .map((event) => (event as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList());
+    return _pendingClaimsUpdatesStream!;
   }
 }

@@ -85,6 +85,25 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('presentPaymentSheet() has not been implemented.');
   }
 
+  // -- Purchase (1.3.0) --
+
+  /// Unified purchase entry point. Routes to web checkout or StoreKit based
+  /// on jurisdiction + remote config; can be overridden per-call by
+  /// `presentation`.
+  Future<Map<String, dynamic>> purchase({
+    required String productId,
+    String? presentation,
+  }) {
+    throw UnimplementedError('purchase() has not been implemented.');
+  }
+
+  /// Force a StoreKit (App Store IAP) purchase, bypassing web checkout.
+  Future<Map<String, dynamic>> purchaseViaStoreKit({
+    required String productId,
+  }) {
+    throw UnimplementedError('purchaseViaStoreKit() has not been implemented.');
+  }
+
   Future<void> preloadPaymentSheet({required String productId, String? userId}) {
     throw UnimplementedError('preloadPaymentSheet() has not been implemented.');
   }
@@ -140,6 +159,37 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   Future<String?> getDetectedJurisdiction() {
     throw UnimplementedError('getDetectedJurisdiction() has not been implemented.');
+  }
+
+  // -- State Queries (1.3.0) --
+
+  /// The currently identified user ID, or null if `identify()` hasn't been
+  /// called.
+  Future<String?> getCurrentUserId() {
+    throw UnimplementedError('getCurrentUserId() has not been implemented.');
+  }
+
+  /// Whether `identify()` (or the deprecated `bootstrap()`) has completed.
+  Future<bool> getIsBootstrapped() {
+    throw UnimplementedError('getIsBootstrapped() has not been implemented.');
+  }
+
+  // -- Pending Claims (1.3.0) --
+
+  /// StoreKit purchases the current user could claim from another ZeroSettle
+  /// account.
+  Future<List<Map<String, dynamic>>> getPendingClaims() {
+    throw UnimplementedError('getPendingClaims() has not been implemented.');
+  }
+
+  // -- StoreKit Helpers (1.3.0) --
+
+  /// Derive a deterministic UUID for `appAccountToken` from the currently
+  /// identified user ID. Returned as a string.
+  Future<String> recommendedAppAccountToken() {
+    throw UnimplementedError(
+      'recommendedAppAccountToken() has not been implemented.',
+    );
   }
 
   // -- Base URL Override --
@@ -283,5 +333,13 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   Stream<Map<String, dynamic>> get checkoutEvents {
     throw UnimplementedError('checkoutEvents has not been implemented.');
+  }
+
+  /// Stream of pending-claim list snapshots. Emits whenever the SDK's
+  /// `pendingClaims` mutates (claim added or removed).
+  Stream<List<Map<String, dynamic>>> get pendingClaimsUpdates {
+    throw UnimplementedError(
+      'pendingClaimsUpdates has not been implemented.',
+    );
   }
 }

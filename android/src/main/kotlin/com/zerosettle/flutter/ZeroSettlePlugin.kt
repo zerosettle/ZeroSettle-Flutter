@@ -551,6 +551,17 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
                 result.success(ZeroSettle.detectedJurisdiction.value?.toRawValue())
             }
 
+            // -- 1.3.0 primitives — iOS only for now; explicit stubs so adopters
+            //    get a clear notImplemented() rather than a generic handler miss.
+            "purchase",
+            "purchaseViaStoreKit",
+            "getCurrentUserId",
+            "getIsBootstrapped",
+            "getPendingClaims",
+            "recommendedAppAccountToken" -> {
+                result.notImplemented()
+            }
+
             else -> result.notImplemented()
         }
     }

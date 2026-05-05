@@ -2,15 +2,33 @@ import Flutter
 import UIKit
 import ZeroSettleKit
 import SwiftUI
+import Combine
+import StoreKit
 
 public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate {
 
     private var methodChannel: FlutterMethodChannel?
     private var entitlementEventChannel: FlutterEventChannel?
     private var checkoutEventChannel: FlutterEventChannel?
+    private var pendingClaimsEventChannel: FlutterEventChannel?
 
     private let entitlementStreamHandler = EntitlementStreamHandler()
     private let checkoutStreamHandler = CheckoutStreamHandler()
+    private let pendingClaimsStreamHandler = PendingClaimsStreamHandler()
+
+    /// Combine subscription that mirrors `ZeroSettle.shared.pendingClaims`
+    /// changes onto the `pending_claims_updates` event channel. The iOS Kit
+    /// fires `objectWillChange.send()` before each mutation; we re-read on
+    /// the next runloop tick to capture the post-mutation value, then dedupe.
+    private var pendingClaimsCancellable: AnyCancellable?
+    private var lastPendingClaimsSnapshot: [[String: Any]] = []
+
+    /// Plugin-side cache of the user ID passed to the most recent
+    /// `identify(.user)` or `bootstrap()` call. Mirrors what the iOS Kit
+    /// stores in its `internal var currentUserId` — which we can't read
+    /// across module boundaries — so we shadow it here. Cleared on
+    /// `logout()` and on `identify(.anonymous|.deferred)`.
+    private var cachedCurrentUserId: String?
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "zerosettle", binaryMessenger: registrar.messenger())
@@ -27,6 +45,45 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         let checkoutEC = FlutterEventChannel(name: "zerosettle/checkout_events", binaryMessenger: registrar.messenger())
         checkoutEC.setStreamHandler(instance.checkoutStreamHandler)
         instance.checkoutEventChannel = checkoutEC
+
+        let pendingClaimsEC = FlutterEventChannel(name: "zerosettle/pending_claims_updates", binaryMessenger: registrar.messenger())
+        pendingClaimsEC.setStreamHandler(instance.pendingClaimsStreamHandler)
+        instance.pendingClaimsEventChannel = pendingClaimsEC
+
+        // Bridge ZeroSettle.shared.pendingClaims (an ObservableObject @Published-like
+        // property notified via objectWillChange) onto the pendingClaimsStreamHandler.
+        // objectWillChange fires for every mutation on the shared instance, so we
+        // dedupe against the previous snapshot to avoid spamming Dart.
+        instance.pendingClaimsStreamHandler.onListenStarted = { [weak instance] in
+            // Emit current state to late subscribers.
+            DispatchQueue.main.async {
+                guard let instance else { return }
+                MainActor.assumeIsolated {
+                    let current = ZeroSettle.shared.pendingClaims.map { $0.toFlutterMap() }
+                    instance.lastPendingClaimsSnapshot = current
+                    instance.pendingClaimsStreamHandler.send(current)
+                }
+            }
+        }
+        Task { @MainActor in
+            instance.pendingClaimsCancellable = ZeroSettle.shared.objectWillChange
+                .sink { [weak instance] _ in
+                    // objectWillChange fires *before* the mutation, so read on the next
+                    // runloop tick to see the post-mutation value.
+                    DispatchQueue.main.async {
+                        guard let instance else { return }
+                        MainActor.assumeIsolated {
+                            let current = ZeroSettle.shared.pendingClaims.map { $0.toFlutterMap() }
+                            // Cheap structural dedupe: same count + same productId/OTID per index.
+                            if pendingClaimsSnapshotsEqual(instance.lastPendingClaimsSnapshot, current) {
+                                return
+                            }
+                            instance.lastPendingClaimsSnapshot = current
+                            instance.pendingClaimsStreamHandler.send(current)
+                        }
+                    }
+                }
+        }
 
         // Register MigrationTipView PlatformView factory
         let migrateTipFactory = ZSMigrateTipViewFactory(messenger: registrar.messenger())
@@ -106,6 +163,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             Task { @MainActor in
                 do {
                     let catalog = try await ZeroSettle.shared.bootstrap(userId: userId)
+                    self.cachedCurrentUserId = userId
                     result(catalog.toFlutterMap())
                 } catch {
                     result(error.toFlutterError())
@@ -136,6 +194,14 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             Task { @MainActor in
                 do {
                     let catalog = try await ZeroSettle.shared.identify(identity)
+                    // Mirror the Kit's internal currentUserId on the plugin
+                    // side so getCurrentUserId() can return it.
+                    switch identity {
+                    case .user(let id, _, _):
+                        self.cachedCurrentUserId = id
+                    case .anonymous, .deferred:
+                        self.cachedCurrentUserId = nil
+                    }
                     result(catalog?.toFlutterMap())
                 } catch {
                     result(error.toFlutterError())
@@ -145,6 +211,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         case "logout":
             Task { @MainActor in
                 ZeroSettle.shared.logout()
+                self.cachedCurrentUserId = nil
                 result(nil)
             }
 
@@ -247,6 +314,50 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                     }
                 }
             )
+
+        // -- Purchase (1.3.0) --
+
+        case "purchase":
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
+                return
+            }
+            let presentationRaw = args?["presentation"] as? String
+            let presentation: CheckoutType?
+            if let presentationRaw {
+                guard let parsed = CheckoutType(rawValue: presentationRaw) else {
+                    result(FlutterError(code: "INVALID_ARGUMENTS", message: "unknown presentation: \(presentationRaw)", details: nil))
+                    return
+                }
+                presentation = parsed
+            } else {
+                presentation = nil
+            }
+            Task { @MainActor in
+                do {
+                    let transaction = try await ZeroSettle.shared.purchase(
+                        productId: productId,
+                        presentation: presentation
+                    )
+                    result(transaction.toFlutterMap())
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
+        case "purchaseViaStoreKit":
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
+                return
+            }
+            Task { @MainActor in
+                do {
+                    let skTransaction = try await ZeroSettle.shared.purchaseViaStoreKit(productId: productId)
+                    result(skTransaction.toZeroSettleFlutterMap(productId: productId))
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
 
         case "preloadPaymentSheet":
             guard let productId = args?["productId"] as? String else {
@@ -576,6 +687,32 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         case "getDetectedJurisdiction":
             result(ZeroSettle.shared.detectedJurisdiction?.rawValue)
 
+        // -- State Queries (1.3.0) --
+
+        case "getCurrentUserId":
+            // ZeroSettleKit's `currentUserId` is `internal`, so we shadow it
+            // in the plugin via cachedCurrentUserId, kept in sync from
+            // identify/bootstrap/logout.
+            result(cachedCurrentUserId)
+
+        case "getIsBootstrapped":
+            result(ZeroSettle.shared.isBootstrapped)
+
+        // -- Pending Claims (1.3.0) --
+
+        case "getPendingClaims":
+            result(ZeroSettle.shared.pendingClaims.map { $0.toFlutterMap() })
+
+        // -- StoreKit Helpers (1.3.0) --
+
+        case "recommendedAppAccountToken":
+            do {
+                let token = try ZeroSettle.shared.recommendedAppAccountToken()
+                result(token.uuidString)
+            } catch {
+                result(error.toFlutterError())
+            }
+
         // -- Upgrade Offer --
 
         case "presentUpgradeOffer":
@@ -741,6 +878,44 @@ private class CheckoutStreamHandler: NSObject, FlutterStreamHandler {
     }
 }
 
+private class PendingClaimsStreamHandler: NSObject, FlutterStreamHandler {
+    private var eventSink: FlutterEventSink?
+    /// Optional callback fired when Dart starts listening — used by the
+    /// plugin to push the current snapshot so late subscribers don't have
+    /// to wait for the next mutation.
+    var onListenStarted: (() -> Void)?
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        eventSink = events
+        onListenStarted?()
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        eventSink = nil
+        return nil
+    }
+
+    func send(_ data: Any) {
+        DispatchQueue.main.async { [weak self] in
+            self?.eventSink?(data)
+        }
+    }
+}
+
+/// Cheap structural dedupe for pending-claim snapshots — same count + same
+/// `productId` and `originalTransactionId` per index. Used to avoid emitting
+/// no-op updates when `objectWillChange` fires for unrelated mutations on
+/// the shared `ZeroSettle` instance.
+private func pendingClaimsSnapshotsEqual(_ a: [[String: Any]], _ b: [[String: Any]]) -> Bool {
+    guard a.count == b.count else { return false }
+    for (lhs, rhs) in zip(a, b) {
+        if (lhs["productId"] as? String) != (rhs["productId"] as? String) { return false }
+        if (lhs["originalTransactionId"] as? String) != (rhs["originalTransactionId"] as? String) { return false }
+    }
+    return true
+}
+
 // MARK: - Serialization Helpers
 
 private let iso8601Formatter: ISO8601DateFormatter = {
@@ -874,6 +1049,40 @@ extension CheckoutTransaction {
         }
         if let storekitStatus {
             map["storekitStatus"] = storekitStatus
+        }
+        return map
+    }
+}
+
+extension PendingClaim {
+    func toFlutterMap() -> [String: Any] {
+        return [
+            "productId": productId,
+            "originalTransactionId": originalTransactionId,
+            "existingOwnerHint": existingOwnerHint,
+        ]
+    }
+}
+
+extension StoreKit.Transaction {
+    /// Map a native `StoreKit.Transaction` onto the same Dart shape as
+    /// `CheckoutTransaction.fromMap` expects. `status` and `source` are
+    /// hard-coded — a successfully-returned StoreKit transaction is
+    /// verified, so `completed` / `store_kit` are correct. `amountCents`
+    /// and `currency` are intentionally omitted: StoreKit.Transaction
+    /// doesn't carry localized price info — adopters should read the
+    /// product catalog if they need price.
+    func toZeroSettleFlutterMap(productId: String) -> [String: Any] {
+        var map: [String: Any] = [
+            "id": String(id),
+            "productId": productID,
+            "originalTransactionId": String(originalID),
+            "purchasedAt": iso8601Formatter.string(from: purchaseDate),
+            "status": "completed",
+            "source": "store_kit",
+        ]
+        if let expirationDate {
+            map["expiresAt"] = iso8601Formatter.string(from: expirationDate)
         }
         return map
     }
