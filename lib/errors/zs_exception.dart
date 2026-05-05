@@ -19,6 +19,11 @@ sealed class ZeroSettleException implements Exception {
       'user_id_required' => ZSUserIdRequiredException(e.message ?? 'User ID required'),
       'web_checkout_disabled' => ZSWebCheckoutDisabledException(e.message ?? 'Web checkout disabled'),
       'checkout_not_started' => ZSCheckoutNotStartedException(e.message ?? 'Checkout not started'),
+      'invalid_publishable_key' => ZSInvalidPublishableKeyException(e.message ?? 'Invalid publishable key'),
+      'checkout_config_expired' => ZSCheckoutConfigExpiredException(e.message ?? 'Checkout config expired'),
+      'transaction_verification_failed' => ZSTransactionVerificationFailedException(e.message ?? 'Transaction verification failed'),
+      'purchase_pending' => ZSPurchasePendingException(e.message ?? 'Purchase pending'),
+      'user_not_identified' => ZSUserNotIdentifiedException(e.message ?? 'User not identified'),
       _ => ZSApiException(e.message ?? 'Unknown error: ${e.code}'),
     };
   }
@@ -63,6 +68,39 @@ class ZSWebCheckoutDisabledException extends ZeroSettleException {
 /// Distinct from terminal errors that occur after checkout is in flight.
 class ZSCheckoutNotStartedException extends ZeroSettleException {
   const ZSCheckoutNotStartedException(super.message);
+}
+
+/// The publishable key format is invalid. Check your ZeroSettle dashboard.
+class ZSInvalidPublishableKeyException extends ZeroSettleException {
+  const ZSInvalidPublishableKeyException(super.message);
+}
+
+/// The deferred-mode checkout config expired (the server-side PENDING
+/// transaction's `checkout_config_expires_at` has passed). Re-initiate
+/// checkout to obtain a fresh session rather than retrying finalize.
+class ZSCheckoutConfigExpiredException extends ZeroSettleException {
+  const ZSCheckoutConfigExpiredException(super.message);
+}
+
+/// Transaction verification failed after checkout (e.g., signature or
+/// JWS validation rejected by the backend or by Apple).
+class ZSTransactionVerificationFailedException extends ZeroSettleException {
+  const ZSTransactionVerificationFailedException(super.message);
+}
+
+/// The purchase is pending approval (e.g., StoreKit Ask to Buy). The
+/// user has not been charged; the SDK will surface a follow-up event
+/// when the purchase resolves.
+class ZSPurchasePendingException extends ZeroSettleException {
+  const ZSPurchasePendingException(super.message);
+}
+
+/// A user-scoped method was called before [ZeroSettle.identify]. Call
+/// [ZeroSettle.identify] with [Identity.user] (or [Identity.anonymous])
+/// at app launch (after [ZeroSettle.configure]) before invoking
+/// user-scoped APIs like [ZeroSettle.restoreEntitlements].
+class ZSUserNotIdentifiedException extends ZeroSettleException {
+  const ZSUserNotIdentifiedException(super.message);
 }
 
 /// Backward-compatible typedef. Use [ZeroSettleException] instead.
