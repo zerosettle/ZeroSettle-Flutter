@@ -382,8 +382,15 @@ class ZeroSettle {
     });
   }
 
-  /// The currently identified user ID, or `null` if [identify] hasn't been
-  /// called yet (or has been cleared via [logout]).
+  /// The currently identified user ID, or `null` if no user is identified.
+  ///
+  /// Returns `null` when:
+  /// - [identify] has not yet been called (or [logout] has cleared state),
+  /// - the most recent [identify] used [Identity.anonymous] (the SDK
+  ///   generates an anonymous session id internally, but it is not
+  ///   surfaced to Flutter — use [Identity.user] if you need to read the
+  ///   identifier back), or
+  /// - the most recent [identify] used [Identity.deferred].
   ///
   /// Use this for conditional UI ("Logged in as ...") or to gate user-scoped
   /// flows.
