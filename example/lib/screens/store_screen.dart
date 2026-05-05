@@ -243,6 +243,24 @@ class _StoreScreenState extends State<StoreScreen> {
     setState(() => _isProcessing = true);
 
     try {
+      // 1.3.0 demo — single-product lookup. Re-fetches the freshest cached
+      // detail before showing the payment sheet so the confirmation copy
+      // reflects any server-side changes since the catalog was loaded.
+      Product? fresh;
+      try {
+        fresh = await ZeroSettle.instance.product(productId: product.id);
+      } catch (_) {
+        // Non-fatal — fall back to local view-model copy.
+      }
+
+      if (mounted) {
+        final confirmed = await _showPurchaseConfirmation(product, fresh);
+        if (!confirmed) {
+          if (mounted) setState(() => _isProcessing = false);
+          return;
+        }
+      }
+
       await ZeroSettle.instance.presentPaymentSheet(
         productId: product.id,
       );
@@ -294,6 +312,77 @@ class _StoreScreenState extends State<StoreScreen> {
       amount: product.price,
       paymentMethod: PaymentMethod.webCheckout,
     ));
+  }
+
+  /// Confirmation sheet shown before [ZeroSettle.presentPaymentSheet]. When a
+  /// fresh [Product] is available from `ZeroSettle.product(productId:)`, its
+  /// data takes precedence so the user sees the most recent name/price/copy.
+  Future<bool> _showPurchaseConfirmation(
+    StoreProduct product,
+    Product? fresh,
+  ) async {
+    final name = fresh?.displayName ?? product.name;
+    final description = fresh?.productDescription ?? product.description;
+    final priceText = fresh?.webPrice != null
+        ? '\$${(fresh!.webPrice!.amountCents / 100).toStringAsFixed(2)}'
+        : product.formattedPrice;
+    final cs = Theme.of(context).colorScheme;
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                priceText,
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                description,
+                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text('Continue'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result == true;
   }
 
   DateTime _expiryForDuration(SubscriptionDuration? duration) {
