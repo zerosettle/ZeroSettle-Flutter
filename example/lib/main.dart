@@ -224,20 +224,39 @@ class _AppShellState extends State<AppShell> {
   // the SDK at runtime without UI noise. The methods are still safe in
   // release because the screen that calls them is gated behind kDebugMode.
 
-  /// Switch env without auto-restoring the current identity, then optionally
-  /// identify as [restoreIdentity]. Does NOT trigger the identity sheet.
+  /// Switch env at runtime. If [restoreIdentity] is provided, log out and
+  /// re-identify as that account. Otherwise, preserve the current identity
+  /// (and its persisted choice) and just re-bootstrap the SDK against the
+  /// new env.
+  ///
+  /// Does NOT trigger the identity sheet.
   Future<void> _applyDebugEnv(
     IAPEnvironment env, {
     Identity? restoreIdentity,
   }) async {
-    // Tear down current identity locally so the next configure starts clean.
-    try {
-      await ZeroSettle.instance.logout();
-    } on ZeroSettleException {
-      // Non-fatal — we still want to swap env.
+    if (restoreIdentity != null) {
+      // Caller picked an explicit account to restore in the new env. Sign
+      // out, swap env, and identify as the requested account.
+      try {
+        await ZeroSettle.instance.logout();
+      } on ZeroSettleException {
+        // Non-fatal — we still want to swap env.
+      }
+      _appState.setIdentity(null);
+      _appState.setInitialized(false);
+      _appState.setProducts([]);
+      _appState.setEntitlements([]);
+
+      await _envNotifier.switchTo(env);
+      await _configureSdk(env);
+      await _applyIdentity(restoreIdentity);
+      return;
     }
-    await IdentityChoiceStore.clear();
-    _appState.setIdentity(null);
+
+    // No explicit account to restore: keep the current identity (and its
+    // persisted choice) so the user isn't surprised by an identity sheet
+    // on next launch. Just re-bootstrap the SDK against the new env.
+    final current = _appState.currentIdentity;
     _appState.setInitialized(false);
     _appState.setProducts([]);
     _appState.setEntitlements([]);
@@ -245,8 +264,8 @@ class _AppShellState extends State<AppShell> {
     await _envNotifier.switchTo(env);
     await _configureSdk(env);
 
-    if (restoreIdentity != null) {
-      await _applyIdentity(restoreIdentity);
+    if (current != null) {
+      await _applyIdentity(current, persist: false);
     }
   }
 
@@ -298,8 +317,9 @@ class _AppShellState extends State<AppShell> {
               HomeScreen(
                 appState: _appState,
                 onNavigateToStore: () => setState(() => _currentTab = 1),
+                onSignIn: switchIdentity,
               ),
-              StoreScreen(appState: _appState),
+              StoreScreen(appState: _appState, onSignIn: switchIdentity),
               EntitlementsScreen(appState: _appState),
               TransactionsScreen(appState: _appState),
               SettingsScreen(

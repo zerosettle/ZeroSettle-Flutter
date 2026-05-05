@@ -6,8 +6,13 @@ import '../widgets/payment_footer.dart';
 
 class StoreScreen extends StatefulWidget {
   final AppState appState;
+  final VoidCallback onSignIn;
 
-  const StoreScreen({super.key, required this.appState});
+  const StoreScreen({
+    super.key,
+    required this.appState,
+    required this.onSignIn,
+  });
 
   @override
   State<StoreScreen> createState() => _StoreScreenState();
@@ -160,6 +165,47 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   Widget _buildEmpty(BuildContext context) {
+    final isDeferred = _appState.currentIdentity is IdentityDeferred;
+    final hasNoIdentity = _appState.currentIdentity == null;
+
+    // Deferred (or no-identity) callers get a sign-in CTA — the catalog only
+    // loads after `identify()` resolves to a user/anonymous session.
+    if (isDeferred || hasNoIdentity) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Column(
+          children: [
+            Icon(Icons.person_outline,
+                size: 48,
+                color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 16),
+            Text('Sign in to load products',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                'The product catalog is fetched once you identify with the SDK. Sign in or continue as guest to load it.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: widget.onSignIn,
+              icon: const Icon(Icons.login),
+              label: const Text('Sign in'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(

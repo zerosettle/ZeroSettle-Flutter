@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 import '../app_state.dart';
 import '../widgets/gem_balance_card.dart';
+import '../widgets/sign_in_banner.dart';
 import '../widgets/subscription_status_card.dart';
 import '../widgets/stat_card.dart';
 
 class HomeScreen extends StatelessWidget {
   final AppState appState;
   final VoidCallback onNavigateToStore;
+  final VoidCallback onSignIn;
 
   const HomeScreen({
     super.key,
     required this.appState,
     required this.onNavigateToStore,
+    required this.onSignIn,
   });
 
   @override
@@ -31,6 +34,14 @@ class HomeScreen extends StatelessWidget {
                     // Profile header
                     _buildHeader(context),
                     const SizedBox(height: 24),
+
+                    // Sign-in CTA — only renders in deferred mode.
+                    SignInBanner(
+                      identity: appState.currentIdentity,
+                      onSignIn: onSignIn,
+                    ),
+                    if (appState.currentIdentity is IdentityDeferred)
+                      const SizedBox(height: 16),
 
                     // Gem Balance
                     GemBalanceCard(
