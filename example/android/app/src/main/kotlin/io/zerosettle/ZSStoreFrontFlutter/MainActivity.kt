@@ -1,4 +1,4 @@
-package com.example.zerosettle_example
+package io.zerosettle.ZSStoreFrontFlutter
 
 import io.flutter.embedding.android.FlutterActivity
 
