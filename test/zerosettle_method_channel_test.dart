@@ -283,7 +283,7 @@ void main() {
     // should put `pauseDurationDays` (not `pauseOptionId`) on the wire.
     // Until then, this fails at compile time.
     // ignore: avoid_dynamic_calls
-    final result = await (platform as dynamic).pauseSubscription(
+    final result = await (platform as dynamic).pauseSubscriptionForCurrentUser(
       productId: 'p1',
       pauseDurationDays: 30,
     );
@@ -303,7 +303,7 @@ void main() {
 
   test('restoreEntitlements (no userId) channel call has no userId key', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).restoreEntitlements();
+    await (platform as dynamic).restoreEntitlementsForCurrentUser();
     final call = channelCalls.firstWhere((c) => c.method == 'restoreEntitlements');
     final args = call.arguments as Map?;
     if (args != null) {
@@ -313,7 +313,7 @@ void main() {
 
   test('fetchTransactionHistory (no userId) channel call has no userId key', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).fetchTransactionHistory();
+    await (platform as dynamic).fetchTransactionHistoryForCurrentUser();
     final call = channelCalls.firstWhere((c) => c.method == 'fetchTransactionHistory');
     final args = call.arguments as Map?;
     if (args != null) {
@@ -323,7 +323,7 @@ void main() {
 
   test('acceptSaveOffer (no userId) channel call carries productId only', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).acceptSaveOffer(productId: 'p1');
+    await (platform as dynamic).acceptSaveOfferForCurrentUser(productId: 'p1');
     final call = channelCalls.firstWhere((c) => c.method == 'acceptSaveOffer');
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['productId'], 'p1');
@@ -332,7 +332,7 @@ void main() {
 
   test('presentCancelFlow (no userId) channel call carries productId only', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).presentCancelFlow(productId: 'p1');
+    await (platform as dynamic).presentCancelFlowForCurrentUser(productId: 'p1');
     final call = channelCalls.firstWhere((c) => c.method == 'presentCancelFlow');
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['productId'], 'p1');
@@ -341,7 +341,7 @@ void main() {
 
   test('resumeSubscription (no userId) channel call carries productId only', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).resumeSubscription(productId: 'p1');
+    await (platform as dynamic).resumeSubscriptionForCurrentUser(productId: 'p1');
     final call = channelCalls.firstWhere((c) => c.method == 'resumeSubscription');
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['productId'], 'p1');
@@ -350,7 +350,7 @@ void main() {
 
   test('cancelSubscription (no userId) channel call carries productId + immediate', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).cancelSubscription(productId: 'p1', immediate: true);
+    await (platform as dynamic).cancelSubscriptionForCurrentUser(productId: 'p1', immediate: true);
     final call = channelCalls.firstWhere((c) => c.method == 'cancelSubscription');
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['productId'], 'p1');
@@ -360,7 +360,7 @@ void main() {
 
   test('presentUpgradeOffer (no userId) channel call carries productId only', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).presentUpgradeOffer(productId: 'p1');
+    await (platform as dynamic).presentUpgradeOfferForCurrentUser(productId: 'p1');
     final call = channelCalls.firstWhere((c) => c.method == 'presentUpgradeOffer');
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['productId'], 'p1');
@@ -369,7 +369,7 @@ void main() {
 
   test('fetchUpgradeOfferConfig (no userId) channel call carries productId only', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).fetchUpgradeOfferConfig(productId: 'p1');
+    await (platform as dynamic).fetchUpgradeOfferConfigForCurrentUser(productId: 'p1');
     final call = channelCalls.firstWhere((c) => c.method == 'fetchUpgradeOfferConfig');
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['productId'], 'p1');
@@ -378,7 +378,7 @@ void main() {
 
   test('trackMigrationConversion (no userId) channel call has no userId key', () async {
     // ignore: avoid_dynamic_calls
-    await (platform as dynamic).trackMigrationConversion();
+    await (platform as dynamic).trackMigrationConversionForCurrentUser();
     final call = channelCalls.firstWhere((c) => c.method == 'trackMigrationConversion');
     final args = call.arguments as Map?;
     if (args != null) {

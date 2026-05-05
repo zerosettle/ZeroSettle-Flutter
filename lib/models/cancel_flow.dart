@@ -109,8 +109,8 @@ class CancelFlowOption {
       id: map['id'] as int,
       order: map['order'] as int,
       label: map['label'] as String,
-      triggersOffer: map['triggersOffer'] as bool,
-      triggersPause: map['triggersPause'] as bool,
+      triggersOffer: (map['triggersOffer'] as bool?) ?? false,
+      triggersPause: (map['triggersPause'] as bool?) ?? false,
     );
   }
 

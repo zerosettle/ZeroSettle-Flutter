@@ -75,7 +75,11 @@ class MockZeroSettlePlatform
   @override
   Future<Map<String, dynamic>> acceptSaveOfferForCurrentUser({required String productId}) async {
     _record('acceptSaveOfferForCurrentUser', {'productId': productId});
-    return const {};
+    return const {
+      'message': 'Saved 40% off your subscription',
+      'discountPercent': 40,
+      'durationMonths': 3,
+    };
   }
 
   @override
@@ -115,7 +119,7 @@ class MockZeroSettlePlatform
   @override
   Future<Map<String, dynamic>> fetchUpgradeOfferConfigForCurrentUser({String? productId}) async {
     _record('fetchUpgradeOfferConfigForCurrentUser', {if (productId != null) 'productId': productId});
-    return const {};
+    return const {'available': false};
   }
 
   @override
