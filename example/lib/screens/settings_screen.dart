@@ -201,21 +201,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         const SizedBox(height: 24),
 
-                        // Subscription Management
-                        _buildSectionHeader(context, 'Subscription'),
-                        Card(
-                          child: ListTile(
-                            leading: const Icon(Icons.credit_card),
-                            title: const Text('Manage Subscription'),
-                            subtitle: const Text(
-                                'Opens Stripe portal or Apple subscription management'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _manageSubscription,
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
                         // Restore Purchases
                         _buildSectionHeader(context, 'Restore Purchases'),
                         Card(
@@ -386,21 +371,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Restore entitlements (no userId — read from identity)
       final entitlements = await ZeroSettle.instance.restoreEntitlements();
       _appState.setEntitlements(entitlements);
-    } on ZSException {
+    } on ZeroSettleException {
       // Silently handle errors
     }
 
     _userIdController.clear();
     setState(() => _isSwitchingUser = false);
-  }
-
-  Future<void> _manageSubscription() async {
-    try {
-      await ZeroSettle.instance
-          .showManageSubscription(userId: _appState.userId);
-    } on ZSException {
-      // Silently handle errors
-    }
   }
 
   Future<void> _restorePurchases() async {
@@ -416,7 +392,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _restoreResult = 'Restored ${entitlements.length} entitlement(s)';
       });
-    } on ZSException {
+    } on ZeroSettleException {
       // Silently handle errors
     } finally {
       setState(() => _isRestoring = false);

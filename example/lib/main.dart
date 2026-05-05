@@ -107,7 +107,7 @@ class _AppShellState extends State<AppShell> {
       } catch (_) {
         // Non-fatal: entitlements may be empty for new users
       }
-    } on ZSException catch (e) {
+    } on ZeroSettleException catch (e) {
       _appState.setError(e.message);
     } finally {
       _appState.setLoading(false);

@@ -49,7 +49,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // Migration Tip (iOS only, auto-hides when not applicable)
-                    ZSMigrateTipView(
+                    MigrationTipView(
                       userId: appState.userId,
                       backgroundColor: Theme.of(context).colorScheme.surface,
                     ),

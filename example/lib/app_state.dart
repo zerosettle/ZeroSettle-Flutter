@@ -55,7 +55,7 @@ class PurchaseRecord {
   }
 }
 
-/// View model wrapping [ZSProduct] with inferred visual properties.
+/// View model wrapping [Product] with inferred visual properties.
 class StoreProduct {
   final String id;
   final String name;
@@ -113,7 +113,7 @@ class StoreProduct {
     }
   }
 
-  factory StoreProduct.fromZSProduct(ZSProduct product, {int index = 0}) {
+  factory StoreProduct.fromProduct(Product product, {int index = 0}) {
     final StoreProductType type;
     final SubscriptionDuration? duration;
     final List<String> features;
@@ -186,7 +186,7 @@ class StoreProduct {
 
   // -- Inference helpers (mirrors StoreProduct.swift) --
 
-  static int? _inferGemAmount(ZSProduct product) {
+  static int? _inferGemAmount(Product product) {
     final lowerId = product.id.toLowerCase();
     final lowerName = product.displayName.toLowerCase();
 
@@ -202,7 +202,7 @@ class StoreProduct {
     return numbers.isNotEmpty ? numbers.first : null;
   }
 
-  static SubscriptionDuration _inferDuration(ZSProduct product) {
+  static SubscriptionDuration _inferDuration(Product product) {
     final lowerId = product.id.toLowerCase();
     final lowerName = product.displayName.toLowerCase();
 
@@ -309,7 +309,7 @@ class AppState extends ChangeNotifier {
   Set<String> unlockedProducts;
 
   // SDK data
-  List<ZSProduct> products;
+  List<Product> products;
   List<StoreProduct> storeProducts;
   List<Entitlement> entitlements;
   RemoteConfig? remoteConfig;
@@ -327,7 +327,7 @@ class AppState extends ChangeNotifier {
     this.subscriptionExpiryDate,
     List<PurchaseRecord>? purchaseHistory,
     Set<String>? unlockedProducts,
-    List<ZSProduct>? products,
+    List<Product>? products,
     List<StoreProduct>? storeProducts,
     List<Entitlement>? entitlements,
     this.remoteConfig,
@@ -365,7 +365,7 @@ class AppState extends ChangeNotifier {
 
   // -- Mutators --
 
-  void setProducts(List<ZSProduct> newProducts) {
+  void setProducts(List<Product> newProducts) {
     products = newProducts;
     var consumableIndex = 0;
     var subscriptionIndex = 0;
@@ -379,7 +379,7 @@ class AppState extends ChangeNotifier {
         case ZSProductType.nonRenewingSubscription:
           index = subscriptionIndex++;
       }
-      return StoreProduct.fromZSProduct(p, index: index);
+      return StoreProduct.fromProduct(p, index: index);
     }).toList();
     notifyListeners();
   }

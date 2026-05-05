@@ -159,7 +159,7 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-    } on ZSException catch (e) {
+    } on ZeroSettleException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${e.message}')),
@@ -392,7 +392,7 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
       final entitlements = await ZeroSettle.instance.restoreEntitlements();
       _appState.setEntitlements(entitlements);
       setState(() => _lastRefresh = DateTime.now());
-    } on ZSException {
+    } on ZeroSettleException {
       // Silently handle errors
     } finally {
       setState(() => _isLoading = false);
@@ -428,7 +428,7 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
       if (result is CancelFlowCancelled) {
         _appState.deactivateSubscription();
       }
-    } on ZSException catch (e) {
+    } on ZeroSettleException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${e.message}')),

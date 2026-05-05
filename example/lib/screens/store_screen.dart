@@ -266,7 +266,7 @@ class _StoreScreenState extends State<StoreScreen> {
       } catch (_) {}
 
       setState(() => _selectedProduct = null);
-    } on ZSException {
+    } on ZeroSettleException {
       // Silently handle errors (cancelled, checkout failed, etc.)
     } finally {
       if (mounted) setState(() => _isProcessing = false);
