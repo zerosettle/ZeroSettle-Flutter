@@ -116,7 +116,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "bootstrap" -> {
                 val userId = call.argument<String>("userId")
                 if (userId == null) {
-                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    result.error("user_not_identified", "Android plugin does not yet support 1.3.0 identify() — pass userId until the Android SDK uplift ships.", null)
                     return
                 }
                 scope.launch {
@@ -186,7 +186,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "restoreEntitlements" -> {
                 val userId = call.argument<String>("userId")
                 if (userId == null) {
-                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    result.error("user_not_identified", "Android plugin does not yet support 1.3.0 identify() — pass userId until the Android SDK uplift ships.", null)
                     return
                 }
                 scope.launch {
@@ -208,7 +208,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "openCustomerPortal" -> {
                 val userId = call.argument<String>("userId")
                 if (userId == null) {
-                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    result.error("user_not_identified", "Android plugin does not yet support 1.3.0 identify() — pass userId until the Android SDK uplift ships.", null)
                     return
                 }
                 val currentActivity = activity
@@ -229,7 +229,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "showManageSubscription" -> {
                 val userId = call.argument<String>("userId")
                 if (userId == null) {
-                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    result.error("user_not_identified", "Android plugin does not yet support 1.3.0 identify() — pass userId until the Android SDK uplift ships.", null)
                     return
                 }
                 val currentActivity = activity
@@ -252,7 +252,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "fetchTransactionHistory" -> {
                 val userId = call.argument<String>("userId")
                 if (userId == null) {
-                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    result.error("user_not_identified", "Android plugin does not yet support 1.3.0 identify() — pass userId until the Android SDK uplift ships.", null)
                     return
                 }
                 scope.launch {
@@ -442,7 +442,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "presentUpgradeOffer" -> {
                 val userId = call.argument<String>("userId")
                 if (userId == null) {
-                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    result.error("user_not_identified", "Android plugin does not yet support 1.3.0 identify() — pass userId until the Android SDK uplift ships.", null)
                     return
                 }
                 val productId = call.argument<String>("productId")
@@ -464,7 +464,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "fetchUpgradeOfferConfig" -> {
                 val userId = call.argument<String>("userId")
                 if (userId == null) {
-                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    result.error("user_not_identified", "Android plugin does not yet support 1.3.0 identify() — pass userId until the Android SDK uplift ships.", null)
                     return
                 }
                 val productId = call.argument<String>("productId")
@@ -506,7 +506,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "trackMigrationConversion" -> {
                 val userId = call.argument<String>("userId")
                 if (userId == null) {
-                    result.error("INVALID_ARGUMENTS", "userId is required", null)
+                    result.error("user_not_identified", "Android plugin does not yet support 1.3.0 identify() — pass userId until the Android SDK uplift ships.", null)
                     return
                 }
                 scope.launch {

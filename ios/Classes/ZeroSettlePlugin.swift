@@ -82,9 +82,15 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 return
             }
             let syncStoreKit = args?["syncStoreKitTransactions"] as? Bool ?? true
+            let appleMerchantId = args?["appleMerchantId"] as? String
+            let preloadCheckout = args?["preloadCheckout"] as? Bool ?? false
+            let maxPreloadedWebViews = args?["maxPreloadedWebViews"] as? Int
             let config = ZeroSettle.Configuration(
                 publishableKey: publishableKey,
-                syncStoreKitTransactions: syncStoreKit
+                syncStoreKitTransactions: syncStoreKit,
+                appleMerchantId: appleMerchantId,
+                preloadCheckout: preloadCheckout,
+                maxPreloadedWebViews: maxPreloadedWebViews
             )
             ZeroSettle.shared.configure(config)
             ZeroSettle.shared.delegate = self
@@ -267,13 +273,14 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // -- Entitlements --
 
         case "restoreEntitlements":
-            guard let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
-                return
-            }
             Task { @MainActor in
                 do {
-                    let entitlements = try await ZeroSettle.shared.restoreEntitlements(userId: userId)
+                    let entitlements: [Entitlement]
+                    if let userId = args?["userId"] as? String {
+                        entitlements = try await ZeroSettle.shared.restoreEntitlements(userId: userId)
+                    } else {
+                        entitlements = try await ZeroSettle.shared.restoreEntitlements()
+                    }
                     result(entitlements.map { $0.toFlutterMap() })
                 } catch {
                     result(error.toFlutterError())
@@ -309,13 +316,14 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // -- Transaction History --
 
         case "fetchTransactionHistory":
-            guard let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
-                return
-            }
             Task { @MainActor in
                 do {
-                    let transactions = try await ZeroSettle.shared.fetchTransactionHistory(userId: userId)
+                    let transactions: [CheckoutTransaction]
+                    if let userId = args?["userId"] as? String {
+                        transactions = try await ZeroSettle.shared.fetchTransactionHistory(userId: userId)
+                    } else {
+                        transactions = try await ZeroSettle.shared.fetchTransactionHistory()
+                    }
                     result(transactions.map { $0.toFlutterMap() })
                 } catch {
                     result(error.toFlutterError())
@@ -325,16 +333,20 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // -- Cancel Flow --
 
         case "presentCancelFlow":
-            guard let productId = args?["productId"] as? String,
-                  let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
             Task { @MainActor in
-                let cancelResult = await ZeroSettle.shared.presentCancelFlow(
-                    productId: productId,
-                    userId: userId
-                )
+                let cancelResult: CancelFlow.Result
+                if let userId = args?["userId"] as? String {
+                    cancelResult = await ZeroSettle.shared.presentCancelFlow(
+                        productId: productId,
+                        userId: userId
+                    )
+                } else {
+                    cancelResult = await ZeroSettle.shared.presentCancelFlow(productId: productId)
+                }
                 switch cancelResult {
                 case .cancelled: result("cancelled")
                 case .retained: result("retained")
@@ -360,19 +372,29 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             }
 
         case "pauseSubscription":
-            guard let productId = args?["productId"] as? String,
-                  let userId = args?["userId"] as? String,
-                  let pauseOptionId = args?["pauseOptionId"] as? Int else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId, userId, and pauseOptionId are required", details: nil))
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
+            // Kit 1.3.0 takes `pauseDurationDays: Int?`. Accept either the new
+            // arg name or the legacy `pauseOptionId` (treated as duration days
+            // for backward compat with the old Flutter API surface).
+            let pauseDurationDays = (args?["pauseDurationDays"] as? Int) ?? (args?["pauseOptionId"] as? Int)
             Task { @MainActor in
                 do {
-                    let resumesAt = try await ZeroSettle.shared.pauseSubscription(
-                        productId: productId,
-                        userId: userId,
-                        pauseOptionId: pauseOptionId
-                    )
+                    let resumesAt: Date?
+                    if let userId = args?["userId"] as? String {
+                        resumesAt = try await ZeroSettle.shared.pauseSubscription(
+                            productId: productId,
+                            userId: userId,
+                            pauseDurationDays: pauseDurationDays
+                        )
+                    } else {
+                        resumesAt = try await ZeroSettle.shared.pauseSubscription(
+                            productId: productId,
+                            pauseDurationDays: pauseDurationDays
+                        )
+                    }
                     if let resumesAt {
                         result(iso8601Formatter.string(from: resumesAt))
                     } else {
@@ -384,17 +406,20 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             }
 
         case "resumeSubscription":
-            guard let productId = args?["productId"] as? String,
-                  let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
             Task { @MainActor in
                 do {
-                    try await ZeroSettle.shared.resumeSubscription(
-                        productId: productId,
-                        userId: userId
-                    )
+                    if let userId = args?["userId"] as? String {
+                        try await ZeroSettle.shared.resumeSubscription(
+                            productId: productId,
+                            userId: userId
+                        )
+                    } else {
+                        try await ZeroSettle.shared.resumeSubscription(productId: productId)
+                    }
                     result(nil)
                 } catch {
                     result(error.toFlutterError())
@@ -404,14 +429,18 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // -- Cancel Flow (Headless) --
 
         case "acceptSaveOffer":
-            guard let productId = args?["productId"] as? String,
-                  let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
             Task { @MainActor in
                 do {
-                    let offerResult = try await ZeroSettle.shared.acceptSaveOffer(productId: productId, userId: userId)
+                    let offerResult: CancelFlow.SaveOfferResult
+                    if let userId = args?["userId"] as? String {
+                        offerResult = try await ZeroSettle.shared.acceptSaveOffer(productId: productId, userId: userId)
+                    } else {
+                        offerResult = try await ZeroSettle.shared.acceptSaveOffer(productId: productId)
+                    }
                     result([
                         "message": offerResult.message,
                         "discountPercent": offerResult.discountPercent,
@@ -470,15 +499,18 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             }
 
         case "cancelSubscription":
-            guard let productId = args?["productId"] as? String,
-                  let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId and userId are required", details: nil))
+            guard let productId = args?["productId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
             let immediate = args?["immediate"] as? Bool ?? false
             Task { @MainActor in
                 do {
-                    try await ZeroSettle.shared.cancelSubscription(productId: productId, userId: userId, immediate: immediate)
+                    if let userId = args?["userId"] as? String {
+                        try await ZeroSettle.shared.cancelSubscription(productId: productId, userId: userId, immediate: immediate)
+                    } else {
+                        try await ZeroSettle.shared.cancelSubscription(productId: productId, immediate: immediate)
+                    }
                     result(nil)
                 } catch {
                     result(error.toFlutterError())
@@ -507,13 +539,13 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // -- Migration Tracking --
 
         case "trackMigrationConversion":
-            guard let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
-                return
-            }
             Task { @MainActor in
                 do {
-                    try await ZeroSettle.shared.trackMigrationConversion(userId: userId)
+                    if let userId = args?["userId"] as? String {
+                        try await ZeroSettle.shared.trackMigrationConversion(userId: userId)
+                    } else {
+                        try await ZeroSettle.shared.trackMigrationConversion()
+                    }
                     result(nil)
                 } catch {
                     result(error.toFlutterError())
@@ -548,15 +580,16 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
 
         case "presentUpgradeOffer":
             let productId = args?["productId"] as? String
-            guard let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
-                return
-            }
             Task { @MainActor in
-                let upgradeResult = await ZeroSettle.shared.presentUpgradeOffer(
-                    productId: productId,
-                    userId: userId
-                )
+                let upgradeResult: UpgradeOffer.Result
+                if let userId = args?["userId"] as? String {
+                    upgradeResult = await ZeroSettle.shared.presentUpgradeOffer(
+                        productId: productId,
+                        userId: userId
+                    )
+                } else {
+                    upgradeResult = await ZeroSettle.shared.presentUpgradeOffer(productId: productId)
+                }
                 switch upgradeResult {
                 case .upgraded: result("upgraded")
                 case .declined: result("declined")
@@ -566,16 +599,17 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
 
         case "fetchUpgradeOfferConfig":
             let productId = args?["productId"] as? String
-            guard let userId = args?["userId"] as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId is required", details: nil))
-                return
-            }
             Task { @MainActor in
                 do {
-                    let config = try await ZeroSettle.shared.fetchUpgradeOfferConfig(
-                        productId: productId,
-                        userId: userId
-                    )
+                    let config: UpgradeOffer.Config
+                    if let userId = args?["userId"] as? String {
+                        config = try await ZeroSettle.shared.fetchUpgradeOfferConfig(
+                            productId: productId,
+                            userId: userId
+                        )
+                    } else {
+                        config = try await ZeroSettle.shared.fetchUpgradeOfferConfig(productId: productId)
+                    }
                     result(config.toFlutterMap())
                 } catch {
                     result(error.toFlutterError())
@@ -1068,18 +1102,28 @@ extension ZeroSettleError {
         switch self {
         case .notConfigured:
             return FlutterError(code: "not_configured", message: errorDescription, details: nil)
+        case .invalidPublishableKey:
+            return FlutterError(code: "invalid_publishable_key", message: errorDescription, details: nil)
         case .cancelled:
             return FlutterError(code: "cancelled", message: errorDescription, details: nil)
         case .productNotFound(let productId):
             return FlutterError(code: "product_not_found", message: errorDescription, details: productId)
         case .checkoutFailed:
             return FlutterError(code: "checkout_failed", message: errorDescription, details: nil)
+        case .transactionVerificationFailed(let detail):
+            return FlutterError(code: "transaction_verification_failed", message: errorDescription, details: detail)
         case .apiError:
             return FlutterError(code: "api_error", message: errorDescription, details: nil)
+        case .checkoutConfigExpired:
+            return FlutterError(code: "checkout_config_expired", message: errorDescription, details: nil)
         case .userIdRequired(let productId):
             return FlutterError(code: "user_id_required", message: errorDescription, details: productId)
         case .webCheckoutDisabledForJurisdiction(let jurisdiction):
             return FlutterError(code: "web_checkout_disabled", message: errorDescription, details: jurisdiction.rawValue)
+        case .purchasePending:
+            return FlutterError(code: "purchase_pending", message: errorDescription, details: nil)
+        case .userNotIdentified:
+            return FlutterError(code: "user_not_identified", message: errorDescription, details: nil)
         case .checkoutNotStarted:
             return FlutterError(code: "checkout_not_started", message: errorDescription, details: nil)
         default:

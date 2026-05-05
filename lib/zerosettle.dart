@@ -54,13 +54,37 @@ class ZeroSettle {
 
   /// Configure the SDK with your publishable key.
   /// Must be called before any other methods.
+  ///
+  /// - [publishableKey]: Your publishable key from the ZeroSettle dashboard.
+  /// - [syncStoreKitTransactions]: Whether to listen for and forward native
+  ///   StoreKit transactions. Set to `false` if you use RevenueCat.
+  /// - [appleMerchantId]: Apple Pay merchant identifier for native pay
+  ///   checkout. Required when using the `NativePay` package trait. If null,
+  ///   the SDK uses the merchant ID from the backend config (managed mode
+  ///   default).
+  /// - [preloadCheckout]: Whether to preload checkout sessions for all
+  ///   products after [identify] completes. Defaults to `false` on Flutter
+  ///   (the iOS Kit default; documented here as the safer Flutter default to
+  ///   avoid surprising network/memory behavior for existing adopters).
+  ///   When `true`, the first checkout opens instantly with no network delay.
+  /// - [maxPreloadedWebViews]: Maximum number of WKWebViews to pre-render in
+  ///   the background pool. Each WebView costs ~3-7 MB of memory. Pass
+  ///   `null` for no limit (all products), a positive `int` to cap the pool
+  ///   size, or `0` to disable WebView pre-rendering entirely (PI caching
+  ///   still works).
   Future<void> configure({
     required String publishableKey,
     bool syncStoreKitTransactions = true,
+    String? appleMerchantId,
+    bool preloadCheckout = false,
+    int? maxPreloadedWebViews,
   }) {
     return _wrap(() => _platform.configure(
           publishableKey: publishableKey,
           syncStoreKitTransactions: syncStoreKitTransactions,
+          appleMerchantId: appleMerchantId,
+          preloadCheckout: preloadCheckout,
+          maxPreloadedWebViews: maxPreloadedWebViews,
         ));
   }
 
@@ -72,6 +96,7 @@ class ZeroSettle {
   /// [restoreEntitlements] in sequence.
   ///
   /// - [userId]: Your app's user identifier
+  @Deprecated('Use identify(Identity.user(id: ..., name: ..., email: ...)). Removed in zerosettle 2.0.')
   Future<ProductCatalog> bootstrap({required String userId}) {
     return _wrap(() async {
       final map = await _platform.bootstrap(userId: userId);
@@ -193,9 +218,21 @@ class ZeroSettle {
   // -- Entitlements --
 
   /// Restore entitlements from both web checkout and StoreKit.
-  Future<List<Entitlement>> restoreEntitlements({required String userId}) {
+  ///
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
+  ///
+  /// Merges entitlements from both StoreKit (local) and web checkout
+  /// (backend). Throws [ZSUserNotIdentifiedException] when called without
+  /// `userId` if no user is identified.
+  Future<List<Entitlement>> restoreEntitlements({
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
+  }) {
     return _wrap(() async {
-      final list = await _platform.restoreEntitlements(userId: userId);
+      final list = userId == null
+          ? await _platform.restoreEntitlementsForCurrentUser()
+          : await _platform.restoreEntitlements(userId: userId);
       return list.map((e) => Entitlement.fromMap(e)).toList();
     });
   }
@@ -217,17 +254,23 @@ class ZeroSettle {
 
   // -- Transaction History --
 
-  /// Fetch the full transaction history for a user.
+  /// Fetch the full transaction history for the currently identified user.
   ///
   /// Unlike [restoreEntitlements] which only returns **active** entitlements,
   /// this method returns all transactions regardless of status — including
   /// consumed consumables, expired subscriptions, refunds, and failed
   /// transactions.
   ///
-  /// - [userId]: Your app's user identifier
-  Future<List<CheckoutTransaction>> fetchTransactionHistory({required String userId}) {
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
+  Future<List<CheckoutTransaction>> fetchTransactionHistory({
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
+  }) {
     return _wrap(() async {
-      final list = await _platform.fetchTransactionHistory(userId: userId);
+      final list = userId == null
+          ? await _platform.fetchTransactionHistoryForCurrentUser()
+          : await _platform.fetchTransactionHistory(userId: userId);
       return list.map((e) => CheckoutTransaction.fromMap(e)).toList();
     });
   }
@@ -294,18 +337,24 @@ class ZeroSettle {
   /// SDK, then presents a native questionnaire sheet. If the flow is disabled
   /// or has no questions, returns [CancelFlowCancelled] immediately.
   ///
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
+  ///
   /// - [productId]: The product the user wants to cancel
-  /// - [userId]: Your app's user identifier
+  /// - [userId]: (Deprecated) Your app's user identifier
   Future<CancelFlowResult> presentCancelFlow({
     required String productId,
-    required String userId,
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
   }) {
     return _wrap(() async {
-      final resultString = await _platform.presentCancelFlow(
-        productId: productId,
-        userId: userId,
-      );
-      return CancelFlowResult.fromRawValue(resultString);
+      final String? resultString;
+      if (userId == null) {
+        resultString = await _platform.presentCancelFlowForCurrentUser(productId: productId);
+      } else {
+        resultString = await _platform.presentCancelFlow(productId: productId, userId: userId);
+      }
+      return CancelFlowResult.fromRawValue(resultString ?? 'dismissed');
     });
   }
 
@@ -321,41 +370,70 @@ class ZeroSettle {
     });
   }
 
-  /// Pause a subscription for the given user.
+  /// Pause a subscription.
   ///
   /// Returns the resume date as a [DateTime] if the backend provides one,
   /// or `null` if no specific resume date was set.
   ///
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0. The
+  /// `pauseOptionId` parameter has been replaced by `pauseDurationDays` per
+  /// Kit 1.3.0; callers should pass `pauseDurationDays` instead.
+  ///
   /// - [productId]: The product to pause
-  /// - [userId]: Your app's user identifier
-  /// - [pauseOptionId]: The ID of the selected pause option
+  /// - [pauseDurationDays]: The number of days to pause for. `null` lets the
+  ///   backend choose the default.
+  /// - [userId]: (Deprecated) Your app's user identifier
+  /// - [pauseOptionId]: (Deprecated) The legacy pause-option ID; passed as
+  ///   `pauseDurationDays` to the bridge.
   Future<DateTime?> pauseSubscription({
     required String productId,
-    required String userId,
-    required int pauseOptionId,
+    int? pauseDurationDays,
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
+    @Deprecated('Use pauseDurationDays. Removed in zerosettle 2.0.')
+    int? pauseOptionId,
   }) {
+    // Precedence: `pauseDurationDays` (new) wins over `pauseOptionId` (legacy).
+    final int? duration = pauseDurationDays ?? pauseOptionId;
     return _wrap(() async {
-      final iso = await _platform.pauseSubscription(
-        productId: productId,
-        userId: userId,
-        pauseOptionId: pauseOptionId,
-      );
+      final String? iso;
+      if (userId == null) {
+        iso = await _platform.pauseSubscriptionForCurrentUser(
+          productId: productId,
+          pauseDurationDays: duration,
+        );
+      } else {
+        // Legacy method channel still requires a non-null pauseOptionId
+        // (its arg name predates the 1.3.0 rename); pass duration through.
+        iso = await _platform.pauseSubscription(
+          productId: productId,
+          userId: userId,
+          pauseOptionId: duration ?? 0,
+        );
+      }
       return iso != null ? DateTime.parse(iso) : null;
     });
   }
 
-  /// Resume a paused subscription for the given user.
+  /// Resume a paused subscription.
+  ///
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
   ///
   /// - [productId]: The product to resume
-  /// - [userId]: Your app's user identifier
+  /// - [userId]: (Deprecated) Your app's user identifier
   Future<void> resumeSubscription({
     required String productId,
-    required String userId,
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
   }) {
-    return _wrap(() => _platform.resumeSubscription(
-          productId: productId,
-          userId: userId,
-        ));
+    return _wrap(() {
+      if (userId == null) {
+        return _platform.resumeSubscriptionForCurrentUser(productId: productId);
+      }
+      return _platform.resumeSubscription(productId: productId, userId: userId);
+    });
   }
 
   // -- Cancel Flow (Headless) --
@@ -364,17 +442,20 @@ class ZeroSettle {
   ///
   /// Returns a [CancelFlowSaveOfferResult] with the discount details.
   ///
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
+  ///
   /// - [productId]: The product the offer applies to
-  /// - [userId]: Your app's user identifier
+  /// - [userId]: (Deprecated) Your app's user identifier
   Future<CancelFlowSaveOfferResult> acceptSaveOffer({
     required String productId,
-    required String userId,
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
   }) {
     return _wrap(() async {
-      final map = await _platform.acceptSaveOffer(
-        productId: productId,
-        userId: userId,
-      );
+      final map = userId == null
+          ? await _platform.acceptSaveOfferForCurrentUser(productId: productId)
+          : await _platform.acceptSaveOffer(productId: productId, userId: userId);
       return CancelFlowSaveOfferResult.fromMap(map);
     });
   }
@@ -398,19 +479,31 @@ class ZeroSettle {
 
   /// Cancel a subscription immediately or at end of period.
   ///
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
+  ///
   /// - [productId]: The product to cancel
-  /// - [userId]: Your app's user identifier
   /// - [immediate]: Whether to cancel immediately (default: false, cancels at period end)
+  /// - [userId]: (Deprecated) Your app's user identifier
   Future<void> cancelSubscription({
     required String productId,
-    required String userId,
     bool immediate = false,
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
   }) {
-    return _wrap(() => _platform.cancelSubscription(
+    return _wrap(() {
+      if (userId == null) {
+        return _platform.cancelSubscriptionForCurrentUser(
           productId: productId,
-          userId: userId,
           immediate: immediate,
-        ));
+        );
+      }
+      return _platform.cancelSubscription(
+        productId: productId,
+        userId: userId,
+        immediate: immediate,
+      );
+    });
   }
 
   // -- Upgrade Offer --
@@ -421,17 +514,20 @@ class ZeroSettle {
   /// SDK, then presents a native upgrade sheet. If no upgrade is available,
   /// returns [UpgradeOfferDismissed] immediately.
   ///
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
+  ///
   /// - [productId]: The current product the user holds
-  /// - [userId]: Your app's user identifier
+  /// - [userId]: (Deprecated) Your app's user identifier
   Future<UpgradeOfferResult> presentUpgradeOffer({
     String? productId,
-    required String userId,
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
   }) {
     return _wrap(() async {
-      final resultString = await _platform.presentUpgradeOffer(
-        productId: productId,
-        userId: userId,
-      );
+      final resultString = userId == null
+          ? await _platform.presentUpgradeOfferForCurrentUser(productId: productId)
+          : await _platform.presentUpgradeOffer(productId: productId, userId: userId);
       return UpgradeOfferResult.fromRawValue(resultString);
     });
   }
@@ -440,17 +536,20 @@ class ZeroSettle {
   ///
   /// Use this for headless/custom upgrade offer implementations.
   ///
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
+  ///
   /// - [productId]: The current product to check upgrades for
-  /// - [userId]: Your app's user identifier
+  /// - [userId]: (Deprecated) Your app's user identifier
   Future<UpgradeOfferConfig> fetchUpgradeOfferConfig({
     String? productId,
-    required String userId,
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
   }) {
     return _wrap(() async {
-      final map = await _platform.fetchUpgradeOfferConfig(
-        productId: productId,
-        userId: userId,
-      );
+      final map = userId == null
+          ? await _platform.fetchUpgradeOfferConfigForCurrentUser(productId: productId)
+          : await _platform.fetchUpgradeOfferConfig(productId: productId, userId: userId);
       return UpgradeOfferConfig.fromMap(map);
     });
   }
@@ -484,9 +583,20 @@ class ZeroSettle {
   /// as part of a migration campaign (switching from native store billing to
   /// web checkout).
   ///
-  /// - [userId]: Your app's user identifier
-  Future<void> trackMigrationConversion({required String userId}) {
-    return _wrap(() => _platform.trackMigrationConversion(userId: userId));
+  /// **1.3.0**: Call [identify] first; then call without `userId`. Passing
+  /// `userId` is deprecated and will be removed in zerosettle 2.0.
+  ///
+  /// - [userId]: (Deprecated) Your app's user identifier
+  Future<void> trackMigrationConversion({
+    @Deprecated('Call identify() once, then use the userId-less form. Removed in zerosettle 2.0.')
+    String? userId,
+  }) {
+    return _wrap(() {
+      if (userId == null) {
+        return _platform.trackMigrationConversionForCurrentUser();
+      }
+      return _platform.trackMigrationConversion(userId: userId);
+    });
   }
 
   // -- Migration Tip --
