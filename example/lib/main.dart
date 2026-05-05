@@ -72,6 +72,7 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _bootstrapApp() async {
     final env = await IAPEnvironment.load();
+    debugPrint('[ZS] bootstrap: loaded env=${env.name}');
     _envNotifier.value = env;
     setState(() => _envLoaded = true);
 
@@ -79,6 +80,7 @@ class _AppShellState extends State<AppShell> {
 
     // Replay persisted identity choice, or prompt the user to pick one.
     final stored = await IdentityChoiceStore.load();
+    debugPrint('[ZS] bootstrap: persisted identity=${stored?.runtimeType ?? 'none'}');
     if (stored != null) {
       await _applyIdentity(stored, persist: false);
     } else if (mounted) {
@@ -88,6 +90,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _configureSdk(IAPEnvironment env) async {
+    debugPrint('[ZS] configure: start env=${env.name} baseUrl=${env.baseUrlOverride ?? 'default'} key=${env.truncatedKey}');
     _appState.setLoading(true);
     _appState.setError(null);
 
@@ -111,6 +114,9 @@ class _AppShellState extends State<AppShell> {
         maxPreloadedWebViews: 3,
       );
 
+      final isConfigured = await ZeroSettle.instance.getIsConfigured();
+      debugPrint('[ZS] configure: done. SDK reports isConfigured=$isConfigured');
+
       // Subscribe to entitlement updates from the native SDK.
       _entitlementSub?.cancel();
       _entitlementSub =
@@ -118,6 +124,7 @@ class _AppShellState extends State<AppShell> {
         _appState.setEntitlements(entitlements);
       });
     } on ZeroSettleException catch (e) {
+      debugPrint('[ZS] configure: FAILED — ${e.message}');
       _appState.setError(e.message);
     } finally {
       _appState.setLoading(false);
@@ -126,12 +133,16 @@ class _AppShellState extends State<AppShell> {
 
   /// Apply an identity to the SDK and refresh user-scoped state.
   Future<void> _applyIdentity(Identity identity, {bool persist = true}) async {
+    debugPrint('[ZS] identify: ${identity.runtimeType} (persist=$persist)');
+    final preCheck = await ZeroSettle.instance.getIsConfigured();
+    debugPrint('[ZS] identify: pre-call isConfigured=$preCheck');
     _appState.setLoading(true);
     _appState.setError(null);
     _appState.setIdentity(identity);
 
     try {
       final catalog = await ZeroSettle.instance.identify(identity);
+      debugPrint('[ZS] identify: success, catalog=${catalog == null ? 'null (deferred)' : '${catalog.products.length} products'}');
       if (catalog != null) {
         _appState.setProducts(catalog.products);
         _appState.setRemoteConfig(catalog.config);
@@ -148,6 +159,7 @@ class _AppShellState extends State<AppShell> {
         }
       }
     } on ZeroSettleException catch (e) {
+      debugPrint('[ZS] identify: FAILED — ${e.runtimeType}: ${e.message}');
       _appState.setError(e.message);
     } finally {
       _appState.setLoading(false);
