@@ -16,6 +16,8 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
   bool _isCancelling = false;
   DateTime? _lastRefresh;
   final Set<String> _expandedIds = {};
+  final Set<String> _transferringIds = {};
+  final Set<String> _checkingUpgradeIds = {};
 
   AppState get _appState => widget.appState;
 
@@ -263,21 +265,15 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: ent.source == EntitlementSource.storeKit
-                                    ? Colors.blue.withValues(alpha: 0.15)
-                                    : Colors.green.withValues(alpha: 0.15),
+                                color: _sourceColor(ent.source)
+                                    .withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                ent.source == EntitlementSource.storeKit
-                                    ? 'StoreKit'
-                                    : 'Web',
+                                _sourceLabel(ent.source),
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color:
-                                      ent.source == EntitlementSource.storeKit
-                                          ? Colors.blue
-                                          : Colors.green,
+                                  color: _sourceColor(ent.source),
                                 ),
                               ),
                             ),
@@ -308,13 +304,7 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
                 const Divider(height: 24),
                 _detailRow(context, 'ID', ent.id),
                 _detailRow(context, 'Product ID', ent.productId),
-                _detailRow(
-                  context,
-                  'Source',
-                  ent.source == EntitlementSource.storeKit
-                      ? 'StoreKit'
-                      : 'Web Checkout',
-                ),
+                _detailRow(context, 'Source', _sourceLabel(ent.source)),
                 _detailRow(context, 'Active', ent.isActive ? 'Yes' : 'No'),
                 _detailRow(context, 'Purchased', _formatDateTime(ent.purchasedAt)),
                 if (ent.expiresAt != null) ...[
@@ -333,12 +323,53 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
                   ],
                 ] else
                   _detailRow(context, 'Expires', 'Never (lifetime)'),
+                ..._buildEntitlementActions(context, ent),
               ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  // Action buttons available for an entitlement. Specific to each entitlement's
+  // source and status:
+  //
+  // - StoreKit + signed-in user → "Transfer to current account"
+  //   (transferStoreKitOwnershipToCurrentUser).
+  // - Active subscription with an expiry → "Check for upgrade"
+  //   (fetchUpgradeOfferConfig + presentUpgradeOffer).
+  List<Widget> _buildEntitlementActions(BuildContext context, Entitlement ent) {
+    final widgets = <Widget>[];
+
+    if (ent.source == EntitlementSource.storeKit &&
+        _appState.currentIdentity is IdentityUser) {
+      widgets.add(const SizedBox(height: 12));
+      widgets.add(
+        OutlinedButton.icon(
+          icon: const Icon(Icons.swap_horiz, size: 18),
+          label: const Text('Transfer to current account'),
+          onPressed: _transferringIds.contains(ent.id)
+              ? null
+              : () => _transferStoreKit(ent),
+        ),
+      );
+    }
+
+    if (ent.isActive && ent.expiresAt != null) {
+      widgets.add(const SizedBox(height: 8));
+      widgets.add(
+        OutlinedButton.icon(
+          icon: const Icon(Icons.upgrade, size: 18),
+          label: const Text('Check for upgrade'),
+          onPressed: _checkingUpgradeIds.contains(ent.id)
+              ? null
+              : () => _checkUpgradeOffer(ent),
+        ),
+      );
+    }
+
+    return widgets;
   }
 
   Widget _detailRow(BuildContext context, String label, String value) {
@@ -386,6 +417,13 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
   }
 
   Future<void> _refresh() async {
+    // Skip if no usable identity yet — restoreEntitlements throws
+    // ZSUserNotIdentifiedException for deferred or null identities.
+    if (_appState.currentIdentity == null ||
+        _appState.currentIdentity is IdentityDeferred) {
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -395,7 +433,7 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
     } on ZeroSettleException {
       // Silently handle errors
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -436,5 +474,194 @@ class _EntitlementsScreenState extends State<EntitlementsScreen> {
     } finally {
       setState(() => _isCancelling = false);
     }
+  }
+
+  // -- 1.3.0 demos --
+
+  /// Calls [ZeroSettle.transferStoreKitOwnershipToCurrentUser]. Replaces the
+  /// deprecated `claimEntitlement`. Only meaningful for StoreKit-source
+  /// entitlements when an [IdentityUser] is active.
+  Future<void> _transferStoreKit(Entitlement ent) async {
+    setState(() => _transferringIds.add(ent.id));
+    String message;
+    try {
+      await ZeroSettle.instance.transferStoreKitOwnershipToCurrentUser(
+        productId: ent.productId,
+      );
+      message = 'Transferred ${ent.productId} to current account';
+      // Refresh entitlements so the UI reflects the new ownership.
+      try {
+        final entitlements = await ZeroSettle.instance.restoreEntitlements();
+        _appState.setEntitlements(entitlements);
+      } catch (_) {}
+    } on ZeroSettleException catch (e) {
+      message = 'Transfer failed: ${e.message}';
+    } finally {
+      if (mounted) {
+        setState(() => _transferringIds.remove(ent.id));
+      }
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Calls [ZeroSettle.fetchUpgradeOfferConfig]; if available, presents a
+  /// confirmation card and offers to launch [ZeroSettle.presentUpgradeOffer].
+  Future<void> _checkUpgradeOffer(Entitlement ent) async {
+    setState(() => _checkingUpgradeIds.add(ent.id));
+    UpgradeOfferConfig? config;
+    String? errorMessage;
+    try {
+      config = await ZeroSettle.instance.fetchUpgradeOfferConfig(
+        productId: ent.productId,
+      );
+    } on ZeroSettleException catch (e) {
+      errorMessage = e.message;
+    } finally {
+      if (mounted) {
+        setState(() => _checkingUpgradeIds.remove(ent.id));
+      }
+    }
+    if (!mounted) return;
+
+    if (errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upgrade check failed: $errorMessage')),
+      );
+      return;
+    }
+    if (config == null || !config.available) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No upgrade available right now')),
+      );
+      return;
+    }
+
+    final shouldShow = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _UpgradeOfferDialog(config: config!),
+    );
+    if (shouldShow != true || !mounted) return;
+
+    try {
+      final result = await ZeroSettle.instance.presentUpgradeOffer(
+        productId: ent.productId,
+      );
+      if (!mounted) return;
+      final label = switch (result) {
+        UpgradeOfferUpgraded() => 'Upgraded successfully',
+        UpgradeOfferDeclined() => 'Upgrade declined',
+        UpgradeOfferDismissed() => 'Upgrade sheet dismissed',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(label)));
+      // Refresh after a successful upgrade.
+      if (result is UpgradeOfferUpgraded) {
+        await _refresh();
+      }
+    } on ZeroSettleException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upgrade error: ${e.message}')),
+      );
+    }
+  }
+
+  // -- Source presentation helpers --
+
+  String _sourceLabel(EntitlementSource source) {
+    return switch (source) {
+      EntitlementSource.storeKit => 'StoreKit',
+      EntitlementSource.playStore => 'Play Store',
+      EntitlementSource.webCheckout => 'Web',
+    };
+  }
+
+  Color _sourceColor(EntitlementSource source) {
+    return switch (source) {
+      EntitlementSource.storeKit => Colors.blue,
+      EntitlementSource.playStore => Colors.teal,
+      EntitlementSource.webCheckout => Colors.green,
+    };
+  }
+}
+
+class _UpgradeOfferDialog extends StatelessWidget {
+  final UpgradeOfferConfig config;
+
+  const _UpgradeOfferDialog({required this.config});
+
+  @override
+  Widget build(BuildContext context) {
+    final target = config.targetProduct;
+    final savings = config.savingsPercent;
+    final display = config.display;
+    return AlertDialog(
+      title: Text(display?.title ?? 'Upgrade available'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (display?.body != null && display!.body.isNotEmpty)
+            Text(display.body)
+          else
+            const Text('A better plan is available for your subscription.'),
+          const SizedBox(height: 16),
+          if (target != null) ...[
+            _kvRow('Plan', target.name),
+            _kvRow(
+              'Price',
+              _formatPrice(target.priceCents, target.currency),
+            ),
+            _kvRow('Billing', target.billingLabel),
+          ],
+          if (savings != null) _kvRow('Savings', '$savings%'),
+          if (config.upgradeType != null)
+            _kvRow('Upgrade type', config.upgradeType!),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(display?.dismissText ?? 'Not now'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(display?.ctaText ?? 'Show upgrade'),
+        ),
+      ],
+    );
+  }
+
+  Widget _kvRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(width: 100, child: Text(label)),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatPrice(int cents, String currency) {
+    final value = cents / 100.0;
+    final symbol = switch (currency.toUpperCase()) {
+      'USD' || 'CAD' || 'AUD' => '\$',
+      'EUR' => '€',
+      'GBP' => '£',
+      _ => '',
+    };
+    return '$symbol${value.toStringAsFixed(2)} $currency';
   }
 }
