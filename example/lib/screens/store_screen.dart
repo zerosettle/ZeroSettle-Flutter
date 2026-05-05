@@ -20,7 +20,7 @@ class StoreScreen extends StatefulWidget {
 
 class _StoreScreenState extends State<StoreScreen> {
   StoreProduct? _selectedProduct;
-  bool _isProcessing = false;
+  PurchaseInFlight _inFlight = PurchaseInFlight.none;
 
   AppState get _appState => widget.appState;
 
@@ -93,8 +93,9 @@ class _StoreScreenState extends State<StoreScreen> {
                   bottom: 0,
                   child: PaymentFooter(
                     selectedProduct: _selectedProduct,
-                    isProcessing: _isProcessing,
+                    inFlight: _inFlight,
                     onZeroSettlePurchase: _handlePurchase,
+                    onStoreKitPurchase: _handleStoreKitPurchase,
                   ),
                 ),
             ],
@@ -286,7 +287,7 @@ class _StoreScreenState extends State<StoreScreen> {
     final product = _selectedProduct;
     if (product == null) return;
 
-    setState(() => _isProcessing = true);
+    setState(() => _inFlight = PurchaseInFlight.webCheckout);
 
     try {
       // 1.3.0 demo — single-product lookup. Re-fetches the freshest cached
@@ -302,42 +303,85 @@ class _StoreScreenState extends State<StoreScreen> {
       if (mounted) {
         final confirmed = await _showPurchaseConfirmation(product, fresh);
         if (!confirmed) {
-          if (mounted) setState(() => _isProcessing = false);
+          if (mounted) setState(() => _inFlight = PurchaseInFlight.none);
           return;
         }
       }
 
+      // Routes to the SwiftUI CheckoutSheet on iOS — Stripe-hosted web checkout.
       await ZeroSettle.instance.presentPaymentSheet(
         productId: product.id,
       );
 
       if (!mounted) return;
 
-      // Update local state based on product type
-      _completePurchase(product);
-
+      _completePurchase(product, PaymentMethod.webCheckout);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Successfully purchased ${product.name}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
-
-      // Refresh entitlements
       try {
         final entitlements = await ZeroSettle.instance.restoreEntitlements();
         _appState.setEntitlements(entitlements);
       } catch (_) {}
-
       setState(() => _selectedProduct = null);
     } on ZeroSettleException {
       // Silently handle errors (cancelled, checkout failed, etc.)
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) setState(() => _inFlight = PurchaseInFlight.none);
     }
   }
 
-  void _completePurchase(StoreProduct product) {
+  /// 1.3.0 demo — explicit native StoreKit 2 purchase via the new SDK
+  /// primitive. ZeroSettleKit's Transaction.updates listener auto-syncs the
+  /// resulting transaction to the ZeroSettle backend; we just react to the
+  /// returned [CheckoutTransaction] and refresh local state.
+  Future<void> _handleStoreKitPurchase() async {
+    final product = _selectedProduct;
+    if (product == null) return;
+
+    setState(() => _inFlight = PurchaseInFlight.storeKit);
+
+    try {
+      final txn = await ZeroSettle.instance.purchaseViaStoreKit(
+        productId: product.id,
+      );
+
+      if (!mounted) return;
+
+      _completePurchase(product, PaymentMethod.storeKit);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Purchased ${product.name} via App Store (txn ${txn.id})',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      // Entitlements will arrive via the entitlement-updates EventChannel
+      // once ZeroSettleKit syncs the StoreKit transaction. Refresh
+      // proactively so the UI reflects state without waiting on a delegate.
+      try {
+        final entitlements = await ZeroSettle.instance.restoreEntitlements();
+        _appState.setEntitlements(entitlements);
+      } catch (_) {}
+      setState(() => _selectedProduct = null);
+    } on ZeroSettleException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('App Store purchase failed: ${e.message}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _inFlight = PurchaseInFlight.none);
+    }
+  }
+
+  void _completePurchase(StoreProduct product, PaymentMethod method) {
     switch (product.type) {
       case StoreProductType.consumable:
         if (product.gemAmount != null) {
@@ -356,7 +400,7 @@ class _StoreScreenState extends State<StoreScreen> {
     _appState.recordPurchase(PurchaseRecord(
       productName: product.name,
       amount: product.price,
-      paymentMethod: PaymentMethod.webCheckout,
+      paymentMethod: method,
     ));
   }
 

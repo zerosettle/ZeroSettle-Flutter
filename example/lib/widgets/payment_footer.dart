@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 
+/// Which button is currently mid-purchase, if any. Lets the footer show a
+/// spinner only on the actually-active button while disabling its sibling.
+enum PurchaseInFlight { none, webCheckout, storeKit }
+
 class PaymentFooter extends StatelessWidget {
   final StoreProduct? selectedProduct;
-  final bool isProcessing;
+  final PurchaseInFlight inFlight;
   final VoidCallback onZeroSettlePurchase;
+  final VoidCallback onStoreKitPurchase;
 
   const PaymentFooter({
     super.key,
     required this.selectedProduct,
-    required this.isProcessing,
+    required this.inFlight,
     required this.onZeroSettlePurchase,
+    required this.onStoreKitPurchase,
   });
+
+  bool get _anyInFlight => inFlight != PurchaseInFlight.none;
 
   @override
   Widget build(BuildContext context) {
@@ -126,35 +134,45 @@ class PaymentFooter extends StatelessWidget {
 
   Widget _buildPaymentButtons(BuildContext context) {
     final showWebCheckout = selectedProduct?.webCheckoutAvailable ?? false;
+    final showStoreKit = selectedProduct?.storeKitAvailable ?? false;
     final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
 
+    final storeKitInFlight = inFlight == PurchaseInFlight.storeKit;
+    final webInFlight = inFlight == PurchaseInFlight.webCheckout;
+
     final storeButton = Expanded(
-      child: Tooltip(
-        message: isIOS
-            ? 'StoreKit purchases are only\navailable in the native iOS app'
-            : 'Play Store purchases are only\navailable in the native Android app',
-        child: FilledButton(
-          onPressed: null,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 50),
-            backgroundColor: Colors.blue,
-            disabledBackgroundColor: Colors.blue.withValues(alpha: 0.3),
-            disabledForegroundColor: Colors.white54,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(isIOS ? Icons.apple : Icons.shopping_cart, size: 18),
-              const SizedBox(width: 6),
-              Text(isIOS ? 'App Store' : 'Play Store',
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600)),
-            ],
+      child: FilledButton(
+        onPressed: selectedProduct == null || _anyInFlight || !showStoreKit
+            ? null
+            : onStoreKitPurchase,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 50),
+          backgroundColor: Colors.blue,
+          disabledBackgroundColor: Colors.blue.withValues(alpha: 0.3),
+          disabledForegroundColor: Colors.white54,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
+        child: storeKitInFlight
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(isIOS ? Icons.apple : Icons.shopping_cart, size: 18),
+                  const SizedBox(width: 6),
+                  Text(isIOS ? 'App Store' : 'Play Store',
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                ],
+              ),
       ),
     );
 
@@ -162,46 +180,51 @@ class PaymentFooter extends StatelessWidget {
       return Row(children: [storeButton]);
     }
 
+    final webButton = Expanded(
+      child: FilledButton(
+        onPressed: selectedProduct == null || _anyInFlight
+            ? null
+            : onZeroSettlePurchase,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 50),
+          backgroundColor: Colors.deepPurple,
+          disabledBackgroundColor: Colors.deepPurple.withValues(alpha: 0.3),
+          disabledForegroundColor: Colors.white54,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: webInFlight
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.credit_card, size: 18),
+                  SizedBox(width: 6),
+                  Text('Pay with Card',
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                ],
+              ),
+      ),
+    );
+
+    if (!showStoreKit) {
+      return Row(children: [webButton]);
+    }
+
     return Row(
       children: [
         storeButton,
         const SizedBox(width: 12),
-        Expanded(
-          child: FilledButton(
-            onPressed: selectedProduct == null || isProcessing
-                ? null
-                : onZeroSettlePurchase,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 50),
-              backgroundColor: Colors.deepPurple,
-              disabledBackgroundColor:
-                  Colors.deepPurple.withValues(alpha: 0.3),
-              disabledForegroundColor: Colors.white54,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: isProcessing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.credit_card, size: 18),
-                      SizedBox(width: 6),
-                      Text('Pay with Card',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-          ),
-        ),
+        webButton,
       ],
     );
   }
