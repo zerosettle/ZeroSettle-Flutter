@@ -5,10 +5,13 @@ import 'package:zerosettle/zerosettle.dart';
 
 import 'app_state.dart';
 import 'iap_environment.dart';
-import 'screens/home_screen.dart';
-import 'screens/store_screen.dart';
+import 'identity_choice.dart';
 import 'screens/entitlements_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/store_screen.dart';
+import 'screens/transactions_screen.dart';
+import 'widgets/identity_choice_sheet.dart';
 
 void main() {
   runApp(const ZeroSettleExampleApp());
@@ -50,12 +53,13 @@ class _AppShellState extends State<AppShell> {
   int _currentTab = 0;
   StreamSubscription<List<Entitlement>>? _entitlementSub;
   bool _envLoaded = false;
+  bool _identityPromptShown = false;
 
   @override
   void initState() {
     super.initState();
     _envNotifier = IAPEnvironmentNotifier(IAPEnvironment.sandbox);
-    _loadEnvironmentAndBoot();
+    _bootstrapApp();
   }
 
   @override
@@ -65,52 +69,137 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
-  Future<void> _loadEnvironmentAndBoot() async {
+  Future<void> _bootstrapApp() async {
     final env = await IAPEnvironment.load();
     _envNotifier.value = env;
     setState(() => _envLoaded = true);
-    await _configureAndBootstrap(env);
+
+    await _configureSdk(env);
+
+    // Replay persisted identity choice, or prompt the user to pick one.
+    final stored = await IdentityChoiceStore.load();
+    if (stored != null) {
+      await _applyIdentity(stored, persist: false);
+    } else if (mounted) {
+      // Defer the sheet to after first frame so the AppShell is mounted.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _promptForIdentity());
+    }
   }
 
-  Future<void> _configureAndBootstrap(IAPEnvironment env) async {
+  Future<void> _configureSdk(IAPEnvironment env) async {
     _appState.setLoading(true);
     _appState.setError(null);
 
     try {
-      // 1. Set base URL override (before configure)
+      // Set base URL override (must run before configure).
       await ZeroSettle.instance.setBaseUrlOverride(env.baseUrlOverride);
 
-      // 2. Configure
-      await ZeroSettle.instance.configure(publishableKey: env.publishableKey);
+      // 1.3.0 configuration:
+      // - syncStoreKitTransactions: forwards native StoreKit purchases to ZeroSettle.
+      //   Set to false if you use RevenueCat or another aggregator.
+      // - appleMerchantId: your Apple Pay merchant identifier. The SDK falls
+      //   back to the dashboard-configured merchant if you omit this.
+      // - preloadCheckout / maxPreloadedWebViews: pre-render WKWebViews so the
+      //   first checkout opens with no network delay. Each pre-rendered view
+      //   costs ~3-7 MB; cap with maxPreloadedWebViews or pass 0 to disable.
+      await ZeroSettle.instance.configure(
+        publishableKey: env.publishableKey,
+        syncStoreKitTransactions: true,
+        appleMerchantId: 'merchant.com.example.zerosettle.flutter',
+        preloadCheckout: true,
+        maxPreloadedWebViews: 3,
+      );
 
-      // 3. Listen to entitlement updates
+      // Subscribe to entitlement updates from the native SDK.
       _entitlementSub?.cancel();
       _entitlementSub =
           ZeroSettle.instance.entitlementUpdates.listen((entitlements) {
         _appState.setEntitlements(entitlements);
       });
+    } on ZeroSettleException catch (e) {
+      _appState.setError(e.message);
+    } finally {
+      _appState.setLoading(false);
+    }
+  }
 
-      // 4. Identify (1.3.0 canonical entry point — replaces bootstrap)
-      final catalog = await ZeroSettle.instance.identify(
-        Identity.user(id: _appState.userId),
-      );
+  /// Apply an identity to the SDK and refresh user-scoped state.
+  Future<void> _applyIdentity(Identity identity, {bool persist = true}) async {
+    _appState.setLoading(true);
+    _appState.setError(null);
+    _appState.setIdentity(identity);
+
+    try {
+      final catalog = await ZeroSettle.instance.identify(identity);
       if (catalog != null) {
         _appState.setProducts(catalog.products);
         _appState.setRemoteConfig(catalog.config);
       }
       _appState.setInitialized(true);
 
-      // 5. Restore entitlements (no userId — read from internal identity state)
-      try {
-        final entitlements = await ZeroSettle.instance.restoreEntitlements();
-        _appState.setEntitlements(entitlements);
-      } catch (_) {
-        // Non-fatal: entitlements may be empty for new users
+      // restoreEntitlements requires a non-deferred identity. Skip on deferred.
+      if (identity is! IdentityDeferred) {
+        try {
+          final entitlements = await ZeroSettle.instance.restoreEntitlements();
+          _appState.setEntitlements(entitlements);
+        } catch (_) {
+          // Non-fatal: entitlements may be empty for new users.
+        }
       }
     } on ZeroSettleException catch (e) {
       _appState.setError(e.message);
     } finally {
       _appState.setLoading(false);
+    }
+
+    if (persist) {
+      await IdentityChoiceStore.save(identity);
+    }
+  }
+
+  Future<void> _promptForIdentity() async {
+    if (_identityPromptShown || !mounted) return;
+    _identityPromptShown = true;
+
+    Identity? choice;
+    while (choice == null && mounted) {
+      choice = await IdentityChoiceSheet.show(
+        context,
+        dismissible: false,
+        current: _appState.currentIdentity,
+      );
+    }
+    if (choice == null) return; // unmounted
+    await _applyIdentity(choice);
+    _identityPromptShown = false;
+  }
+
+  /// Public entry point used by [SettingsScreen] for switching identity.
+  Future<void> switchIdentity() async {
+    final choice = await IdentityChoiceSheet.show(
+      context,
+      dismissible: true,
+      current: _appState.currentIdentity,
+    );
+    if (choice != null) {
+      await _applyIdentity(choice);
+    }
+  }
+
+  /// Public entry point used by [SettingsScreen] for sign-out.
+  Future<void> signOut() async {
+    try {
+      await ZeroSettle.instance.logout();
+    } on ZeroSettleException {
+      // Logout failures are non-fatal — clear local state regardless.
+    }
+    await IdentityChoiceStore.clear();
+    _appState.setIdentity(null);
+    _appState.setInitialized(false);
+    _appState.setProducts([]);
+    _appState.setEntitlements([]);
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _promptForIdentity());
     }
   }
 
@@ -119,7 +208,13 @@ class _AppShellState extends State<AppShell> {
     _appState.setInitialized(false);
     _appState.setProducts([]);
     _appState.setEntitlements([]);
-    await _configureAndBootstrap(env);
+    await _configureSdk(env);
+
+    // Re-apply identity to refresh products/entitlements against the new env.
+    final identity = _appState.currentIdentity;
+    if (identity != null) {
+      await _applyIdentity(identity, persist: false);
+    }
   }
 
   @override
@@ -131,6 +226,7 @@ class _AppShellState extends State<AppShell> {
     return ListenableBuilder(
       listenable: _appState,
       builder: (context, _) {
+        // Show the loading screen until SDK has at least been configured.
         if (!_appState.isInitialized && _appState.isLoading) {
           return _buildLoadingScreen(context);
         }
@@ -145,10 +241,13 @@ class _AppShellState extends State<AppShell> {
               ),
               StoreScreen(appState: _appState),
               EntitlementsScreen(appState: _appState),
+              TransactionsScreen(appState: _appState),
               SettingsScreen(
                 appState: _appState,
                 envNotifier: _envNotifier,
                 onSwitchEnvironment: _switchEnvironment,
+                onSwitchIdentity: switchIdentity,
+                onSignOut: signOut,
               ),
             ],
           ),
@@ -171,6 +270,11 @@ class _AppShellState extends State<AppShell> {
                 icon: Icon(Icons.verified_outlined),
                 selectedIcon: Icon(Icons.verified),
                 label: 'Entitlements',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.receipt_long_outlined),
+                selectedIcon: Icon(Icons.receipt_long),
+                label: 'Transactions',
               ),
               NavigationDestination(
                 icon: Icon(Icons.settings_outlined),

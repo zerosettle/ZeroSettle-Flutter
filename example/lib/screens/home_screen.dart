@@ -48,9 +48,10 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // Migration Tip (iOS only, auto-hides when not applicable)
+                    // Migration Tip (iOS only, auto-hides when not applicable).
+                    // The widget no-ops when there is no signed-in user.
                     MigrationTipView(
-                      userId: appState.userId,
+                      userId: appState.userId ?? '',
                       backgroundColor: Theme.of(context).colorScheme.surface,
                     ),
                     const SizedBox(height: 16),

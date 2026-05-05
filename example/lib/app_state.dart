@@ -295,10 +295,17 @@ class StoreProduct {
 }
 
 class AppState extends ChangeNotifier {
-  // User identity
-  String userId;
+  // User identity (1.3.0 — populated after [ZeroSettle.identify])
+  Identity? currentIdentity;
   String email;
   DateTime memberSince;
+
+  /// The current user id when [currentIdentity] is [IdentityUser];
+  /// `null` for anonymous, deferred, or unset identity.
+  String? get userId => switch (currentIdentity) {
+        IdentityUser(:final id) => id,
+        _ => null,
+      };
 
   // Local state
   int gemCount;
@@ -318,7 +325,7 @@ class AppState extends ChangeNotifier {
   String? error;
 
   AppState({
-    this.userId = 'flutter_example_user',
+    this.currentIdentity,
     this.email = 'demo@example.com',
     DateTime? memberSince,
     this.gemCount = 0,
@@ -478,16 +485,22 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void resetForUser(String newUserId) {
-    userId = newUserId;
-    gemCount = 0;
-    subscriptionStatus = SubscriptionStatus.inactive;
-    subscriptionPlan = null;
-    subscriptionExpiryDate = null;
-    purchaseHistory = [];
-    unlockedProducts = {};
-    entitlements = [];
-    memberSince = DateTime.now();
+  /// Set the current identity. Resets per-user local state when switching to a
+  /// different identity.
+  void setIdentity(Identity? identity) {
+    final wasDifferent = identity?.toMap().toString() !=
+        currentIdentity?.toMap().toString();
+    currentIdentity = identity;
+    if (wasDifferent) {
+      gemCount = 0;
+      subscriptionStatus = SubscriptionStatus.inactive;
+      subscriptionPlan = null;
+      subscriptionExpiryDate = null;
+      purchaseHistory = [];
+      unlockedProducts = {};
+      entitlements = [];
+      memberSince = DateTime.now();
+    }
     notifyListeners();
   }
 }
