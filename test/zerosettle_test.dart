@@ -25,23 +25,102 @@ class MockZeroSettlePlatform
   Map<String, dynamic>? productReturnValue = _sampleProductMap();
   bool hasActiveEntitlementReturn = true;
 
-  // Args captured from configure() — facade may pass-through new fields once
-  // Agent 2 lands them. Until then, only the existing two are populated.
+  // Args captured from configure().
   String? lastPublishableKey;
   bool? lastSyncStoreKitTransactions;
+  String? lastAppleMerchantId;
+  bool? lastPreloadCheckout;
+  int? lastMaxPreloadedWebViews;
 
   @override
   Future<void> configure({
     required String publishableKey,
     bool syncStoreKitTransactions = true,
+    String? appleMerchantId,
+    bool preloadCheckout = false,
+    int? maxPreloadedWebViews,
   }) async {
     configured = true;
     lastPublishableKey = publishableKey;
     lastSyncStoreKitTransactions = syncStoreKitTransactions;
+    lastAppleMerchantId = appleMerchantId;
+    lastPreloadCheckout = preloadCheckout;
+    lastMaxPreloadedWebViews = maxPreloadedWebViews;
     _record('configure', {
       'publishableKey': publishableKey,
       'syncStoreKitTransactions': syncStoreKitTransactions,
+      if (appleMerchantId != null) 'appleMerchantId': appleMerchantId,
+      'preloadCheckout': preloadCheckout,
+      if (maxPreloadedWebViews != null) 'maxPreloadedWebViews': maxPreloadedWebViews,
     });
+  }
+
+  // ---- 1.3.0 no-userId platform-interface variants ----
+  // Agent 2 disambiguated method overloads using *ForCurrentUser suffix on the
+  // platform interface; the public facade methods (e.g., restoreEntitlements())
+  // delegate here.
+
+  @override
+  Future<List<Map<String, dynamic>>> restoreEntitlementsForCurrentUser() async {
+    _record('restoreEntitlementsForCurrentUser');
+    return const [];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchTransactionHistoryForCurrentUser() async {
+    _record('fetchTransactionHistoryForCurrentUser');
+    return const [];
+  }
+
+  @override
+  Future<Map<String, dynamic>> acceptSaveOfferForCurrentUser({required String productId}) async {
+    _record('acceptSaveOfferForCurrentUser', {'productId': productId});
+    return const {};
+  }
+
+  @override
+  Future<String?> presentCancelFlowForCurrentUser({required String productId}) async {
+    _record('presentCancelFlowForCurrentUser', {'productId': productId});
+    return null;
+  }
+
+  @override
+  Future<String?> pauseSubscriptionForCurrentUser({required String productId, int? pauseDurationDays}) async {
+    _record('pauseSubscriptionForCurrentUser', {
+      'productId': productId,
+      if (pauseDurationDays != null) 'pauseDurationDays': pauseDurationDays,
+    });
+    return null;
+  }
+
+  @override
+  Future<void> resumeSubscriptionForCurrentUser({required String productId}) async {
+    _record('resumeSubscriptionForCurrentUser', {'productId': productId});
+  }
+
+  @override
+  Future<void> cancelSubscriptionForCurrentUser({required String productId, bool immediate = false}) async {
+    _record('cancelSubscriptionForCurrentUser', {
+      'productId': productId,
+      'immediate': immediate,
+    });
+  }
+
+  @override
+  Future<String> presentUpgradeOfferForCurrentUser({String? productId}) async {
+    _record('presentUpgradeOfferForCurrentUser', {if (productId != null) 'productId': productId});
+    return 'dismissed';
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchUpgradeOfferConfigForCurrentUser({String? productId}) async {
+    _record('fetchUpgradeOfferConfigForCurrentUser', {if (productId != null) 'productId': productId});
+    return const {};
+  }
+
+  @override
+  Future<void> trackMigrationConversionForCurrentUser() async {
+    _record('trackMigrationConversionForCurrentUser');
   }
 
   // ---- Identity / 1.3.0 surface ----
