@@ -295,7 +295,7 @@ class _DebugSettingsScreenState extends State<DebugSettingsScreen> {
             child: RadioGroup<IAPEnvironment>(
               groupValue: _selectedEnv,
               onChanged: (value) {
-                if (value != null) {
+                if (value != null && value.isEnabled) {
                   setState(() => _selectedEnv = value);
                   _refreshAccounts();
                 }
@@ -303,11 +303,19 @@ class _DebugSettingsScreenState extends State<DebugSettingsScreen> {
               child: Column(
                 children: [
                   for (final env in IAPEnvironment.values)
-                    RadioListTile<IAPEnvironment>(
-                      value: env,
-                      title: Text(env.displayName),
-                      subtitle: Text(env.description),
-                      dense: true,
+                    IgnorePointer(
+                      ignoring: !env.isEnabled,
+                      child: Opacity(
+                        opacity: env.isEnabled ? 1.0 : 0.4,
+                        child: RadioListTile<IAPEnvironment>(
+                          value: env,
+                          title: Text(env.displayName),
+                          subtitle: Text(env.isEnabled
+                              ? env.description
+                              : '${env.description} — disabled'),
+                          dense: true,
+                        ),
+                      ),
                     ),
                 ],
               ),

@@ -193,18 +193,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: RadioGroup<IAPEnvironment>(
                   groupValue: pending,
                   onChanged: (value) {
-                    if (value != null) {
+                    if (value != null && value.isEnabled) {
                       setState(() => _pendingEnv = value);
                     }
                   },
                   child: Column(
                     children: [
                       for (final env in IAPEnvironment.values)
-                        RadioListTile<IAPEnvironment>(
-                          value: env,
-                          title: Text(env.displayName),
-                          subtitle: Text(env.description),
-                          dense: true,
+                        IgnorePointer(
+                          ignoring: !env.isEnabled,
+                          child: Opacity(
+                            opacity: env.isEnabled ? 1.0 : 0.4,
+                            child: RadioListTile<IAPEnvironment>(
+                              value: env,
+                              title: Text(env.displayName),
+                              subtitle: Text(env.isEnabled
+                                  ? env.description
+                                  : '${env.description} — disabled'),
+                              dense: true,
+                            ),
+                          ),
                         ),
                     ],
                   ),
