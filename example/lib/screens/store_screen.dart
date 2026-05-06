@@ -345,8 +345,29 @@ class _StoreScreenState extends State<StoreScreen> {
     setState(() => _inFlight = PurchaseInFlight.storeKit);
 
     try {
+      // Diagnostic: confirm SDK identity state at the exact moment of purchase.
+      // The StoreKit appAccountToken is derived from this userId — if it's
+      // null/empty/anonymous-UUID, the backend won't attribute the purchase
+      // to the signed-in user.
+      final identity = _appState.currentIdentity;
+      final sdkUserId = await ZeroSettle.instance.getCurrentUserId();
+      final isBoot = await ZeroSettle.instance.getIsBootstrapped();
+      debugPrint(
+        '[ZS] purchaseViaStoreKit: productId=${product.id}'
+        ' appStateIdentity=${identity.runtimeType}'
+        ' sdkCurrentUserId=$sdkUserId'
+        ' isBootstrapped=$isBoot',
+      );
+
       final txn = await ZeroSettle.instance.purchaseViaStoreKit(
         productId: product.id,
+      );
+
+      debugPrint(
+        '[ZS] purchaseViaStoreKit: returned txn'
+        ' id=${txn.id}'
+        ' productId=${txn.productId}'
+        ' source=${txn.source}',
       );
 
       if (!mounted) return;
