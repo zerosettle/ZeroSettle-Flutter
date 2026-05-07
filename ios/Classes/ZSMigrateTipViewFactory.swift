@@ -18,6 +18,8 @@ class ZSMigrateTipViewFactory: NSObject, FlutterPlatformViewFactory {
     ) -> FlutterPlatformView {
         return MigrationTipViewFlutterContainer(
             frame: frame,
+            viewId: viewId,
+            messenger: messenger,
             arguments: args
         )
     }
