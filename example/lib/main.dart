@@ -76,11 +76,19 @@ class _AppShellState extends State<AppShell> {
     _envNotifier.value = env;
     setState(() => _envLoaded = true);
 
+    // Pre-load the persisted identity BEFORE configure. The iOS Kit's
+    // StoreKitManager starts listening to Transaction.updates inside
+    // configure(); if Apple redelivers an unfinished transaction in the
+    // window between configure() and identify(), the Kit's
+    // handleVerifiedTransaction asserts (DEBUG) or leaves the txn
+    // unfinished (RELEASE). Loading identity first shrinks that window
+    // to just the bridge round-trip on identify().
+    final stored = await IdentityChoiceStore.load();
+    debugPrint('[ZS] bootstrap: persisted identity=${stored?.runtimeType ?? 'none'}');
+
     await _configureSdk(env);
 
     // Replay persisted identity choice, or prompt the user to pick one.
-    final stored = await IdentityChoiceStore.load();
-    debugPrint('[ZS] bootstrap: persisted identity=${stored?.runtimeType ?? 'none'}');
     if (stored != null) {
       await _applyIdentity(stored, persist: false);
     } else if (mounted) {
