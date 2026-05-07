@@ -61,9 +61,16 @@ class HomeScreen extends StatelessWidget {
 
                     // Migration Tip (iOS only, auto-hides when not applicable).
                     // The widget no-ops when there is no signed-in user.
+                    //
+                    // The native widget uses `backgroundColor` for BOTH the
+                    // card fill AND the CTA text color (the CTA button bg is
+                    // hardcoded white). Pass a saturated brand color, not a
+                    // surface/neutral, or the white-on-white text will be
+                    // unreadable. `colorScheme.primary` works in both light
+                    // and dark themes.
                     MigrationTipView(
                       userId: appState.userId ?? '',
-                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
                     ),
                     const SizedBox(height: 16),
 
