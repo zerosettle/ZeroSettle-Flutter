@@ -31,6 +31,7 @@ class MockZeroSettlePlatform
   String? lastAppleMerchantId;
   bool? lastPreloadCheckout;
   int? lastMaxPreloadedWebViews;
+  String? lastApplePaySetupBehavior;
 
   @override
   Future<void> configure({
@@ -39,6 +40,7 @@ class MockZeroSettlePlatform
     String? appleMerchantId,
     bool preloadCheckout = false,
     int? maxPreloadedWebViews,
+    String? applePaySetupBehavior,
   }) async {
     configured = true;
     lastPublishableKey = publishableKey;
@@ -46,12 +48,15 @@ class MockZeroSettlePlatform
     lastAppleMerchantId = appleMerchantId;
     lastPreloadCheckout = preloadCheckout;
     lastMaxPreloadedWebViews = maxPreloadedWebViews;
+    lastApplePaySetupBehavior = applePaySetupBehavior;
     _record('configure', {
       'publishableKey': publishableKey,
       'syncStoreKitTransactions': syncStoreKitTransactions,
       if (appleMerchantId != null) 'appleMerchantId': appleMerchantId,
       'preloadCheckout': preloadCheckout,
       if (maxPreloadedWebViews != null) 'maxPreloadedWebViews': maxPreloadedWebViews,
+      if (applePaySetupBehavior != null)
+        'applePaySetupBehavior': applePaySetupBehavior,
     });
   }
 
@@ -414,6 +419,35 @@ class MockZeroSettlePlatform
   @override
   Stream<List<Map<String, dynamic>>> get pendingClaimsUpdates =>
       Stream.fromIterable(pendingClaimsUpdatesValues);
+
+  // ---- 1.3.2 Apple Pay primitives ----
+
+  bool isApplePayOnlyReturn = false;
+  String applePayStateReturn = 'ready';
+  bool presentApplePaySetupCalled = false;
+  final List<String> applePayStateUpdatesValues = ['ready'];
+
+  @override
+  Future<void> presentApplePaySetup() async {
+    presentApplePaySetupCalled = true;
+    _record('presentApplePaySetup');
+  }
+
+  @override
+  Future<bool> getIsApplePayOnly() async {
+    _record('getIsApplePayOnly');
+    return isApplePayOnlyReturn;
+  }
+
+  @override
+  Future<String> getApplePayState() async {
+    _record('getApplePayState');
+    return applePayStateReturn;
+  }
+
+  @override
+  Stream<String> get applePayStateUpdates =>
+      Stream.fromIterable(applePayStateUpdatesValues);
 }
 
 // -- Sample Data Helpers --
@@ -936,6 +970,67 @@ void main() {
       final token = await ZeroSettle.instance.recommendedAppAccountToken();
       expect(token, '550e8400-e29b-41d4-a716-446655440000');
       expect(mockPlatform.calls.last['method'], 'recommendedAppAccountToken');
+    });
+
+    // ==== 1.3.2: Apple Pay primitives ====
+
+    test('configure forwards applePaySetupBehavior raw value', () async {
+      await ZeroSettle.instance.configure(
+        publishableKey: 'zs_pk_test_123',
+        applePaySetupBehavior: ApplePaySetupBehavior.delegateToApp,
+      );
+      expect(mockPlatform.lastApplePaySetupBehavior, 'delegateToApp');
+    });
+
+    test('configure without applePaySetupBehavior leaves the field null', () async {
+      await ZeroSettle.instance.configure(publishableKey: 'zs_pk_test_123');
+      expect(mockPlatform.lastApplePaySetupBehavior, isNull);
+    });
+
+    test('presentApplePaySetup() routes to platform', () async {
+      await ZeroSettle.instance.presentApplePaySetup();
+      expect(mockPlatform.presentApplePaySetupCalled, isTrue);
+      expect(mockPlatform.calls.last['method'], 'presentApplePaySetup');
+    });
+
+    test('getIsApplePayOnly() returns the platform bool', () async {
+      mockPlatform.isApplePayOnlyReturn = true;
+      expect(await ZeroSettle.instance.getIsApplePayOnly(), isTrue);
+      mockPlatform.isApplePayOnlyReturn = false;
+      expect(await ZeroSettle.instance.getIsApplePayOnly(), isFalse);
+    });
+
+    test('getApplePayState() converts raw value to enum', () async {
+      mockPlatform.applePayStateReturn = 'ready';
+      expect(
+        await ZeroSettle.instance.getApplePayState(),
+        ApplePayAvailabilityState.ready,
+      );
+      mockPlatform.applePayStateReturn = 'setupRequired';
+      expect(
+        await ZeroSettle.instance.getApplePayState(),
+        ApplePayAvailabilityState.setupRequired,
+      );
+      mockPlatform.applePayStateReturn = 'unavailable';
+      expect(
+        await ZeroSettle.instance.getApplePayState(),
+        ApplePayAvailabilityState.unavailable,
+      );
+    });
+
+    test('applePayStateUpdates stream forwards raw values as enums', () async {
+      mockPlatform.applePayStateUpdatesValues
+        ..clear()
+        ..add('ready')
+        ..add('setupRequired')
+        ..add('unavailable');
+      final emissions =
+          await ZeroSettle.instance.applePayStateUpdates.toList();
+      expect(emissions, [
+        ApplePayAvailabilityState.ready,
+        ApplePayAvailabilityState.setupRequired,
+        ApplePayAvailabilityState.unavailable,
+      ]);
     });
   });
 }

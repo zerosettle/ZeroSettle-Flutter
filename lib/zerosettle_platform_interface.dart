@@ -24,6 +24,7 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     String? appleMerchantId,
     bool preloadCheckout = false,
     int? maxPreloadedWebViews,
+    String? applePaySetupBehavior,
   }) {
     throw UnimplementedError('configure() has not been implemented.');
   }
@@ -340,6 +341,41 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Stream<List<Map<String, dynamic>>> get pendingClaimsUpdates {
     throw UnimplementedError(
       'pendingClaimsUpdates has not been implemented.',
+    );
+  }
+
+  // -- Apple Pay (1.3.2) --
+
+  /// Launches the system Wallet setup flow so the user can add a card for
+  /// Apple Pay. Mirrors `ZeroSettle.shared.presentApplePaySetup()` on iOS.
+  Future<void> presentApplePaySetup() {
+    throw UnimplementedError(
+      'presentApplePaySetup() has not been implemented.',
+    );
+  }
+
+  /// Whether the SDK is currently treating this merchant as Apple-Pay-only.
+  /// Mirrors `ZeroSettle.shared.isApplePayOnly` on iOS.
+  Future<bool> getIsApplePayOnly() {
+    throw UnimplementedError(
+      'getIsApplePayOnly() has not been implemented.',
+    );
+  }
+
+  /// Reads the current Apple Pay availability state once. Returned as a raw
+  /// string (`"ready"` / `"setupRequired"` / `"unavailable"`); the facade
+  /// converts to [ApplePayAvailabilityState].
+  Future<String> getApplePayState() {
+    throw UnimplementedError('getApplePayState() has not been implemented.');
+  }
+
+  /// Stream of Apple Pay availability state changes from the iOS Kit's
+  /// `applePayAvailability.statePublisher`. Each event is the raw string
+  /// (`"ready"` / `"setupRequired"` / `"unavailable"`); the facade converts
+  /// to [ApplePayAvailabilityState].
+  Stream<String> get applePayStateUpdates {
+    throw UnimplementedError(
+      'applePayStateUpdates has not been implemented.',
     );
   }
 }

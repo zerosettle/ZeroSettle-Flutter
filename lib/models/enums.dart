@@ -132,3 +132,62 @@ enum Jurisdiction {
     );
   }
 }
+
+/// How the SDK reacts when the merchant is Apple-Pay-only and the device's
+/// Wallet has no supported card configured ([ApplePayAvailabilityState.setupRequired]).
+///
+/// Pass to [ZeroSettle.configure] via the `applePaySetupBehavior` parameter.
+/// Mirrors the iOS Kit's `ApplePaySetupBehavior` enum.
+enum ApplePaySetupBehavior {
+  /// SDK opens the system Wallet setup flow automatically when the merchant
+  /// is Apple-Pay-only and the device's Wallet has no supported card. The
+  /// banner shows a built-in "Set up Apple Pay" CTA inline. Default behavior
+  /// on iOS.
+  presentBuiltInUI('presentBuiltInUI'),
+
+  /// SDK delegates the setup flow to your app. The banner hides itself on
+  /// `setupRequired`; all imperative entry points surface
+  /// [ZSApplePaySetupRequiredException] without auto-opening Wallet. Observe
+  /// [ZeroSettle.applePayStateUpdates] to drive your own UI, then call
+  /// [ZeroSettle.presentApplePaySetup] when ready.
+  delegateToApp('delegateToApp');
+
+  const ApplePaySetupBehavior(this.rawValue);
+  final String rawValue;
+
+  static ApplePaySetupBehavior fromRawValue(String value) {
+    return ApplePaySetupBehavior.values.firstWhere(
+      (e) => e.rawValue == value,
+      orElse: () => throw ArgumentError('Unknown ApplePaySetupBehavior: $value'),
+    );
+  }
+}
+
+/// Tri-state Apple Pay availability on the device, observed from the iOS
+/// Kit's `ApplePayAvailability` service.
+///
+/// Raw values match what the iOS Kit's `ApplePayAvailability.State`
+/// persists/exchanges so the wire format stays stable across versions.
+enum ApplePayAvailabilityState {
+  /// Device supports Apple Pay AND user has at least one supported card.
+  ready('ready'),
+
+  /// Device supports Apple Pay but Wallet has no supported cards.
+  /// Call [ZeroSettle.presentApplePaySetup] to launch the Wallet setup flow.
+  setupRequired('setupRequired'),
+
+  /// Device cannot do Apple Pay (older hardware, simulator,
+  /// MDM/parental restriction).
+  unavailable('unavailable');
+
+  const ApplePayAvailabilityState(this.rawValue);
+  final String rawValue;
+
+  static ApplePayAvailabilityState fromRawValue(String value) {
+    return ApplePayAvailabilityState.values.firstWhere(
+      (e) => e.rawValue == value,
+      orElse: () =>
+          throw ArgumentError('Unknown ApplePayAvailabilityState: $value'),
+    );
+  }
+}

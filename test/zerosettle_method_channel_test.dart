@@ -156,6 +156,13 @@ void main() {
             ];
           case 'recommendedAppAccountToken':
             return '550e8400-e29b-41d4-a716-446655440000';
+          // 1.3.2 Apple Pay primitives
+          case 'presentApplePaySetup':
+            return null;
+          case 'getIsApplePayOnly':
+            return true;
+          case 'getApplePayState':
+            return 'setupRequired';
           default:
             return null;
         }
@@ -512,5 +519,64 @@ void main() {
       (c) => c.method == 'recommendedAppAccountToken',
     );
     expect(call.arguments, isNull);
+  });
+
+  // ==== 1.3.2: Apple Pay primitives ====
+
+  test('configure channel call forwards applePaySetupBehavior raw value', () async {
+    await platform.configure(
+      publishableKey: 'zs_pk_test_123',
+      applePaySetupBehavior: 'delegateToApp',
+    );
+    final call = channelCalls.firstWhere((c) => c.method == 'configure');
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args['applePaySetupBehavior'], 'delegateToApp');
+  });
+
+  test('configure channel call omits applePaySetupBehavior when null', () async {
+    await platform.configure(publishableKey: 'zs_pk_test_123');
+    final call = channelCalls.firstWhere((c) => c.method == 'configure');
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args.containsKey('applePaySetupBehavior'), isFalse);
+  });
+
+  test('presentApplePaySetup channel call has no arguments', () async {
+    await platform.presentApplePaySetup();
+    final call =
+        channelCalls.firstWhere((c) => c.method == 'presentApplePaySetup');
+    expect(call.arguments, isNull);
+  });
+
+  test('getIsApplePayOnly returns the platform bool', () async {
+    expect(await platform.getIsApplePayOnly(), isTrue);
+    final call =
+        channelCalls.firstWhere((c) => c.method == 'getIsApplePayOnly');
+    expect(call.arguments, isNull);
+  });
+
+  test('getApplePayState returns raw state string', () async {
+    expect(await platform.getApplePayState(), 'setupRequired');
+    final call =
+        channelCalls.firstWhere((c) => c.method == 'getApplePayState');
+    expect(call.arguments, isNull);
+  });
+
+  test('applePayStateUpdates EventChannel forwards string events', () async {
+    const channelName = 'zerosettle/apple_pay_state_updates';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final emissions = <String>[];
+    final sub = platform.applePayStateUpdates.listen(emissions.add);
+
+    // Allow listener to register, then emit two values via the EventChannel.
+    await Future<void>.delayed(Duration.zero);
+    final codec = const StandardMethodCodec();
+    for (final raw in ['ready', 'setupRequired']) {
+      final data = codec.encodeSuccessEnvelope(raw);
+      await messenger.handlePlatformMessage(channelName, data, (_) {});
+    }
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+    expect(emissions, ['ready', 'setupRequired']);
   });
 }

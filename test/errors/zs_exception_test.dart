@@ -114,6 +114,48 @@ void main() {
     });
   });
 
+  group('ZeroSettleException.fromPlatformException — 1.3.2 Apple Pay codes', () {
+    test('apple_pay_unavailable maps to ZSApplePayUnavailableException', () {
+      final e = ZeroSettleException.fromPlatformException(
+        PlatformException(
+          code: 'apple_pay_unavailable',
+          message: 'Apple Pay unavailable',
+        ),
+      );
+      expect(e, isA<ZSApplePayUnavailableException>());
+      expect(e.message, 'Apple Pay unavailable');
+    });
+
+    test(
+        'apple_pay_setup_required maps to ZSApplePaySetupRequiredException',
+        () {
+      final e = ZeroSettleException.fromPlatformException(
+        PlatformException(
+          code: 'apple_pay_setup_required',
+          message: 'Apple Pay setup required',
+        ),
+      );
+      expect(e, isA<ZSApplePaySetupRequiredException>());
+      expect(e.message, 'Apple Pay setup required');
+    });
+
+    test('apple_pay_unavailable with null message uses default', () {
+      final e = ZeroSettleException.fromPlatformException(
+        PlatformException(code: 'apple_pay_unavailable'),
+      );
+      expect(e, isA<ZSApplePayUnavailableException>());
+      expect(e.message, isNotEmpty);
+    });
+
+    test('apple_pay_setup_required with null message uses default', () {
+      final e = ZeroSettleException.fromPlatformException(
+        PlatformException(code: 'apple_pay_setup_required'),
+      );
+      expect(e, isA<ZSApplePaySetupRequiredException>());
+      expect(e.message, isNotEmpty);
+    });
+  });
+
   group('ZeroSettleException.fromPlatformException — default fallback', () {
     test('unknown code returns a base ZeroSettleException', () {
       final e = ZeroSettleException.fromPlatformException(

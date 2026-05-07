@@ -29,9 +29,13 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
     private lateinit var methodChannel: MethodChannel
     private lateinit var entitlementEventChannel: EventChannel
     private lateinit var checkoutEventChannel: EventChannel
+    private lateinit var applePayStateEventChannel: EventChannel
 
     private val entitlementStreamHandler = StreamHandler()
     private val checkoutStreamHandler = StreamHandler()
+    // Apple Pay availability is iOS-only. Android exposes the channel so Dart
+    // can subscribe without a runtime error, but emits nothing.
+    private val applePayStateStreamHandler = StreamHandler()
 
     private var activity: Activity? = null
     private var applicationContext: Context? = null
@@ -50,12 +54,16 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
 
         checkoutEventChannel = EventChannel(binding.binaryMessenger, "zerosettle/checkout_events")
         checkoutEventChannel.setStreamHandler(checkoutStreamHandler)
+
+        applePayStateEventChannel = EventChannel(binding.binaryMessenger, "zerosettle/apple_pay_state_updates")
+        applePayStateEventChannel.setStreamHandler(applePayStateStreamHandler)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel.setMethodCallHandler(null)
         entitlementEventChannel.setStreamHandler(null)
         checkoutEventChannel.setStreamHandler(null)
+        applePayStateEventChannel.setStreamHandler(null)
         scope.cancel()
     }
 
@@ -559,6 +567,16 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "getIsBootstrapped",
             "getPendingClaims",
             "recommendedAppAccountToken" -> {
+                result.notImplemented()
+            }
+
+            // -- 1.3.2 Apple Pay primitives — iOS only. Android stubs return
+            //    notImplemented() so adopters who call them get a clear error
+            //    rather than a silent no-op. The applePaySetupBehavior arg on
+            //    `configure` is silently ignored above (it's iOS-specific).
+            "presentApplePaySetup",
+            "getIsApplePayOnly",
+            "getApplePayState" -> {
                 result.notImplemented()
             }
 

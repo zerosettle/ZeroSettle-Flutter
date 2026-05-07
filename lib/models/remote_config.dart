@@ -41,11 +41,28 @@ class CheckoutConfig {
   final bool isEnabled;
   final Map<Jurisdiction, JurisdictionCheckoutConfig> jurisdictions;
 
+  /// Allowed payment methods for this merchant. `null` (or missing on the
+  /// wire) means no restriction. `["apple_pay"]` restricts the SDK to
+  /// Apple-Pay-only behavior. Other values are accepted for forward
+  /// compatibility but trigger no current behavior change.
+  final List<String>? paymentMethods;
+
   const CheckoutConfig({
     required this.sheetType,
     required this.isEnabled,
     this.jurisdictions = const {},
+    this.paymentMethods,
   });
+
+  /// True when the merchant has restricted payment to Apple Pay only.
+  /// Drives native availability checks and banner CTA swap.
+  ///
+  /// Mirrors the iOS Kit's `CheckoutConfig.isApplePayOnly` computed
+  /// property — true iff `paymentMethods == ["apple_pay"]`.
+  bool get isApplePayOnly =>
+      paymentMethods != null &&
+      paymentMethods!.length == 1 &&
+      paymentMethods!.first == 'apple_pay';
 
   factory CheckoutConfig.fromMap(Map<String, dynamic> map) {
     final jurisdictionsMap = <Jurisdiction, JurisdictionCheckoutConfig>{};
@@ -57,10 +74,15 @@ class CheckoutConfig {
                 Map<String, dynamic>.from(entry.value as Map));
       }
     }
+    final paymentMethodsRaw = map['paymentMethods'];
+    final List<String>? paymentMethods = paymentMethodsRaw == null
+        ? null
+        : (paymentMethodsRaw as List).map((e) => e as String).toList();
     return CheckoutConfig(
       sheetType: CheckoutType.fromRawValue(map['sheetType'] as String),
       isEnabled: map['isEnabled'] as bool,
       jurisdictions: jurisdictionsMap,
+      paymentMethods: paymentMethods,
     );
   }
 
@@ -71,6 +93,7 @@ class CheckoutConfig {
       'jurisdictions': jurisdictions.map(
         (k, v) => MapEntry(k.rawValue, v.toMap()),
       ),
+      if (paymentMethods != null) 'paymentMethods': paymentMethods,
     };
   }
 

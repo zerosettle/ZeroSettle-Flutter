@@ -63,6 +63,33 @@ void main() {
         expect(Jurisdiction.fromRawValue(j.rawValue), j);
       }
     });
+
+    test('ApplePaySetupBehavior round-trip', () {
+      for (final b in ApplePaySetupBehavior.values) {
+        expect(ApplePaySetupBehavior.fromRawValue(b.rawValue), b);
+      }
+    });
+
+    test('ApplePaySetupBehavior.fromRawValue throws on unknown', () {
+      expect(
+        () => ApplePaySetupBehavior.fromRawValue('not_a_real_behavior'),
+        throwsArgumentError,
+      );
+    });
+
+    test('ApplePayAvailabilityState round-trip', () {
+      for (final s in ApplePayAvailabilityState.values) {
+        expect(ApplePayAvailabilityState.fromRawValue(s.rawValue), s);
+      }
+    });
+
+    test('ApplePayAvailabilityState raw values match Kit persistence', () {
+      // Persistence raw values used by the iOS Kit's ApplePayAvailability
+      // (UserDefaults debug-state-override). Wire format must stay stable.
+      expect(ApplePayAvailabilityState.ready.rawValue, 'ready');
+      expect(ApplePayAvailabilityState.setupRequired.rawValue, 'setupRequired');
+      expect(ApplePayAvailabilityState.unavailable.rawValue, 'unavailable');
+    });
   });
 
   group('Promotion', () {
@@ -303,6 +330,51 @@ void main() {
       final config = RemoteConfig.fromMap(map);
       expect(config.migration, isNull);
       expect(config.checkout.sheetType, CheckoutType.safariVC);
+    });
+
+    test('CheckoutConfig.paymentMethods round-trips and isApplePayOnly', () {
+      final map = {
+        'checkout': {
+          'sheetType': 'native_pay',
+          'isEnabled': true,
+          'jurisdictions': <String, dynamic>{},
+          'paymentMethods': ['apple_pay'],
+        },
+      };
+      final config = RemoteConfig.fromMap(map);
+      expect(config.checkout.paymentMethods, ['apple_pay']);
+      expect(config.checkout.isApplePayOnly, isTrue);
+
+      final rt = RemoteConfig.fromMap(config.toMap());
+      expect(rt.checkout.paymentMethods, ['apple_pay']);
+      expect(rt.checkout.isApplePayOnly, isTrue);
+    });
+
+    test('CheckoutConfig.isApplePayOnly is false when paymentMethods absent', () {
+      final map = {
+        'checkout': {
+          'sheetType': 'webview',
+          'isEnabled': true,
+          'jurisdictions': <String, dynamic>{},
+        },
+      };
+      final config = RemoteConfig.fromMap(map);
+      expect(config.checkout.paymentMethods, isNull);
+      expect(config.checkout.isApplePayOnly, isFalse);
+    });
+
+    test('CheckoutConfig.isApplePayOnly is false for multi-method merchants', () {
+      final map = {
+        'checkout': {
+          'sheetType': 'webview',
+          'isEnabled': true,
+          'jurisdictions': <String, dynamic>{},
+          'paymentMethods': ['apple_pay', 'card'],
+        },
+      };
+      final config = RemoteConfig.fromMap(map);
+      expect(config.checkout.paymentMethods, ['apple_pay', 'card']);
+      expect(config.checkout.isApplePayOnly, isFalse);
     });
   });
 

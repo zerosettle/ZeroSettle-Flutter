@@ -24,6 +24,8 @@ sealed class ZeroSettleException implements Exception {
       'transaction_verification_failed' => ZSTransactionVerificationFailedException(e.message ?? 'Transaction verification failed'),
       'purchase_pending' => ZSPurchasePendingException(e.message ?? 'Purchase pending'),
       'user_not_identified' => ZSUserNotIdentifiedException(e.message ?? 'User not identified'),
+      'apple_pay_unavailable' => ZSApplePayUnavailableException(e.message ?? 'Apple Pay unavailable'),
+      'apple_pay_setup_required' => ZSApplePaySetupRequiredException(e.message ?? 'Apple Pay setup required'),
       _ => ZSApiException(e.message ?? 'Unknown error: ${e.code}'),
     };
   }
@@ -101,6 +103,22 @@ class ZSPurchasePendingException extends ZeroSettleException {
 /// user-scoped APIs like [ZeroSettle.restoreEntitlements].
 class ZSUserNotIdentifiedException extends ZeroSettleException {
   const ZSUserNotIdentifiedException(super.message);
+}
+
+/// The merchant is Apple-Pay-only and the device cannot do Apple Pay at all
+/// (older hardware, simulator, MDM/parental restriction). The customer was
+/// NOT charged. The hosting app should show its own UX or skip the purchase
+/// path.
+class ZSApplePayUnavailableException extends ZeroSettleException {
+  const ZSApplePayUnavailableException(super.message);
+}
+
+/// The merchant is Apple-Pay-only and the device supports Apple Pay but the
+/// Wallet has no supported cards. The customer was NOT charged. Call
+/// [ZeroSettle.presentApplePaySetup] to launch the system Wallet setup
+/// flow, then retry the purchase.
+class ZSApplePaySetupRequiredException extends ZeroSettleException {
+  const ZSApplePaySetupRequiredException(super.message);
 }
 
 /// Backward-compatible typedef. Use [ZeroSettleException] instead.

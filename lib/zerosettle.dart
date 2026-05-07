@@ -74,12 +74,17 @@ class ZeroSettle {
   ///   `null` for no limit (all products), a positive `int` to cap the pool
   ///   size, or `0` to disable WebView pre-rendering entirely (PI caching
   ///   still works).
+  /// - [applePaySetupBehavior]: How the SDK reacts when the merchant is
+  ///   Apple-Pay-only and the device's Wallet has no supported card. iOS
+  ///   only — silently ignored on Android. When omitted the SDK uses its
+  ///   default ([ApplePaySetupBehavior.presentBuiltInUI]).
   Future<void> configure({
     required String publishableKey,
     bool syncStoreKitTransactions = true,
     String? appleMerchantId,
     bool preloadCheckout = false,
     int? maxPreloadedWebViews,
+    ApplePaySetupBehavior? applePaySetupBehavior,
   }) {
     return _wrap(() => _platform.configure(
           publishableKey: publishableKey,
@@ -87,6 +92,7 @@ class ZeroSettle {
           appleMerchantId: appleMerchantId,
           preloadCheckout: preloadCheckout,
           maxPreloadedWebViews: maxPreloadedWebViews,
+          applePaySetupBehavior: applePaySetupBehavior?.rawValue,
         ));
   }
 
@@ -444,6 +450,45 @@ class ZeroSettle {
   /// hasn't been called.
   Future<String> recommendedAppAccountToken() {
     return _wrap(() => _platform.recommendedAppAccountToken());
+  }
+
+  // -- Apple Pay (1.3.2) --
+
+  /// Launches the system Wallet setup flow so the user can add a card for
+  /// Apple Pay. Mirrors `ZeroSettle.shared.presentApplePaySetup()` on iOS.
+  ///
+  /// Use this from a [ZSApplePaySetupRequiredException] handler, or from a
+  /// banner CTA when [ApplePayAvailabilityState.setupRequired] is observed
+  /// via [applePayStateUpdates].
+  ///
+  /// On Android this is a no-op stub (returns `notImplemented` from the
+  /// platform); the surrounding facade swallows it silently as a non-error.
+  Future<void> presentApplePaySetup() {
+    return _wrap(() => _platform.presentApplePaySetup());
+  }
+
+  /// Whether the SDK is currently treating this merchant as Apple-Pay-only.
+  /// Drives banner CTA swap and the imperative-checkout pre-flight gate on
+  /// iOS. Mirrors `ZeroSettle.shared.isApplePayOnly`.
+  Future<bool> getIsApplePayOnly() {
+    return _wrap(() => _platform.getIsApplePayOnly());
+  }
+
+  /// Reads the current [ApplePayAvailabilityState] once. Mirrors
+  /// `ZeroSettle.shared.applePayAvailability.state` on iOS.
+  Future<ApplePayAvailabilityState> getApplePayState() {
+    return _wrap(() async {
+      final raw = await _platform.getApplePayState();
+      return ApplePayAvailabilityState.fromRawValue(raw);
+    });
+  }
+
+  /// Hot stream of [ApplePayAvailabilityState] changes from the iOS Kit's
+  /// `applePayAvailability.statePublisher`. Emits the current state on
+  /// subscription so late subscribers don't have to wait.
+  Stream<ApplePayAvailabilityState> get applePayStateUpdates {
+    return _platform.applePayStateUpdates
+        .map(ApplePayAvailabilityState.fromRawValue);
   }
 
   // -- Cancel Flow --

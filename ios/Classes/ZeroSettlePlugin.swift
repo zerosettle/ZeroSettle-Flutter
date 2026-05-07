@@ -11,10 +11,18 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private var entitlementEventChannel: FlutterEventChannel?
     private var checkoutEventChannel: FlutterEventChannel?
     private var pendingClaimsEventChannel: FlutterEventChannel?
+    private var applePayStateEventChannel: FlutterEventChannel?
 
     private let entitlementStreamHandler = EntitlementStreamHandler()
     private let checkoutStreamHandler = CheckoutStreamHandler()
     private let pendingClaimsStreamHandler = PendingClaimsStreamHandler()
+    private let applePayStateStreamHandler = ApplePayStateStreamHandler()
+
+    /// Combine subscription that mirrors
+    /// `ZeroSettle.shared.applePayAvailability.statePublisher` onto the
+    /// `apple_pay_state_updates` event channel. Subscribed once at register()
+    /// time so late Dart subscribers receive the current state on attach.
+    private var applePayStateCancellable: AnyCancellable?
 
     /// Combine subscription that mirrors `ZeroSettle.shared.pendingClaims`
     /// changes onto the `pending_claims_updates` event channel. The iOS Kit
@@ -49,6 +57,32 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         let pendingClaimsEC = FlutterEventChannel(name: "zerosettle/pending_claims_updates", binaryMessenger: registrar.messenger())
         pendingClaimsEC.setStreamHandler(instance.pendingClaimsStreamHandler)
         instance.pendingClaimsEventChannel = pendingClaimsEC
+
+        let applePayStateEC = FlutterEventChannel(name: "zerosettle/apple_pay_state_updates", binaryMessenger: registrar.messenger())
+        applePayStateEC.setStreamHandler(instance.applePayStateStreamHandler)
+        instance.applePayStateEventChannel = applePayStateEC
+
+        // Bridge ZeroSettle.shared.applePayAvailability.$state (Combine
+        // @Published) onto the applePayStateStreamHandler. Push the current
+        // value on listen-start so late Dart subscribers see it immediately.
+        instance.applePayStateStreamHandler.onListenStarted = { [weak instance] in
+            DispatchQueue.main.async {
+                guard let instance else { return }
+                MainActor.assumeIsolated {
+                    let raw = ZeroSettle.shared.applePayAvailability.state.rawString
+                    instance.applePayStateStreamHandler.send(raw)
+                }
+            }
+        }
+        Task { @MainActor in
+            instance.applePayStateCancellable = ZeroSettle.shared
+                .applePayAvailability
+                .statePublisher
+                .removeDuplicates()
+                .sink { [weak instance] state in
+                    instance?.applePayStateStreamHandler.send(state.rawString)
+                }
+        }
 
         // Bridge ZeroSettle.shared.pendingClaims (an ObservableObject @Published-like
         // property notified via objectWillChange) onto the pendingClaimsStreamHandler.
@@ -142,13 +176,34 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             let appleMerchantId = args?["appleMerchantId"] as? String
             let preloadCheckout = args?["preloadCheckout"] as? Bool ?? false
             let maxPreloadedWebViews = args?["maxPreloadedWebViews"] as? Int
-            let config = ZeroSettle.Configuration(
-                publishableKey: publishableKey,
-                syncStoreKitTransactions: syncStoreKit,
-                appleMerchantId: appleMerchantId,
-                preloadCheckout: preloadCheckout,
-                maxPreloadedWebViews: maxPreloadedWebViews
-            )
+            // ApplePaySetupBehavior is `Sendable` without an explicit raw
+            // value type, so we map strings via switch. When omitted, fall
+            // through to the iOS Configuration init's default
+            // (`.presentBuiltInUI`) by using the no-arg initializer path.
+            let applePaySetupBehaviorRaw = args?["applePaySetupBehavior"] as? String
+            let config: ZeroSettle.Configuration
+            if let applePaySetupBehaviorRaw {
+                guard let behavior = ApplePaySetupBehavior.fromRawString(applePaySetupBehaviorRaw) else {
+                    result(FlutterError(code: "INVALID_ARGUMENTS", message: "unknown applePaySetupBehavior: \(applePaySetupBehaviorRaw)", details: nil))
+                    return
+                }
+                config = ZeroSettle.Configuration(
+                    publishableKey: publishableKey,
+                    syncStoreKitTransactions: syncStoreKit,
+                    appleMerchantId: appleMerchantId,
+                    preloadCheckout: preloadCheckout,
+                    maxPreloadedWebViews: maxPreloadedWebViews,
+                    applePaySetupBehavior: behavior
+                )
+            } else {
+                config = ZeroSettle.Configuration(
+                    publishableKey: publishableKey,
+                    syncStoreKitTransactions: syncStoreKit,
+                    appleMerchantId: appleMerchantId,
+                    preloadCheckout: preloadCheckout,
+                    maxPreloadedWebViews: maxPreloadedWebViews
+                )
+            }
             ZeroSettle.shared.configure(config)
             ZeroSettle.shared.delegate = self
             result(nil)
@@ -713,6 +768,18 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(error.toFlutterError())
             }
 
+        // -- Apple Pay (1.3.2) --
+
+        case "presentApplePaySetup":
+            ZeroSettle.shared.presentApplePaySetup()
+            result(nil)
+
+        case "getIsApplePayOnly":
+            result(ZeroSettle.shared.isApplePayOnly)
+
+        case "getApplePayState":
+            result(ZeroSettle.shared.applePayAvailability.state.rawString)
+
         // -- Upgrade Offer --
 
         case "presentUpgradeOffer":
@@ -883,6 +950,31 @@ private class PendingClaimsStreamHandler: NSObject, FlutterStreamHandler {
     /// Optional callback fired when Dart starts listening — used by the
     /// plugin to push the current snapshot so late subscribers don't have
     /// to wait for the next mutation.
+    var onListenStarted: (() -> Void)?
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        eventSink = events
+        onListenStarted?()
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        eventSink = nil
+        return nil
+    }
+
+    func send(_ data: Any) {
+        DispatchQueue.main.async { [weak self] in
+            self?.eventSink?(data)
+        }
+    }
+}
+
+private class ApplePayStateStreamHandler: NSObject, FlutterStreamHandler {
+    private var eventSink: FlutterEventSink?
+    /// Optional callback fired when Dart starts listening — used by the
+    /// plugin to push the current Apple Pay availability state so late
+    /// subscribers see it without waiting for the next change.
     var onListenStarted: (() -> Void)?
 
     func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -1115,11 +1207,16 @@ extension CheckoutConfig {
         for (key, value) in jurisdictions {
             jurisdictionsMap[key.rawValue] = value.toFlutterMap()
         }
-        return [
+        var map: [String: Any] = [
             "sheetType": sheetType.rawValue,
             "isEnabled": isEnabled,
             "jurisdictions": jurisdictionsMap,
+            "isApplePayOnly": isApplePayOnly,
         ]
+        if let paymentMethods {
+            map["paymentMethods"] = paymentMethods
+        }
+        return map
     }
 }
 
@@ -1295,6 +1392,36 @@ extension UpgradeOffer.Display {
     }
 }
 
+// MARK: - Apple Pay Raw-String Mapping
+
+/// `ApplePaySetupBehavior` is declared `Sendable` without an explicit raw
+/// value type on the iOS Kit. We map to/from string form here so the wire
+/// format stays stable across Kit versions.
+extension ApplePaySetupBehavior {
+    static func fromRawString(_ value: String) -> ApplePaySetupBehavior? {
+        switch value {
+        case "presentBuiltInUI": return .presentBuiltInUI
+        case "delegateToApp": return .delegateToApp
+        default: return nil
+        }
+    }
+}
+
+/// `ApplePayAvailability.State` is declared `Equatable, Sendable` without an
+/// explicit raw value type. The persistence raw values used by the Kit
+/// (`UserDefaults` keys for `debugStateOverride`) are mirrored here so the
+/// stream payloads, single reads, and persisted state all use the same wire
+/// strings.
+extension ApplePayAvailability.State {
+    var rawString: String {
+        switch self {
+        case .ready: return "ready"
+        case .setupRequired: return "setupRequired"
+        case .unavailable: return "unavailable"
+        }
+    }
+}
+
 // MARK: - Error Mapping
 
 extension Error {
@@ -1335,6 +1462,10 @@ extension ZeroSettleError {
             return FlutterError(code: "user_not_identified", message: errorDescription, details: nil)
         case .checkoutNotStarted:
             return FlutterError(code: "checkout_not_started", message: errorDescription, details: nil)
+        case .applePayUnavailable:
+            return FlutterError(code: "apple_pay_unavailable", message: errorDescription, details: nil)
+        case .applePaySetupRequired:
+            return FlutterError(code: "apple_pay_setup_required", message: errorDescription, details: nil)
         default:
             return FlutterError(code: "api_error", message: errorDescription, details: nil)
         }

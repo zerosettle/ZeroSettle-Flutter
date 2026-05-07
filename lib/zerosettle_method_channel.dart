@@ -18,6 +18,10 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   final pendingClaimsEventChannel =
       const EventChannel('zerosettle/pending_claims_updates');
 
+  @visibleForTesting
+  final applePayStateEventChannel =
+      const EventChannel('zerosettle/apple_pay_state_updates');
+
   // -- Configuration --
 
   @override
@@ -34,6 +38,7 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     String? appleMerchantId,
     bool preloadCheckout = false,
     int? maxPreloadedWebViews,
+    String? applePaySetupBehavior,
   }) async {
     await methodChannel.invokeMethod('configure', {
       'publishableKey': publishableKey,
@@ -41,6 +46,7 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
       if (appleMerchantId != null) 'appleMerchantId': appleMerchantId,
       'preloadCheckout': preloadCheckout,
       if (maxPreloadedWebViews != null) 'maxPreloadedWebViews': maxPreloadedWebViews,
+      if (applePaySetupBehavior != null) 'applePaySetupBehavior': applePaySetupBehavior,
     });
   }
 
@@ -523,5 +529,34 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList());
     return _pendingClaimsUpdatesStream!;
+  }
+
+  // -- Apple Pay (1.3.2) --
+
+  @override
+  Future<void> presentApplePaySetup() async {
+    await methodChannel.invokeMethod('presentApplePaySetup');
+  }
+
+  @override
+  Future<bool> getIsApplePayOnly() async {
+    final result = await methodChannel.invokeMethod<bool>('getIsApplePayOnly');
+    return result ?? false;
+  }
+
+  @override
+  Future<String> getApplePayState() async {
+    final result = await methodChannel.invokeMethod<String>('getApplePayState');
+    // Default to "unavailable" if the platform returns null (e.g. Android stub).
+    return result ?? 'unavailable';
+  }
+
+  Stream<String>? _applePayStateUpdatesStream;
+
+  @override
+  Stream<String> get applePayStateUpdates {
+    _applePayStateUpdatesStream ??=
+        applePayStateEventChannel.receiveBroadcastStream().map((e) => e as String);
+    return _applePayStateUpdatesStream!;
   }
 }
