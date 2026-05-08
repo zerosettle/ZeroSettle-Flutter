@@ -157,6 +157,42 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // Register MigrationTipView PlatformView factory
         let migrateTipFactory = ZSMigrateTipViewFactory(messenger: registrar.messenger())
         registrar.register(migrateTipFactory, withId: "zerosettle/migrate_tip_view")
+
+        // Static dismissed-state helpers for ZSMigrationManager. Routed
+        // through a separate channel because they're not scoped to a
+        // particular Dart `MigrationManager` handle — they read/write
+        // UserDefaults globally / per-userId.
+        let migrationStaticChannel = FlutterMethodChannel(
+            name: "zerosettle/migration_manager_static",
+            binaryMessenger: registrar.messenger()
+        )
+        migrationStaticChannel.setMethodCallHandler { call, result in
+            let args = call.arguments as? [String: Any]
+            switch call.method {
+            case "isPermanentlyDismissed":
+                guard let userId = args?["userId"] as? String else {
+                    result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId required", details: nil))
+                    return
+                }
+                result(ZSMigrationManager.isPermanentlyDismissed(forUserId: userId))
+
+            case "setDismissed":
+                guard let userId = args?["userId"] as? String,
+                      let dismissed = args?["dismissed"] as? Bool else {
+                    result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId + dismissed required", details: nil))
+                    return
+                }
+                ZSMigrationManager.setDismissed(dismissed, forUserId: userId)
+                result(nil)
+
+            case "resetDismissedState":
+                ZSMigrationManager.resetDismissedState()
+                result(nil)
+
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
     }
 
     // MARK: - Universal Link Handling
