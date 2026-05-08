@@ -917,12 +917,85 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         )
         migrationHandles[handleId] = entry
 
+        // Method dispatch — imperative APIs (present, dismiss,
+        // startCheckout, etc.) and disposeHandle.
+        methodChannel.setMethodCallHandler { [weak self] call, result in
+            Task { @MainActor in
+                self?.handleMigrationManagerCall(
+                    handleId: handleId, call: call, result: result
+                )
+            }
+        }
+
         // State stream — pushes a coherent snapshot of all five
         // @Published properties on every change.
         stateChannel.setStreamHandler(MigrationStateStreamHandler(entry: entry))
 
-        // Method dispatch (task 6) + failures stream (task 7) wired below
-        // alongside their handlers.
+        // Failures stream wired in task 7.
+    }
+
+    @MainActor
+    private func handleMigrationManagerCall(
+        handleId: String,
+        call: FlutterMethodCall,
+        result: @escaping FlutterResult
+    ) {
+        guard let entry = migrationHandles[handleId] else {
+            result(FlutterError(
+                code: "handle_not_found",
+                message: "MigrationManager handle \(handleId) not found",
+                details: nil
+            ))
+            return
+        }
+        let manager = entry.manager
+        let args = call.arguments as? [String: Any]
+
+        switch call.method {
+        case "getState":
+            result(manager.toFlutterStateMap())
+
+        case "present":
+            manager.present()
+            result(nil)
+
+        case "dismiss":
+            manager.dismiss()
+            result(nil)
+
+        case "startCheckout":
+            let stripeCustomerId = args?["stripeCustomerId"] as? String
+            Task { @MainActor in
+                let url = await manager.startCheckout(
+                    stripeCustomerId: stripeCustomerId
+                )
+                result(url?.absoluteString)
+            }
+
+        case "markCheckoutSucceeded":
+            let transactionId = args?["transactionId"] as? String
+            Task { @MainActor in
+                await manager.markCheckoutSucceeded(transactionId: transactionId)
+                result(nil)
+            }
+
+        case "showAppleSubscriptionManagement":
+            Task { @MainActor in
+                await manager.showAppleSubscriptionManagement()
+                result(nil)
+            }
+
+        case "disposeHandle":
+            entry.cancellables.removeAll()
+            entry.methodChannel.setMethodCallHandler(nil)
+            entry.stateChannel.setStreamHandler(nil)
+            entry.failuresChannel.setStreamHandler(nil)
+            migrationHandles.removeValue(forKey: handleId)
+            result(nil)
+
+        default:
+            result(FlutterMethodNotImplemented)
+        }
     }
 
     // MARK: - Root View Controller
