@@ -917,11 +917,12 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         )
         migrationHandles[handleId] = entry
 
-        // Method dispatch and stream handlers are wired in subsequent tasks.
-        // Tasks 5 (state stream), 6 (imperative methods + dispose), 7
-        // (failures stream) fill these in. For now the channels exist but
-        // no handlers are attached, so any call will return
-        // `FlutterMethodNotImplemented` / no events.
+        // State stream — pushes a coherent snapshot of all five
+        // @Published properties on every change.
+        stateChannel.setStreamHandler(MigrationStateStreamHandler(entry: entry))
+
+        // Method dispatch (task 6) + failures stream (task 7) wired below
+        // alongside their handlers.
     }
 
     // MARK: - Root View Controller
@@ -1480,6 +1481,137 @@ extension UpgradeOffer.Display {
         ]
         if let storekitMigrationBody { map["storekitMigrationBody"] = storekitMigrationBody }
         if let storekitCancelInstructions { map["cancelInstructions"] = storekitCancelInstructions }
+        return map
+    }
+}
+
+// MARK: - Migration Manager Stream Handlers
+
+/// Bridges `ZSMigrationManager`'s 5 `@Published` properties onto a Flutter
+/// EventChannel. We use the manual-sink pattern (5 independent
+/// `.sink` subscriptions all calling a shared `emitSnapshot`) instead of
+/// `Publishers.CombineLatest4(...).combineLatest(...)` because the chained
+/// form produces a tuple-of-tuples that's awkward to type-check, and the
+/// per-property approach gives us the same dedup guarantees once paired
+/// with `removeDuplicates()` per stream — when any single property changes
+/// we re-read the manager's full state and push a coherent snapshot.
+private final class MigrationStateStreamHandler: NSObject, FlutterStreamHandler {
+    private weak var entry: MigrationManagerHandleEntry?
+
+    init(entry: MigrationManagerHandleEntry) {
+        self.entry = entry
+    }
+
+    func onListen(
+        withArguments arguments: Any?,
+        eventSink events: @escaping FlutterEventSink
+    ) -> FlutterError? {
+        guard let entry else { return nil }
+        entry.stateSink = events
+
+        // ZSMigrationManager is @MainActor — touching its `@Published`
+        // backing publishers (`$state`, etc.) and reading its properties
+        // must happen on the main actor. `onListen` itself is nonisolated,
+        // so we hop over before subscribing.
+        Task { @MainActor in
+            // Emit the current snapshot immediately so late subscribers
+            // don't have to wait for the next mutation.
+            events(entry.manager.toFlutterStateMap())
+
+            // Subscribe to each of the 5 published properties. On any
+            // change we re-read the manager's current state and push the
+            // merged map. This sidesteps Combine's 4-arity ceiling and
+            // keeps the read on the main actor (which the manager
+            // requires).
+            let emit: () -> Void = { [weak entry] in
+                guard let entry else { return }
+                Task { @MainActor in
+                    entry.stateSink?(entry.manager.toFlutterStateMap())
+                }
+            }
+            let manager = entry.manager
+            manager.$state
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+            manager.$offerData
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+            manager.$checkoutError
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+            manager.$isLoading
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+            manager.$storekitCancelRequired
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+        }
+
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        entry?.stateSink = nil
+        return nil
+    }
+}
+
+// MARK: - Migration Manager Flutter Map Extensions
+
+private extension ZSMigrationManager {
+    func toFlutterStateMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "state": state.rawString,
+            "isLoading": isLoading,
+            "storekitCancelRequired": storekitCancelRequired,
+        ]
+        if let offerData = offerData {
+            map["offerData"] = offerData.toFlutterMap()
+        }
+        if let err = checkoutError {
+            map["checkoutErrorMessage"] = err.localizedDescription
+        }
+        return map
+    }
+}
+
+private extension MigrationOffer.State {
+    var rawString: String {
+        switch self {
+        case .loading:    return "loading"
+        case .ineligible: return "ineligible"
+        case .eligible:   return "eligible"
+        case .presented:  return "presented"
+        case .accepted:   return "accepted"
+        case .completed:  return "completed"
+        case .dismissed:  return "dismissed"
+        }
+    }
+}
+
+private extension MigrationOffer.OfferData {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "prompt": prompt.toFlutterMap(),
+            "freeTrialDays": freeTrialDays,
+            "activeStoreKitProductId": activeStoreKitProductId,
+        ]
+        if let end = storekitSubscriptionEnd {
+            map["storekitSubscriptionEnd"] = iso8601Formatter.string(from: end)
+        }
+        if let otid = activeStoreKitOriginalTransactionId {
+            map["activeStoreKitOriginalTransactionId"] = otid
+        }
         return map
     }
 }
