@@ -453,6 +453,20 @@ class MockZeroSettlePlatform
   @override
   Stream<String> get applePayStateUpdates =>
       Stream.fromIterable(applePayStateUpdatesValues);
+
+  // ---- Headless Migration Manager ----
+
+  String migrationManagerHandleReturn = 'handle_test_42';
+  String? lastMigrationManagerStripeCustomerId;
+
+  @override
+  Future<String> resolveMigrationManagerHandle({String? stripeCustomerId}) async {
+    lastMigrationManagerStripeCustomerId = stripeCustomerId;
+    _record('resolveMigrationManagerHandle', {
+      if (stripeCustomerId != null) 'stripeCustomerId': stripeCustomerId,
+    });
+    return migrationManagerHandleReturn;
+  }
 }
 
 // -- Sample Data Helpers --

@@ -531,6 +531,19 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return _pendingClaimsUpdatesStream!;
   }
 
+  // -- Migration Manager (Headless) --
+
+  @override
+  Future<String> resolveMigrationManagerHandle({String? stripeCustomerId}) async {
+    final result = await methodChannel.invokeMethod<String>(
+      'resolveMigrationManagerHandle',
+      {
+        if (stripeCustomerId != null) 'stripeCustomerId': stripeCustomerId,
+      },
+    );
+    return result!;
+  }
+
   // -- Apple Pay (1.3.2) --
 
   @override

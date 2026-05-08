@@ -13,6 +13,7 @@ import 'models/cancel_flow.dart';
 import 'models/upgrade_offer.dart';
 import 'models/identity.dart';
 import 'models/pending_claim.dart';
+import 'managers/migration_manager.dart';
 
 export 'models/price.dart';
 export 'models/enums.dart';
@@ -764,6 +765,24 @@ class ZeroSettle {
         return _platform.trackMigrationConversionForCurrentUser();
       }
       return _platform.trackMigrationConversion(userId: userId);
+    });
+  }
+
+  // -- Migration Manager (Headless) --
+
+  /// Returns a [MigrationManager] handle bound to the currently-identified
+  /// user and the optional [stripeCustomerId]. The iOS-side manager is
+  /// cached; calling this twice returns handles wired to the same underlying
+  /// state.
+  ///
+  /// Call [MigrationManager.dispose] when your widget tears down to release
+  /// the per-handle channel subscriptions.
+  Future<MigrationManager> migrationManager({String? stripeCustomerId}) {
+    return _wrap(() async {
+      final id = await _platform.resolveMigrationManagerHandle(
+        stripeCustomerId: stripeCustomerId,
+      );
+      return MigrationManager.fromHandleId(id);
     });
   }
 

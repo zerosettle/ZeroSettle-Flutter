@@ -344,6 +344,17 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     );
   }
 
+  // -- Migration Manager (Headless) --
+
+  /// Returns the iOS-side handle ID for the migration manager scoped to the
+  /// currently-identified user and the optional [stripeCustomerId]. The
+  /// returned ID is opaque; pass it to `MigrationManager.fromHandleId`.
+  Future<String> resolveMigrationManagerHandle({String? stripeCustomerId}) {
+    throw UnimplementedError(
+      'resolveMigrationManagerHandle() has not been implemented.',
+    );
+  }
+
   // -- Apple Pay (1.3.2) --
 
   /// Launches the system Wallet setup flow so the user can add a card for

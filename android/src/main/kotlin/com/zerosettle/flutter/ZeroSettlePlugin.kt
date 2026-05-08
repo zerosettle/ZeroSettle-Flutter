@@ -580,6 +580,15 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
                 result.notImplemented()
             }
 
+            // -- Headless offer managers — iOS only for now. Android adopters
+            //    should fall back to the drop-in widgets until the Android
+            //    bridge ships. The per-handle MethodChannels are also not
+            //    wired on Android — Dart adopters who call this on Android
+            //    will see notImplemented() before any handle ID is generated.
+            "resolveMigrationManagerHandle" -> {
+                result.notImplemented()
+            }
+
             else -> result.notImplemented()
         }
     }
