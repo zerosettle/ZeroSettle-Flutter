@@ -1,3 +1,44 @@
+## 1.3.4
+
+Tracks ZeroSettleKit 1.3.4. Two adopter-visible changes plus a bridge cleanup.
+
+### `ZSApplePaySetupRequiredException` gains `autoPresentedSetup` field
+
+Mirrors Kit 1.3.4's payload addition on `ZeroSettleError.applePaySetupRequired(autoPresentedSetup:)`. When the SDK auto-presented the system Wallet (because `Configuration.applePaySetupBehavior == ApplePaySetupBehavior.presentBuiltInUI`, the default), `autoPresentedSetup` is `true`; your app should NOT stack additional setup UI. When `delegateToApp`, the flag is `false` and your app owns the setup affordance — call `ZeroSettle.instance.presentApplePaySetup()` when ready.
+
+```dart
+try {
+  await ZeroSettle.instance.purchase(productId: 'pro_monthly');
+} on ZSApplePaySetupRequiredException catch (e) {
+  if (e.autoPresentedSetup) {
+    // SDK already opened Wallet — no UI needed, maybe analytics
+  } else {
+    showCustomSetupSheet();
+  }
+}
+```
+
+Source-compatible — the new field has a default of `false`, so existing `catch (e)` blocks keep working.
+
+### `OfferManager` factory: orphan-manager hazard fixed (Kit-side)
+
+Kit 1.3.4's `offerManager(stripeCustomerId:)` is now non-throwing and eager — it returns the canonical shared instance regardless of `identify()` state. The Flutter bridge no longer wraps the call in `try/catch`. Adopters using `await ZeroSettle.instance.offerManager(...)` benefit automatically: handles obtained before `identify()` runs now stay live and re-evaluate eligibility in place once the user identifies.
+
+### Internal: `@Observable` migration in ZeroSettleKit (no Flutter impact)
+
+Kit 1.3.4 migrated `ApplePayAvailability` from `ObservableObject`/`@Published` to Swift's modern Observation framework. The Flutter bridge subscribes to the deprecated-but-still-supported `statePublisher` (Combine `AnyPublisher`) — no Flutter-visible behavior change. Will be revisited before Kit 2.0 removes the Combine bridge.
+
+### Bumps
+
+* iOS pod dependency: `ZeroSettleKit ~> 1.3.4`.
+* Plugin tracks Kit's 1.3.x line in lockstep.
+
+## 1.3.3
+
+Tracks ZeroSettleKit 1.3.3. **No Flutter-visible API changes** — the Kit's 1.3.3 work (`OfferTipView` and `ZSOfferManager` direct-init no longer require `userId:`) only affects native Swift call sites. Flutter already uses the canonical `ZeroSettle.instance.offerManager(stripeCustomerId:)` factory, so all 1.3.3 fixes are absorbed transparently.
+
+* iOS pod dependency: `ZeroSettleKit ~> 1.3.3`.
+
 ## 1.3.2
 
 Tracks ZeroSettleKit 1.3.2. Pre-existing primitives that were missing in earlier 1.3.x Flutter releases are now bridged, plus the new Apple Pay availability + setup-behavior surface.

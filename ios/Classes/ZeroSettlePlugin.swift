@@ -936,16 +936,15 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         case "resolveOfferManagerHandle":
             let stripeCustomerId = args?["stripeCustomerId"] as? String
             Task { @MainActor in
-                do {
-                    let manager = try ZeroSettle.shared.offerManager(
-                        stripeCustomerId: stripeCustomerId
-                    )
-                    let handleId = UUID().uuidString
-                    self.installOfferHandle(handleId: handleId, manager: manager)
-                    result(handleId)
-                } catch {
-                    result(error.toFlutterError())
-                }
+                // ZSOfferManager became non-throwing + eager in Kit 1.3.4 to
+                // fix the orphan-manager hazard. No try/catch needed; the
+                // factory always returns the canonical shared instance.
+                let manager = ZeroSettle.shared.offerManager(
+                    stripeCustomerId: stripeCustomerId
+                )
+                let handleId = UUID().uuidString
+                self.installOfferHandle(handleId: handleId, manager: manager)
+                result(handleId)
             }
 
         // -- Upgrade Offer --
@@ -2258,8 +2257,16 @@ extension ZeroSettleError {
             return FlutterError(code: "checkout_not_started", message: errorDescription, details: nil)
         case .applePayUnavailable:
             return FlutterError(code: "apple_pay_unavailable", message: errorDescription, details: nil)
-        case .applePaySetupRequired:
-            return FlutterError(code: "apple_pay_setup_required", message: errorDescription, details: nil)
+        case .applePaySetupRequired(let autoPresentedSetup):
+            // Forward the autoPresentedSetup flag (added in Kit 1.3.4) so the
+            // Dart `ZSApplePaySetupRequiredException` can tell adopters whether
+            // the SDK already opened the system Wallet (true → presentBuiltInUI
+            // path) or not (false → delegateToApp path; app handles setup UX).
+            return FlutterError(
+                code: "apple_pay_setup_required",
+                message: errorDescription,
+                details: ["autoPresentedSetup": autoPresentedSetup]
+            )
         default:
             return FlutterError(code: "api_error", message: errorDescription, details: nil)
         }

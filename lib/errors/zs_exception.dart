@@ -25,10 +25,26 @@ sealed class ZeroSettleException implements Exception {
       'purchase_pending' => ZSPurchasePendingException(e.message ?? 'Purchase pending'),
       'user_not_identified' => ZSUserNotIdentifiedException(e.message ?? 'User not identified'),
       'apple_pay_unavailable' => ZSApplePayUnavailableException(e.message ?? 'Apple Pay unavailable'),
-      'apple_pay_setup_required' => ZSApplePaySetupRequiredException(e.message ?? 'Apple Pay setup required'),
+      'apple_pay_setup_required' => ZSApplePaySetupRequiredException(
+            e.message ?? 'Apple Pay setup required',
+            autoPresentedSetup: _readAutoPresentedSetup(e),
+          ),
       _ => ZSApiException(e.message ?? 'Unknown error: ${e.code}'),
     };
   }
+}
+
+/// Read the `autoPresentedSetup` flag from the `apple_pay_setup_required`
+/// PlatformException's `details` map. Defaults to `false` when missing —
+/// older Kit versions didn't ship the payload, and "the app should show
+/// its own setup affordance" is the safer default.
+bool _readAutoPresentedSetup(PlatformException e) {
+  final details = e.details;
+  if (details is Map) {
+    final value = details['autoPresentedSetup'];
+    if (value is bool) return value;
+  }
+  return false;
 }
 
 /// The SDK has not been configured. Call [ZeroSettle.configure] first.
@@ -117,8 +133,27 @@ class ZSApplePayUnavailableException extends ZeroSettleException {
 /// Wallet has no supported cards. The customer was NOT charged. Call
 /// [ZeroSettle.presentApplePaySetup] to launch the system Wallet setup
 /// flow, then retry the purchase.
+///
+/// [autoPresentedSetup] indicates whether the SDK has already opened the
+/// system Wallet on the user's behalf:
+///
+/// - `true` — `Configuration.applePaySetupBehavior == .presentBuiltInUI`
+///   (the default). The SDK auto-presented the system Wallet setup flow.
+///   Your app should NOT stack additional setup UI; just be aware the
+///   purchase didn't complete and the user is mid-setup.
+/// - `false` — `Configuration.applePaySetupBehavior == .delegateToApp`.
+///   The SDK did not open Wallet. Your app owns the setup UX — present
+///   your own banner / sheet and call
+///   `ZeroSettle.instance.presentApplePaySetup()` when the user is ready.
+///
+/// Added in zerosettle 1.3.4 (mirrors ZeroSettleKit 1.3.4's
+/// `applePaySetupRequired(autoPresentedSetup:)` payload).
 class ZSApplePaySetupRequiredException extends ZeroSettleException {
-  const ZSApplePaySetupRequiredException(super.message);
+  final bool autoPresentedSetup;
+  const ZSApplePaySetupRequiredException(
+    super.message, {
+    this.autoPresentedSetup = false,
+  });
 }
 
 /// Backward-compatible typedef. Use [ZeroSettleException] instead.

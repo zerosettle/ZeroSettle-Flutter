@@ -154,6 +154,52 @@ void main() {
       expect(e, isA<ZSApplePaySetupRequiredException>());
       expect(e.message, isNotEmpty);
     });
+
+    test(
+        'apple_pay_setup_required reads autoPresentedSetup=true from details (Kit 1.3.4 payload)',
+        () {
+      final e = ZeroSettleException.fromPlatformException(
+        PlatformException(
+          code: 'apple_pay_setup_required',
+          message: 'Apple Pay setup required',
+          details: {'autoPresentedSetup': true},
+        ),
+      );
+      expect(e, isA<ZSApplePaySetupRequiredException>());
+      expect(
+        (e as ZSApplePaySetupRequiredException).autoPresentedSetup,
+        isTrue,
+      );
+    });
+
+    test('apple_pay_setup_required reads autoPresentedSetup=false', () {
+      final e = ZeroSettleException.fromPlatformException(
+        PlatformException(
+          code: 'apple_pay_setup_required',
+          message: 'Apple Pay setup required',
+          details: {'autoPresentedSetup': false},
+        ),
+      );
+      expect(
+        (e as ZSApplePaySetupRequiredException).autoPresentedSetup,
+        isFalse,
+      );
+    });
+
+    test(
+        'apple_pay_setup_required missing details defaults autoPresentedSetup to false',
+        () {
+      final e = ZeroSettleException.fromPlatformException(
+        PlatformException(
+          code: 'apple_pay_setup_required',
+          message: 'Apple Pay setup required',
+        ),
+      );
+      expect(
+        (e as ZSApplePaySetupRequiredException).autoPresentedSetup,
+        isFalse,
+      );
+    });
   });
 
   group('ZeroSettleException.fromPlatformException — default fallback', () {
