@@ -55,6 +55,7 @@ class _AppShellState extends State<AppShell> {
   StreamSubscription<List<Entitlement>>? _entitlementSub;
   bool _envLoaded = false;
   bool _identityPromptShown = false;
+  MigrationManager? _migrationManager;
 
   @override
   void initState() {
@@ -66,6 +67,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _entitlementSub?.cancel();
+    _migrationManager?.dispose();
     _envNotifier.dispose();
     super.dispose();
   }
@@ -166,6 +168,18 @@ class _AppShellState extends State<AppShell> {
           // Non-fatal: entitlements may be empty for new users.
         }
       }
+
+      // Wire up the headless migration manager so adopters can drive a
+      // custom UI from MigrationManager.stateUpdates. The drop-in
+      // MigrationTipView widget is the alternative; this example uses the
+      // headless path on the Home screen.
+      try {
+        await _migrationManager?.dispose();
+        final mgr = await ZeroSettle.instance.migrationManager();
+        if (mounted) setState(() => _migrationManager = mgr);
+      } catch (_) {
+        // Non-fatal — the home screen handles a null manager.
+      }
     } on ZeroSettleException catch (e) {
       debugPrint('[ZS] identify: FAILED — ${e.runtimeType}: ${e.message}');
       _appState.setError(e.message);
@@ -215,6 +229,8 @@ class _AppShellState extends State<AppShell> {
       // Logout failures are non-fatal — clear local state regardless.
     }
     await IdentityChoiceStore.clear();
+    await _migrationManager?.dispose();
+    _migrationManager = null;
     _appState.setIdentity(null);
     _appState.setInitialized(false);
     _appState.setProducts([]);
@@ -262,6 +278,8 @@ class _AppShellState extends State<AppShell> {
       } on ZeroSettleException {
         // Non-fatal — we still want to swap env.
       }
+      await _migrationManager?.dispose();
+      _migrationManager = null;
       _appState.setIdentity(null);
       _appState.setInitialized(false);
       _appState.setProducts([]);
@@ -310,6 +328,8 @@ class _AppShellState extends State<AppShell> {
       // Non-fatal — clear local state regardless.
     }
     await IdentityChoiceStore.clear();
+    await _migrationManager?.dispose();
+    _migrationManager = null;
     _appState.setIdentity(null);
     _appState.setInitialized(false);
     _appState.setProducts([]);
@@ -338,6 +358,7 @@ class _AppShellState extends State<AppShell> {
                 appState: _appState,
                 onNavigateToStore: () => setState(() => _currentTab = 1),
                 onSignIn: switchIdentity,
+                migrationManager: _migrationManager,
               ),
               StoreScreen(appState: _appState, onSignIn: switchIdentity),
               EntitlementsScreen(appState: _appState),

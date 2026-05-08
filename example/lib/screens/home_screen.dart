@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 import '../app_state.dart';
 import '../widgets/gem_balance_card.dart';
+import '../widgets/migration_offer_card.dart';
 import '../widgets/sign_in_banner.dart';
 import '../widgets/subscription_status_card.dart';
 import '../widgets/stat_card.dart';
@@ -10,12 +11,14 @@ class HomeScreen extends StatelessWidget {
   final AppState appState;
   final VoidCallback onNavigateToStore;
   final VoidCallback onSignIn;
+  final MigrationManager? migrationManager;
 
   const HomeScreen({
     super.key,
     required this.appState,
     required this.onNavigateToStore,
     required this.onSignIn,
+    required this.migrationManager,
   });
 
   @override
@@ -59,19 +62,13 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // Migration Tip (iOS only, auto-hides when not applicable).
-                    // The widget no-ops when there is no signed-in user.
-                    //
-                    // The native widget uses `backgroundColor` for BOTH the
-                    // card fill AND the CTA text color (the CTA button bg is
-                    // hardcoded white). Pass a saturated brand color, not a
-                    // surface/neutral, or the white-on-white text will be
-                    // unreadable. `colorScheme.primary` works in both light
-                    // and dark themes.
-                    MigrationTipView(
-                      userId: appState.userId ?? '',
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                    ),
+                    // Headless migration offer demo — custom Dart UI driven by
+                    // MigrationManager.stateUpdates. Drop-in alternative is
+                    // MigrationTipView (still available in lib/widgets/).
+                    if (migrationManager != null)
+                      MigrationOfferCard(manager: migrationManager!)
+                    else
+                      const SizedBox.shrink(),
                     const SizedBox(height: 16),
 
                     // Recent Purchases
