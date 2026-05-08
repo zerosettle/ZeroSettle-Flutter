@@ -5,6 +5,31 @@ import SwiftUI
 import Combine
 import StoreKit
 
+/// Holds the per-handle Combine subscriptions and method-channel + event-
+/// channel handlers that bridge a single `ZSMigrationManager` instance to
+/// Flutter. Released when Dart calls `disposeHandle`.
+private final class MigrationManagerHandleEntry: NSObject {
+    let manager: ZSMigrationManager
+    let methodChannel: FlutterMethodChannel
+    let stateChannel: FlutterEventChannel
+    let failuresChannel: FlutterEventChannel
+    var stateSink: FlutterEventSink?
+    var failuresSink: FlutterEventSink?
+    var cancellables: Set<AnyCancellable> = []
+
+    init(
+        manager: ZSMigrationManager,
+        methodChannel: FlutterMethodChannel,
+        stateChannel: FlutterEventChannel,
+        failuresChannel: FlutterEventChannel
+    ) {
+        self.manager = manager
+        self.methodChannel = methodChannel
+        self.stateChannel = stateChannel
+        self.failuresChannel = failuresChannel
+    }
+}
+
 public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate {
 
     private var methodChannel: FlutterMethodChannel?
@@ -12,6 +37,15 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private var checkoutEventChannel: FlutterEventChannel?
     private var pendingClaimsEventChannel: FlutterEventChannel?
     private var applePayStateEventChannel: FlutterEventChannel?
+
+    /// Captured at `register(with:)` time so per-handle channels (built on
+    /// demand inside `installMigrationHandle`) can attach without re-routing
+    /// through the registrar.
+    private var messenger: FlutterBinaryMessenger?
+
+    /// (handleId → entry). One entry per Dart `MigrationManager` lifetime.
+    /// Cleared on `disposeHandle` from Dart.
+    private var migrationHandles: [String: MigrationManagerHandleEntry] = [:]
 
     private let entitlementStreamHandler = EntitlementStreamHandler()
     private let checkoutStreamHandler = CheckoutStreamHandler()
@@ -42,6 +76,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         let channel = FlutterMethodChannel(name: "zerosettle", binaryMessenger: registrar.messenger())
         let instance = ZeroSettlePlugin()
         instance.methodChannel = channel
+        instance.messenger = registrar.messenger()
 
         registrar.addMethodCallDelegate(instance, channel: channel)
         registrar.addApplicationDelegate(instance)
@@ -780,6 +815,23 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         case "getApplePayState":
             result(ZeroSettle.shared.applePayAvailability.state.rawString)
 
+        // -- Migration Manager (Headless) --
+
+        case "resolveMigrationManagerHandle":
+            let stripeCustomerId = args?["stripeCustomerId"] as? String
+            Task { @MainActor in
+                do {
+                    let manager = try ZeroSettle.shared.migrationManager(
+                        stripeCustomerId: stripeCustomerId
+                    )
+                    let handleId = UUID().uuidString
+                    self.installMigrationHandle(handleId: handleId, manager: manager)
+                    result(handleId)
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
         // -- Upgrade Offer --
 
         case "presentUpgradeOffer":
@@ -830,6 +882,46 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         default:
             result(FlutterMethodNotImplemented)
         }
+    }
+
+    // MARK: - Migration Manager Bridge
+
+    /// Builds the per-handle MethodChannel + EventChannels for a freshly
+    /// resolved `ZSMigrationManager` and stores the entry in
+    /// `migrationHandles`. Method dispatch and stream handlers are wired in
+    /// follow-up tasks (5–7) — at this point we just create the channels
+    /// and the entry so the registry skeleton is testable.
+    @MainActor
+    private func installMigrationHandle(
+        handleId: String,
+        manager: ZSMigrationManager
+    ) {
+        guard let messenger = self.messenger else { return }
+        let methodChannel = FlutterMethodChannel(
+            name: "zerosettle/migration_manager_\(handleId)",
+            binaryMessenger: messenger
+        )
+        let stateChannel = FlutterEventChannel(
+            name: "zerosettle/migration_manager_\(handleId)_state",
+            binaryMessenger: messenger
+        )
+        let failuresChannel = FlutterEventChannel(
+            name: "zerosettle/migration_manager_\(handleId)_failures",
+            binaryMessenger: messenger
+        )
+        let entry = MigrationManagerHandleEntry(
+            manager: manager,
+            methodChannel: methodChannel,
+            stateChannel: stateChannel,
+            failuresChannel: failuresChannel
+        )
+        migrationHandles[handleId] = entry
+
+        // Method dispatch and stream handlers are wired in subsequent tasks.
+        // Tasks 5 (state stream), 6 (imperative methods + dispose), 7
+        // (failures stream) fill these in. For now the channels exist but
+        // no handlers are attached, so any call will return
+        // `FlutterMethodNotImplemented` / no events.
     }
 
     // MARK: - Root View Controller
