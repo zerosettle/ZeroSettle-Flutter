@@ -337,17 +337,20 @@ class ZeroSettle {
   // -- Subscription Management --
 
   /// Open the Stripe customer portal for subscription management.
-  ///
-  /// **Deprecated:** Use [showManageSubscription] instead — it auto-routes
-  /// between Stripe and the native store's management UI based on entitlement
-  /// sources.
-  @Deprecated('Use showManageSubscription() instead — it auto-routes between Stripe and native store management based on entitlement sources.')
+  /// **Removed in ZeroSettleKit 1.x.** The Dart facade is kept for source
+  /// compatibility but the iOS bridge throws `not_implemented`. Use
+  /// [presentCancelFlow] (or the headless [cancelSubscription]) for
+  /// subscription retention / cancellation flows. Removed in zerosettle 2.0.
+  @Deprecated('Removed in ZeroSettleKit 1.x. Use presentCancelFlow() (or headless cancelSubscription()). Removed in zerosettle 2.0.')
   Future<void> openCustomerPortal({required String userId}) {
     return _wrap(() => _platform.openCustomerPortal(userId: userId));
   }
 
-  /// Smart subscription management -- routes to Stripe portal or Apple's
-  /// native management UI based on entitlement sources.
+  /// **Removed in ZeroSettleKit 1.x.** The Dart facade is kept for source
+  /// compatibility but the iOS bridge throws `not_implemented`. Use
+  /// [presentCancelFlow] (or the headless [cancelSubscription]) for
+  /// subscription retention / cancellation flows. Removed in zerosettle 2.0.
+  @Deprecated('Removed in ZeroSettleKit 1.x. Use presentCancelFlow() (or headless cancelSubscription()). Removed in zerosettle 2.0.')
   Future<void> showManageSubscription({required String userId}) {
     return _wrap(() => _platform.showManageSubscription(userId: userId));
   }
