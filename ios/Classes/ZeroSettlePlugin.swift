@@ -931,7 +931,10 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // @Published properties on every change.
         stateChannel.setStreamHandler(MigrationStateStreamHandler(entry: entry))
 
-        // Failures stream wired in task 7.
+        // Failures stream — wires `ZSMigrationManager.onCheckoutFailure`
+        // (single-slot closure) onto a Flutter EventChannel so adopters
+        // receive checkout failures as a Stream<CheckoutFailure>.
+        failuresChannel.setStreamHandler(MigrationFailuresStreamHandler(entry: entry))
     }
 
     @MainActor
@@ -1686,6 +1689,76 @@ private extension MigrationOffer.OfferData {
             map["activeStoreKitOriginalTransactionId"] = otid
         }
         return map
+    }
+}
+
+/// Bridges `ZSMigrationManager.onCheckoutFailure` (single-slot closure) onto
+/// a Flutter EventChannel. Per-handle scope means there's at most one
+/// Flutter listener per manager instance, so overwriting the closure is
+/// safe — adopters who configured one in Swift would not also be using the
+/// Flutter bridge.
+private final class MigrationFailuresStreamHandler: NSObject, FlutterStreamHandler {
+    private weak var entry: MigrationManagerHandleEntry?
+
+    init(entry: MigrationManagerHandleEntry) {
+        self.entry = entry
+    }
+
+    func onListen(
+        withArguments arguments: Any?,
+        eventSink events: @escaping FlutterEventSink
+    ) -> FlutterError? {
+        guard let entry else { return nil }
+        entry.failuresSink = events
+
+        // Hop to MainActor — `ZSMigrationManager` is @MainActor and so is
+        // its `onCheckoutFailure` property.
+        Task { @MainActor in
+            entry.manager.onCheckoutFailure = { [weak entry] failure in
+                guard let entry else { return }
+                Task { @MainActor in
+                    entry.failuresSink?(failure.toFlutterMap())
+                }
+            }
+        }
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        entry?.failuresSink = nil
+        // Don't clear the closure on cancel — listener might re-subscribe.
+        return nil
+    }
+}
+
+/// `CheckoutFailure` is a Swift enum with associated values — flatten to a
+/// shape Dart can deserialize: `{ kind, message, statusCode?, url? }`.
+private extension CheckoutFailure {
+    func toFlutterMap() -> [String: Any] {
+        switch self {
+        case .networkUnreachable(let err):
+            return [
+                "kind": "networkUnreachable",
+                "message": err.localizedDescription,
+            ]
+        case .loadFailed(let err):
+            return [
+                "kind": "loadFailed",
+                "message": err.localizedDescription,
+            ]
+        case .serverError(let statusCode, let url):
+            return [
+                "kind": "serverError",
+                "message": "Server error \(statusCode) at \(url.absoluteString)",
+                "statusCode": statusCode,
+                "url": url.absoluteString,
+            ]
+        case .unknown(let err):
+            return [
+                "kind": "unknown",
+                "message": err.localizedDescription,
+            ]
+        }
     }
 }
 
