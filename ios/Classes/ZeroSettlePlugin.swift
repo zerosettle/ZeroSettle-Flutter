@@ -30,6 +30,31 @@ private final class MigrationManagerHandleEntry: NSObject {
     }
 }
 
+/// Holds the per-handle Combine subscriptions and method-channel + event-
+/// channel handlers that bridge a single `ZSOfferManager` instance to
+/// Flutter. Released when Dart calls `disposeHandle`.
+///
+/// Unlike `MigrationManagerHandleEntry`, there is no failures channel —
+/// `ZSOfferManager` has no `onCheckoutFailure` closure callback. Errors
+/// surface via the state stream's `checkoutErrorMessage` field.
+private final class OfferManagerHandleEntry: NSObject {
+    let manager: ZSOfferManager
+    let methodChannel: FlutterMethodChannel
+    let stateChannel: FlutterEventChannel
+    var stateSink: FlutterEventSink?
+    var cancellables: Set<AnyCancellable> = []
+
+    init(
+        manager: ZSOfferManager,
+        methodChannel: FlutterMethodChannel,
+        stateChannel: FlutterEventChannel
+    ) {
+        self.manager = manager
+        self.methodChannel = methodChannel
+        self.stateChannel = stateChannel
+    }
+}
+
 public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate {
 
     private var methodChannel: FlutterMethodChannel?
@@ -46,6 +71,10 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     /// (handleId → entry). One entry per Dart `MigrationManager` lifetime.
     /// Cleared on `disposeHandle` from Dart.
     private var migrationHandles: [String: MigrationManagerHandleEntry] = [:]
+
+    /// (handleId → entry). One entry per Dart `OfferManager` lifetime.
+    /// Cleared on `disposeHandle` from Dart.
+    private var offerHandles: [String: OfferManagerHandleEntry] = [:]
 
     private let entitlementStreamHandler = EntitlementStreamHandler()
     private let checkoutStreamHandler = CheckoutStreamHandler()
@@ -868,6 +897,23 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 }
             }
 
+        // -- Offer Manager (Headless) --
+
+        case "resolveOfferManagerHandle":
+            let stripeCustomerId = args?["stripeCustomerId"] as? String
+            Task { @MainActor in
+                do {
+                    let manager = try ZeroSettle.shared.offerManager(
+                        stripeCustomerId: stripeCustomerId
+                    )
+                    let handleId = UUID().uuidString
+                    self.installOfferHandle(handleId: handleId, manager: manager)
+                    result(handleId)
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
         // -- Upgrade Offer --
 
         case "presentUpgradeOffer":
@@ -1035,6 +1081,44 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         default:
             result(FlutterMethodNotImplemented)
         }
+    }
+
+    // MARK: - Offer Manager Bridge
+
+    /// Builds the per-handle MethodChannel + EventChannel for a freshly
+    /// resolved `ZSOfferManager` and stores the entry in `offerHandles`.
+    /// Method dispatch and the state stream handler are wired in
+    /// follow-up tasks (14–15) — at this point we just create the
+    /// channels and the entry so the registry skeleton is testable.
+    ///
+    /// Unlike the migration variant, there's no failures channel —
+    /// `ZSOfferManager` has no `onCheckoutFailure` closure callback.
+    @MainActor
+    private func installOfferHandle(
+        handleId: String,
+        manager: ZSOfferManager
+    ) {
+        guard let messenger = self.messenger else { return }
+        let methodChannel = FlutterMethodChannel(
+            name: "zerosettle/offer_manager_\(handleId)",
+            binaryMessenger: messenger
+        )
+        let stateChannel = FlutterEventChannel(
+            name: "zerosettle/offer_manager_\(handleId)_state",
+            binaryMessenger: messenger
+        )
+        let entry = OfferManagerHandleEntry(
+            manager: manager,
+            methodChannel: methodChannel,
+            stateChannel: stateChannel
+        )
+        offerHandles[handleId] = entry
+
+        // Method dispatch and the state stream handler are wired in
+        // subsequent tasks. Task 14 (state stream) and Task 15 (imperative
+        // methods + dispose) fill these in. For now the channels exist
+        // but no handlers are attached, so any call will return
+        // `FlutterMethodNotImplemented` / no events.
     }
 
     // MARK: - Root View Controller
