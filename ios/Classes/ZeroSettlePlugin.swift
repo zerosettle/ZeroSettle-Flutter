@@ -222,6 +222,40 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterMethodNotImplemented)
             }
         }
+
+        // Static dismissed-state helpers for ZSOfferManager. Same shape as
+        // the migration variant — UserDefaults-backed, scoped per-userId.
+        let offerStaticChannel = FlutterMethodChannel(
+            name: "zerosettle/offer_manager_static",
+            binaryMessenger: registrar.messenger()
+        )
+        offerStaticChannel.setMethodCallHandler { call, result in
+            let args = call.arguments as? [String: Any]
+            switch call.method {
+            case "isPermanentlyDismissed":
+                guard let userId = args?["userId"] as? String else {
+                    result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId required", details: nil))
+                    return
+                }
+                result(ZSOfferManager.isPermanentlyDismissed(forUserId: userId))
+
+            case "setDismissed":
+                guard let userId = args?["userId"] as? String,
+                      let dismissed = args?["dismissed"] as? Bool else {
+                    result(FlutterError(code: "INVALID_ARGUMENTS", message: "userId + dismissed required", details: nil))
+                    return
+                }
+                ZSOfferManager.setDismissed(dismissed, forUserId: userId)
+                result(nil)
+
+            case "resetDismissedState":
+                ZSOfferManager.resetDismissedState()
+                result(nil)
+
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
     }
 
     // MARK: - Universal Link Handling
