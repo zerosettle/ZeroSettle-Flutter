@@ -5,14 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zerosettle/zerosettle.dart';
 
 void main() {
-  group('ZSMigrateTipView', () {
+  group('MigrationTipView', () {
     testWidgets('renders UiKitView on iOS', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ZSMigrateTipView(
+            body: MigrationTipView(
               userId: 'test_user',
               backgroundColor: Colors.black,
             ),
@@ -33,7 +33,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ZSMigrateTipView(
+            body: MigrationTipView(
               userId: 'test_user',
               backgroundColor: Colors.black,
             ),
@@ -58,7 +58,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ZSMigrateTipView(
+            body: MigrationTipView(
               userId: testUserId,
               backgroundColor: testColor,
             ),
@@ -74,7 +74,7 @@ void main() {
       // Verify creation params
       expect(uiKitView.creationParams, isA<Map<String, dynamic>>());
       final params = uiKitView.creationParams as Map<String, dynamic>;
-      expect(params['backgroundColor'], testColor.value);
+      expect(params['backgroundColor'], testColor.toARGB32());
       expect(params['userId'], testUserId);
 
       // Verify codec
@@ -89,7 +89,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ZSMigrateTipView(
+            body: MigrationTipView(
               userId: 'test',
               backgroundColor: Colors.blue,
             ),
@@ -114,12 +114,12 @@ void main() {
 
       for (final color in colors) {
         // The value should match exactly what Flutter uses internally
-        expect(color.value, isA<int>());
+        expect(color.toARGB32(), isA<int>());
         // ARGB format: 0xAARRGGBB
-        final a = (color.value >> 24) & 0xFF;
-        final r = (color.value >> 16) & 0xFF;
-        final g = (color.value >> 8) & 0xFF;
-        final b = color.value & 0xFF;
+        final a = (color.toARGB32() >> 24) & 0xFF;
+        final r = (color.toARGB32() >> 16) & 0xFF;
+        final g = (color.toARGB32() >> 8) & 0xFF;
+        final b = color.toARGB32() & 0xFF;
         expect(a, greaterThanOrEqualTo(0));
         expect(r, greaterThanOrEqualTo(0));
         expect(g, greaterThanOrEqualTo(0));

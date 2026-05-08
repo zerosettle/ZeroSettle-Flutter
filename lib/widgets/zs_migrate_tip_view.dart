@@ -83,7 +83,7 @@ class _MigrationTipViewState extends State<MigrationTipView> {
       child: UiKitView(
         viewType: 'zerosettle/migrate_tip_view',
         creationParams: {
-          'backgroundColor': widget.backgroundColor.value,
+          'backgroundColor': widget.backgroundColor.toARGB32(),
           'userId': widget.userId,
         },
         creationParamsCodec: const StandardMessageCodec(),

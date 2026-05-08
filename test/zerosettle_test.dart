@@ -1,3 +1,8 @@
+// This file exercises both the 1.3.x facade AND the deprecated `userId:` /
+// `bootstrap()` paths to verify backward-compat. Suppress the deprecation
+// warnings here — the noise would obscure real signal.
+// ignore_for_file: deprecated_member_use_from_same_package
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zerosettle/zerosettle.dart';
 import 'package:zerosettle/zerosettle_platform_interface.dart';
@@ -836,25 +841,21 @@ void main() {
     // ==== 1.3.0: Deprecated userId-taking forms still compile + route ====
 
     test('deprecated bootstrap(userId) still routes to platform', () async {
-      // ignore: deprecated_member_use_from_same_package
       final catalog = await ZeroSettle.instance.bootstrap(userId: 'user_42');
       expect(catalog, isA<ProductCatalog>());
     });
 
     test('deprecated restoreEntitlements(userId) still routes to platform', () async {
-      // ignore: deprecated_member_use_from_same_package
       final result = await ZeroSettle.instance.restoreEntitlements(userId: 'user_42');
       expect(result, isA<List<Entitlement>>());
     });
 
     test('deprecated fetchTransactionHistory(userId) still routes to platform', () async {
-      // ignore: deprecated_member_use_from_same_package
       final result = await ZeroSettle.instance.fetchTransactionHistory(userId: 'user_42');
       expect(result, isA<List<CheckoutTransaction>>());
     });
 
     test('deprecated trackMigrationConversion(userId) still routes to platform', () async {
-      // ignore: deprecated_member_use_from_same_package
       await expectLater(
         ZeroSettle.instance.trackMigrationConversion(userId: 'user_42'),
         completes,

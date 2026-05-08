@@ -404,8 +404,8 @@ class ZeroSettle {
     return _wrap(() => _platform.getCurrentUserId());
   }
 
-  /// Whether [identify] (or the deprecated [bootstrap]) has completed and
-  /// entitlements have been fetched.
+  /// Whether [identify] (or the deprecated bootstrap path) has completed
+  /// and entitlements have been fetched.
   ///
   /// Adopters can poll this to know when the SDK is ready for purchase /
   /// entitlement-gated features after a fresh app launch.
