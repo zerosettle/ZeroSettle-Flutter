@@ -1114,11 +1114,13 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         )
         offerHandles[handleId] = entry
 
-        // Method dispatch and the state stream handler are wired in
-        // subsequent tasks. Task 14 (state stream) and Task 15 (imperative
-        // methods + dispose) fill these in. For now the channels exist
-        // but no handlers are attached, so any call will return
-        // `FlutterMethodNotImplemented` / no events.
+        // State stream — pushes a coherent snapshot of all five
+        // @Published properties on every change.
+        stateChannel.setStreamHandler(OfferStateStreamHandler(entry: entry))
+
+        // Method dispatch is wired in Task 15. For now the method channel
+        // exists but no handler is attached, so imperative calls return
+        // `FlutterMethodNotImplemented`.
     }
 
     // MARK: - Root View Controller
@@ -1807,6 +1809,196 @@ private extension MigrationOffer.OfferData {
         }
         if let otid = activeStoreKitOriginalTransactionId {
             map["activeStoreKitOriginalTransactionId"] = otid
+        }
+        return map
+    }
+}
+
+// MARK: - Offer Manager Stream Handler
+
+/// Bridges `ZSOfferManager`'s 5 `@Published` properties onto a Flutter
+/// EventChannel. Same manual-sink pattern as `MigrationStateStreamHandler`
+/// — when any single property changes we re-read the manager's full state
+/// and push a coherent snapshot.
+private final class OfferStateStreamHandler: NSObject, FlutterStreamHandler {
+    private weak var entry: OfferManagerHandleEntry?
+
+    init(entry: OfferManagerHandleEntry) {
+        self.entry = entry
+    }
+
+    func onListen(
+        withArguments arguments: Any?,
+        eventSink events: @escaping FlutterEventSink
+    ) -> FlutterError? {
+        guard let entry else { return nil }
+        entry.stateSink = events
+
+        // ZSOfferManager is @MainActor — touching its `@Published` backing
+        // publishers (`$state`, etc.) and reading its properties must
+        // happen on the main actor. `onListen` itself is nonisolated, so
+        // we hop over before subscribing.
+        Task { @MainActor in
+            // Emit the current snapshot immediately so late subscribers
+            // don't have to wait for the next mutation.
+            events(entry.manager.toFlutterStateMap())
+
+            // Subscribe to each of the 5 published properties. On any
+            // change we re-read the manager's current state and push the
+            // merged map. This sidesteps Combine's 4-arity ceiling and
+            // keeps the read on the main actor (which the manager
+            // requires).
+            let emit: () -> Void = { [weak entry] in
+                guard let entry else { return }
+                Task { @MainActor in
+                    entry.stateSink?(entry.manager.toFlutterStateMap())
+                }
+            }
+            let manager = entry.manager
+            manager.$state
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+            manager.$offerData
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+            manager.$checkoutError
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+            manager.$isLoading
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+            manager.$storekitCancelRequired
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { _ in emit() }
+                .store(in: &entry.cancellables)
+        }
+
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        entry?.stateSink = nil
+        return nil
+    }
+}
+
+// MARK: - Offer Manager Flutter Map Extensions
+
+private extension ZSOfferManager {
+    func toFlutterStateMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "state": state.rawString,
+            "isLoading": isLoading,
+            "storekitCancelRequired": storekitCancelRequired,
+        ]
+        if let offerData = offerData {
+            map["offerData"] = offerData.toFlutterMap()
+        }
+        if let err = checkoutError {
+            map["checkoutErrorMessage"] = err.localizedDescription
+        }
+        return map
+    }
+}
+
+private extension Offer.State {
+    var rawString: String {
+        switch self {
+        case .loading:    return "loading"
+        case .ineligible: return "ineligible"
+        case .eligible:   return "eligible"
+        case .presented:  return "presented"
+        case .accepted:   return "accepted"
+        case .completed:  return "completed"
+        case .dismissed:  return "dismissed"
+        }
+    }
+}
+
+private extension Offer.FlowType {
+    var rawString: String { rawValue }
+}
+
+private extension Offer.UpgradeType {
+    var rawString: String { rawValue }
+}
+
+private extension Offer.CheckoutPresentation {
+    var rawString: String { rawValue }
+}
+
+private extension Offer.Display {
+    func toFlutterMap() -> [String: Any] {
+        return [
+            "offerTitle": offerTitle,
+            "offerMessage": offerMessage,
+            "offerCta": offerCta,
+            "acceptedTitle": acceptedTitle,
+            "acceptedMessage": acceptedMessage,
+            "acceptedCta": acceptedCta,
+            "completedTitle": completedTitle,
+            "completedMessage": completedMessage,
+        ]
+    }
+}
+
+private extension Offer.PerProductOffer {
+    func toFlutterMap() -> [String: Any] {
+        return [
+            "productId": productId,
+            "savingsPercent": savingsPercent,
+            "display": display.toFlutterMap(),
+        ]
+    }
+}
+
+private extension Offer.OfferData {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "flowType": flowType.rawString,
+            "productId": productId,
+            "eligibleProductIds": eligibleProductIds,
+            "savingsPercent": savingsPercent,
+            "display": display.toFlutterMap(),
+            "freeTrialDays": freeTrialDays,
+            "minSubscriptionDays": minSubscriptionDays,
+        ]
+        if let maxSub = maxSubscriptionDays {
+            map["maxSubscriptionDays"] = maxSub
+        }
+        if let rollout = rolloutPercent {
+            map["rolloutPercent"] = rollout
+        }
+        if let upgradeType {
+            map["upgradeType"] = upgradeType.rawString
+        }
+        if let fromProductId {
+            map["fromProductId"] = fromProductId
+        }
+        if let toProductId {
+            map["toProductId"] = toProductId
+        }
+        if let variantId {
+            map["variantId"] = variantId
+        }
+        if let perProductPrompts {
+            var dict: [String: [String: Any]] = [:]
+            for (key, value) in perProductPrompts {
+                dict[key] = value.toFlutterMap()
+            }
+            map["perProductPrompts"] = dict
+        }
+        if let checkoutPresentation {
+            map["checkoutPresentation"] = checkoutPresentation.rawString
         }
         return map
     }
