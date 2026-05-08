@@ -14,6 +14,7 @@ import 'models/upgrade_offer.dart';
 import 'models/identity.dart';
 import 'models/pending_claim.dart';
 import 'managers/migration_manager.dart';
+import 'managers/offer_manager.dart';
 
 export 'models/price.dart';
 export 'models/enums.dart';
@@ -785,6 +786,28 @@ class ZeroSettle {
         stripeCustomerId: stripeCustomerId,
       );
       return MigrationManager.fromHandleId(id);
+    });
+  }
+
+  // -- Offer Manager (Headless) --
+
+  /// Returns an [OfferManager] handle bound to the currently-identified
+  /// user and the optional [stripeCustomerId]. The iOS-side manager is
+  /// cached; calling this twice returns handles wired to the same
+  /// underlying state.
+  ///
+  /// `OfferManager` covers both migration (StoreKit → web) and upgrade
+  /// (storekit_to_web, web_to_web) flows — the server picks which one
+  /// to render via the `offer` field on the products response.
+  ///
+  /// Call [OfferManager.dispose] when your widget tears down to release
+  /// the per-handle channel subscriptions.
+  Future<OfferManager> offerManager({String? stripeCustomerId}) {
+    return _wrap(() async {
+      final id = await _platform.resolveOfferManagerHandle(
+        stripeCustomerId: stripeCustomerId,
+      );
+      return OfferManager.fromHandleId(id);
     });
   }
 

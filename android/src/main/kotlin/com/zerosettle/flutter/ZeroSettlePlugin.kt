@@ -588,6 +588,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware, ZeroSe
             "resolveMigrationManagerHandle" -> {
                 result.notImplemented()
             }
+            "resolveOfferManagerHandle" -> {
+                result.notImplemented()
+            }
 
             else -> result.notImplemented()
         }

@@ -544,6 +544,19 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     return result!;
   }
 
+  // -- Offer Manager (Headless) --
+
+  @override
+  Future<String> resolveOfferManagerHandle({String? stripeCustomerId}) async {
+    final result = await methodChannel.invokeMethod<String>(
+      'resolveOfferManagerHandle',
+      {
+        if (stripeCustomerId != null) 'stripeCustomerId': stripeCustomerId,
+      },
+    );
+    return result!;
+  }
+
   // -- Apple Pay (1.3.2) --
 
   @override

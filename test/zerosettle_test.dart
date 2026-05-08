@@ -467,6 +467,20 @@ class MockZeroSettlePlatform
     });
     return migrationManagerHandleReturn;
   }
+
+  // ---- Headless Offer Manager ----
+
+  String offerManagerHandleReturn = 'offer_handle_test_42';
+  String? lastOfferManagerStripeCustomerId;
+
+  @override
+  Future<String> resolveOfferManagerHandle({String? stripeCustomerId}) async {
+    lastOfferManagerStripeCustomerId = stripeCustomerId;
+    _record('resolveOfferManagerHandle', {
+      if (stripeCustomerId != null) 'stripeCustomerId': stripeCustomerId,
+    });
+    return offerManagerHandleReturn;
+  }
 }
 
 // -- Sample Data Helpers --
