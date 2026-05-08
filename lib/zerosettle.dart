@@ -30,6 +30,8 @@ export 'models/funnel_event.dart';
 export 'models/identity.dart';
 export 'models/pending_claim.dart';
 export 'models/migration_offer.dart';
+export 'models/checkout_failure.dart';
+export 'managers/migration_manager.dart' show MigrationManager;
 
 /// Main entry point for the ZeroSettle Flutter SDK.
 ///
