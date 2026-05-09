@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:zerosettle/zerosettle.dart';
 
 /// Adopter-style custom migration offer card. Subscribes to a
@@ -103,16 +104,39 @@ class _MigrationOfferCardState extends State<MigrationOfferCard> {
   Future<void> _accept() async {
     setState(() => _accepting = true);
     try {
+      // 1. Get the migration-discounted Stripe checkout URL from the SDK.
+      //    The manager state machine transitions through .presented internally.
       final url = await widget.manager.startCheckout();
-      if (url == null && mounted) {
+      if (url == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not start checkout. Try again later.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      // 2. Adopter responsibility in the headless flow: present the URL.
+      //    We use url_launcher's in-app browser view (SFSafariViewController
+      //    on iOS, Custom Tab on Android) so the user can return to the app
+      //    via a universal-link callback after Stripe completes.
+      final ok = await launchUrl(
+        url,
+        mode: LaunchMode.inAppBrowserView,
+      );
+      if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not start checkout. Try again later.'),
+            content: Text('Could not open checkout in browser.'),
           ),
         );
       }
-      // Real checkout would happen via in-app browser / payment sheet here;
-      // SDK's startCheckout already handles presentation in iOS Kit.
+      // 3. The SDK's universal-link handler picks up the callback when the
+      //    user returns from Stripe; the manager auto-transitions to
+      //    .accepted via the Combine bridge → stateUpdates stream → this
+      //    widget rebuilds. No manual markCheckoutSucceeded needed here.
     } finally {
       if (mounted) setState(() => _accepting = false);
     }
