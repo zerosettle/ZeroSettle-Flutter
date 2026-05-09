@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:zerosettle/zerosettle.dart';
 
 /// Adopter-style custom migration offer card. Subscribes to a
@@ -102,41 +101,42 @@ class _MigrationOfferCardState extends State<MigrationOfferCard> {
   }
 
   Future<void> _accept() async {
+    final s = _state;
+    final offerData = s?.offerData;
+    if (offerData == null) return;
+
     setState(() => _accepting = true);
     try {
-      // 1. Get the migration-discounted Stripe checkout URL from the SDK.
-      //    The manager state machine transitions through .presented internally.
-      final url = await widget.manager.startCheckout();
-      if (url == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not start checkout. Try again later.'),
-            ),
-          );
-        }
-        return;
-      }
+      // 1. Transition the manager state machine to .presented. This also
+      //    arms the SDK so the next CheckoutSheet creates a
+      //    migration-discounted PaymentIntent.
+      await widget.manager.present();
 
-      // 2. Adopter responsibility in the headless flow: present the URL.
-      //    We use url_launcher's in-app browser view (SFSafariViewController
-      //    on iOS, Custom Tab on Android) so the user can return to the app
-      //    via a universal-link callback after Stripe completes.
-      final ok = await launchUrl(
-        url,
-        mode: LaunchMode.inAppBrowserView,
+      // 2. Drive the SDK's existing CheckoutSheet — same machinery JustOne's
+      //    `.checkoutSheet(item:)` SwiftUI modifier uses. This respects the
+      //    dashboard's `CheckoutType` setting (webview / safariVC / safari)
+      //    via RemoteConfig, so adopters get the in-app WebView, system
+      //    SFSafariViewController, or external Safari per their tenant
+      //    configuration. We do NOT use `manager.startCheckout()` —
+      //    that's only the URL-only escape hatch for adopters who need raw
+      //    transport control.
+      final txn = await ZeroSettle.instance.presentPaymentSheet(
+        productId: offerData.prompt.productId,
       );
-      if (!ok && mounted) {
+
+      // 3. Tell the manager the checkout completed. State transitions to
+      //    .accepted; the rebuild via `stateUpdates` flips the card into
+      //    its accepted-confirmation copy.
+      await widget.manager.markCheckoutSucceeded(transactionId: txn.id);
+    } on ZSCancelledException {
+      // User dismissed checkout — state stays .presented; retry is possible
+      // by tapping the CTA again. No snackbar; cancellation isn't an error.
+    } on ZeroSettleException catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open checkout in browser.'),
-          ),
+          SnackBar(content: Text('Checkout failed: ${e.message}')),
         );
       }
-      // 3. The SDK's universal-link handler picks up the callback when the
-      //    user returns from Stripe; the manager auto-transitions to
-      //    .accepted via the Combine bridge → stateUpdates stream → this
-      //    widget rebuilds. No manual markCheckoutSucceeded needed here.
     } finally {
       if (mounted) setState(() => _accepting = false);
     }
