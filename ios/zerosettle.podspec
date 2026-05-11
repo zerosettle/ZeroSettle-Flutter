@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'ZeroSettle, Inc.' => 'support@zerosettle.io' }
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files     = 'zerosettle/Sources/zerosettle/**/*.swift'
   s.dependency 'Flutter'
   s.dependency 'ZeroSettleKit', '~> 1.3.5'
   s.platform         = :ios, '18.0'
