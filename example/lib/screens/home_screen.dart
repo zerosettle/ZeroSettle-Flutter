@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 import '../app_state.dart';
 import '../widgets/gem_balance_card.dart';
-import '../widgets/migration_offer_card.dart';
+import '../widgets/offer_card.dart';
 import '../widgets/sign_in_banner.dart';
 import '../widgets/subscription_status_card.dart';
 import '../widgets/stat_card.dart';
@@ -11,14 +11,14 @@ class HomeScreen extends StatelessWidget {
   final AppState appState;
   final VoidCallback onNavigateToStore;
   final VoidCallback onSignIn;
-  final MigrationManager? migrationManager;
+  final OfferManager? offerManager;
 
   const HomeScreen({
     super.key,
     required this.appState,
     required this.onNavigateToStore,
     required this.onSignIn,
-    required this.migrationManager,
+    required this.offerManager,
   });
 
   @override
@@ -62,11 +62,13 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // Headless migration offer demo — custom Dart UI driven by
-                    // MigrationManager.stateUpdates. Drop-in alternative is
-                    // MigrationTipView (still available in lib/widgets/).
-                    if (migrationManager != null)
-                      MigrationOfferCard(manager: migrationManager!)
+                    // Headless offer demo — custom Dart UI driven by
+                    // OfferManager.stateUpdates. Covers both migration
+                    // (StoreKit → web) and upgrade flows. The 1-call
+                    // canonical path lives in OfferCard._accept().
+                    // Drop-in alternative: MigrationTipView (lib/widgets/).
+                    if (offerManager != null)
+                      OfferCard(manager: offerManager!)
                     else
                       const SizedBox.shrink(),
                     const SizedBox(height: 16),

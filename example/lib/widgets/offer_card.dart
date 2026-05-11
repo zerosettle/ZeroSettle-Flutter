@@ -3,22 +3,28 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
-/// Adopter-style custom migration offer card. Subscribes to a
-/// [MigrationManager.stateUpdates] stream and renders a Material 3 card
-/// when the state is `eligible` / `presented`. Demonstrates the headless
-/// path; the drop-in `MigrationTipView` widget is the alternative.
-class MigrationOfferCard extends StatefulWidget {
-  final MigrationManager manager;
+/// Adopter-style headless offer card. Subscribes to an
+/// [OfferManager.stateUpdates] stream and renders a Material 3 card when
+/// state is `eligible` or `presented`. Demonstrates the canonical 1-call
+/// checkout: `ZeroSettle.instance.presentPaymentSheet(...)` handles the
+/// offer state machine automatically — no manual `present()` or
+/// `markCheckoutSucceeded()` required.
+///
+/// Works for both migration (StoreKit → web) and upgrade
+/// (storekit_to_web, web_to_web) flows — the server picks which to render.
+/// The drop-in alternative is the SwiftUI-backed `MigrationTipView`.
+class OfferCard extends StatefulWidget {
+  final OfferManager manager;
 
-  const MigrationOfferCard({super.key, required this.manager});
+  const OfferCard({super.key, required this.manager});
 
   @override
-  State<MigrationOfferCard> createState() => _MigrationOfferCardState();
+  State<OfferCard> createState() => _OfferCardState();
 }
 
-class _MigrationOfferCardState extends State<MigrationOfferCard> {
-  StreamSubscription<MigrationManagerState>? _stateSub;
-  MigrationManagerState? _state;
+class _OfferCardState extends State<OfferCard> {
+  StreamSubscription<OfferManagerState>? _stateSub;
+  OfferManagerState? _state;
   bool _accepting = false;
 
   @override
@@ -39,15 +45,15 @@ class _MigrationOfferCardState extends State<MigrationOfferCard> {
   Widget build(BuildContext context) {
     final s = _state;
     if (s == null ||
-        s.state == MigrationOfferState.loading ||
-        s.state == MigrationOfferState.ineligible ||
-        s.state == MigrationOfferState.dismissed ||
-        s.state == MigrationOfferState.completed ||
+        s.state == OfferState.loading ||
+        s.state == OfferState.ineligible ||
+        s.state == OfferState.dismissed ||
+        s.state == OfferState.completed ||
         s.offerData == null) {
       return const SizedBox.shrink();
     }
     final cs = Theme.of(context).colorScheme;
-    final prompt = s.offerData!.prompt;
+    final display = s.offerData!.display;
     return Card(
       color: cs.primaryContainer,
       child: Padding(
@@ -61,7 +67,7 @@ class _MigrationOfferCardState extends State<MigrationOfferCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    prompt.title,
+                    display.offerTitle,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: cs.onPrimaryContainer,
                           fontWeight: FontWeight.w600,
@@ -78,7 +84,7 @@ class _MigrationOfferCardState extends State<MigrationOfferCard> {
             ),
             const SizedBox(height: 4),
             Text(
-              prompt.message,
+              display.offerMessage,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: cs.onPrimaryContainer,
                   ),
@@ -92,7 +98,7 @@ class _MigrationOfferCardState extends State<MigrationOfferCard> {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(prompt.ctaText),
+                  : Text(display.offerCta),
             ),
           ],
         ),
@@ -107,27 +113,14 @@ class _MigrationOfferCardState extends State<MigrationOfferCard> {
 
     setState(() => _accepting = true);
     try {
-      // 1. Transition the manager state machine to .presented. This also
-      //    arms the SDK so the next CheckoutSheet creates a
-      //    migration-discounted PaymentIntent.
-      await widget.manager.present();
-
-      // 2. Drive the SDK's existing CheckoutSheet — same machinery JustOne's
-      //    `.checkoutSheet(item:)` SwiftUI modifier uses. This respects the
-      //    dashboard's `CheckoutType` setting (webview / safariVC / safari)
-      //    via RemoteConfig, so adopters get the in-app WebView, system
-      //    SFSafariViewController, or external Safari per their tenant
-      //    configuration. We do NOT use `manager.startCheckout()` —
-      //    that's only the URL-only escape hatch for adopters who need raw
-      //    transport control.
-      final txn = await ZeroSettle.instance.presentPaymentSheet(
-        productId: offerData.prompt.productId,
+      // Single canonical call. The SDK detects this product as the active
+      // offer's checkoutProductId, runs the offer state machine through
+      // its transitions (`.presented` → `.accepted`/`.completed`), and
+      // surfaces them via the stateUpdates stream. No manual `present()`
+      // or `markCheckoutSucceeded()` needed.
+      await ZeroSettle.instance.presentPaymentSheet(
+        productId: offerData.checkoutProductId,
       );
-
-      // 3. Tell the manager the checkout completed. State transitions to
-      //    .accepted; the rebuild via `stateUpdates` flips the card into
-      //    its accepted-confirmation copy.
-      await widget.manager.markCheckoutSucceeded(transactionId: txn.id);
     } on ZSCancelledException {
       // User dismissed checkout — state stays .presented; retry is possible
       // by tapping the CTA again. No snackbar; cancellation isn't an error.
