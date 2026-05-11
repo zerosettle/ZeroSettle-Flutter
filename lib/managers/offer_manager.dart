@@ -10,11 +10,11 @@ import '../models/offer.dart';
 /// offer UI for both migration and upgrade flows.
 ///
 /// State changes from the iOS-side `@Published` properties are delivered
-/// via [stateUpdates]. Imperative methods ([present], [dismiss],
-/// [startCheckout], [preloadCheckout], etc.) drive the iOS Kit manager.
-/// Adopters should call [dispose] when the owning widget tears down to
-/// release the per-handle channel subscriptions — the iOS-side manager
-/// is cached per `(userId, stripeCustomerId)` and outlives the handle.
+/// via [stateUpdates]. Imperative methods ([dismiss], [startCheckout],
+/// [preloadCheckout], etc.) drive the iOS Kit manager. Adopters should
+/// call [dispose] when the owning widget tears down to release the
+/// per-handle channel subscriptions — the iOS-side manager is cached
+/// per `(userId, stripeCustomerId)` and outlives the handle.
 ///
 /// Unlike `MigrationManager`, `ZSOfferManager` has no
 /// `onCheckoutFailure` closure — checkout errors surface via
@@ -65,6 +65,7 @@ class OfferManager {
   }
 
   /// Transition the offer into the `presented` state.
+  @Deprecated('Bookkeeping is automatic when you call ZeroSettle.instance.presentPaymentSheet or ZeroSettle.instance.purchase. Will be removed in 2.0.')
   Future<void> present() async {
     _ensureNotDisposed();
     await _methodChannel.invokeMethod<void>('present');
@@ -76,10 +77,25 @@ class OfferManager {
     await _methodChannel.invokeMethod<void>('dismiss');
   }
 
-  /// Start the web checkout flow. Returns the checkout URL or null on
-  /// failure (or for `web_to_web` upgrades, which complete server-side
-  /// with no WebView). Errors are exposed via
-  /// [OfferManagerState.checkoutErrorMessage] on the state stream.
+  /// **Advanced — raw URL escape hatch.** For ordinary use, prefer
+  /// `ZeroSettle.instance.presentPaymentSheet(productId:)` or
+  /// `ZeroSettle.instance.purchase(productId:)`. Those handle offer
+  /// bookkeeping automatically — you don't need to call `present()` or
+  /// `markCheckoutSucceeded()` yourself.
+  ///
+  /// Use this method only when you need full control over presentation or
+  /// transport: a custom WebView with bespoke chrome, a third-party
+  /// browser SDK, or a context where there's no view hierarchy at all.
+  ///
+  /// When you go down this path, you are responsible for calling
+  /// `markCheckoutSucceeded(transactionId:)` after your out-of-band
+  /// checkout completes. The auto-bookkeeping path doesn't apply to URLs
+  /// you handle yourself.
+  ///
+  /// - [stripeCustomerId]: Optional existing Stripe customer ID for unified
+  ///   billing portal.
+  /// - Returns the checkout URL for WebView, or `null` for web-to-web upgrades
+  ///   (handled internally).
   Future<Uri?> startCheckout({String? stripeCustomerId}) async {
     _ensureNotDisposed();
     final result =
@@ -103,6 +119,7 @@ class OfferManager {
 
   /// Mark the checkout as succeeded; transitions state toward `accepted`
   /// (when [OfferOfferData.needsAppleCancel] is true) or `completed`.
+  @Deprecated('Bookkeeping is automatic when you call ZeroSettle.instance.presentPaymentSheet or ZeroSettle.instance.purchase. The body of this method is preserved through 1.x for adopters using `startCheckout` (raw URL escape hatch) who need to call it manually after their out-of-band checkout completes. Will be removed in 2.0.')
   Future<void> markCheckoutSucceeded({String? transactionId}) async {
     _ensureNotDisposed();
     await _methodChannel.invokeMethod<void>('markCheckoutSucceeded', {

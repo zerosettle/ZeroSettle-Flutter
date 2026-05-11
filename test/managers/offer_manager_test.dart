@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zerosettle/zerosettle.dart';
@@ -125,5 +127,54 @@ void main() {
       // ignore: deprecated_member_use_from_same_package
       throwsA(isA<ZSException>()),
     );
+  });
+
+  group('OfferManager method-level deprecations + startCheckout docstring', () {
+    final source = File('lib/managers/offer_manager.dart').readAsStringSync();
+
+    test('present() is annotated @Deprecated', () {
+      final presentIdx = source.indexOf('Future<void> present(');
+      expect(presentIdx, isPositive, reason: 'present() declaration not found');
+      final lines = source.substring(0, presentIdx).split('\n');
+      final precedingNonBlank = lines.reversed
+          .skipWhile((l) => l.trim().isEmpty)
+          .firstWhere((l) => true, orElse: () => '');
+      expect(precedingNonBlank.contains('@Deprecated('), isTrue,
+          reason: '@Deprecated must immediately precede present()');
+    });
+
+    test('markCheckoutSucceeded is annotated @Deprecated', () {
+      final markIdx = source.indexOf('Future<void> markCheckoutSucceeded(');
+      expect(markIdx, isPositive, reason: 'markCheckoutSucceeded() declaration not found');
+      final lines = source.substring(0, markIdx).split('\n');
+      final precedingNonBlank = lines.reversed
+          .skipWhile((l) => l.trim().isEmpty)
+          .firstWhere((l) => true, orElse: () => '');
+      expect(precedingNonBlank.contains('@Deprecated('), isTrue,
+          reason: '@Deprecated must immediately precede markCheckoutSucceeded()');
+    });
+
+    test('startCheckout is NOT annotated @Deprecated', () {
+      final startIdx = source.indexOf('Future<Uri?> startCheckout(');
+      expect(startIdx, isPositive, reason: 'startCheckout() declaration not found');
+      final lines = source.substring(0, startIdx).split('\n');
+      final precedingNonBlank = lines.reversed
+          .skipWhile((l) => l.trim().isEmpty)
+          .firstWhere((l) => true, orElse: () => '');
+      expect(precedingNonBlank.contains('@Deprecated('), isFalse,
+          reason: 'startCheckout must remain undeprecated — escape hatch.');
+    });
+
+    test('startCheckout docstring describes it as an escape hatch / advanced', () {
+      final startIdx = source.indexOf('Future<Uri?> startCheckout(');
+      final preceding = source.substring(
+        startIdx > 1500 ? startIdx - 1500 : 0,
+        startIdx,
+      );
+      final lower = preceding.toLowerCase();
+      expect(lower.contains('escape hatch') || lower.contains('advanced'),
+          isTrue,
+          reason: 'startCheckout docstring must mark it as advanced/escape hatch.');
+    });
   });
 }
