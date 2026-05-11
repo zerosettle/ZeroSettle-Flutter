@@ -1,3 +1,42 @@
+## 1.3.5
+
+Tracks ZeroSettleKit 1.3.5. Auto-bookkeeping for offer checkouts arrives transparently — `ZeroSettle.instance.presentPaymentSheet(productId:)` and `ZeroSettle.instance.purchase(productId:)` now run the offer state machine automatically when the productId matches the active offer's `checkoutProductId`.
+
+### What's new
+
+Adopters using `ZeroSettle.instance.presentPaymentSheet(...)` to accept a migration or upgrade offer no longer need to call `manager.present()` or `manager.markCheckoutSucceeded()`. The SDK detects active offer context and runs the state machine itself:
+
+- Pre-checkout: state advances `.eligible → .presented`.
+- Post-checkout success: state advances `.presented → .accepted` or `.presented → .completed` depending on `needsAppleCancel`. Migration conversion analytics fire automatically.
+- Failure / cancellation: state stays `.presented`. User retries via the same CTA.
+
+The `OfferManager.stateUpdates` stream surfaces every transition — reactive UI driven from this stream works identically before and after this release.
+
+### Adopter migration
+
+If your app calls `manager.present()` and `manager.markCheckoutSucceeded()` around `ZeroSettle.instance.presentPaymentSheet(...)`, delete both calls. The SDK now handles them. Compile-time deprecation warnings will guide you.
+
+If your app uses `manager.startCheckout()` for raw URL flows, no change — that path stays manual and supported.
+
+### Deprecations
+
+* **`OfferManager.present()`** — `@Deprecated`. Bookkeeping is automatic. Removed in 2.0.
+* **`OfferManager.markCheckoutSucceeded({transactionId})`** — `@Deprecated`. Bookkeeping is automatic. Body retained through 1.x for adopters using `startCheckout` (raw URL escape hatch).
+* **`MigrationManager` (entire class)** — class-level `@Deprecated`. Mirrors Kit's existing class-level deprecation on `ZSMigrationManager`. Use `OfferManager` instead via `ZeroSettle.instance.offerManager()` — strict superset that handles migration + StoreKit→web upgrade + web→web upgrade.
+
+### Not deprecated
+
+* **`OfferManager.startCheckout({stripeCustomerId})`** — remains the sanctioned path for adopters who need custom WebView/transport. Docstring rewritten to clarify scope.
+
+### Example app
+
+`MigrationOfferCard` renamed to `OfferCard`, switched to `OfferManager`, and updated to demonstrate the canonical 1-call `_accept()` flow. The example now has zero deprecation warnings.
+
+### Bumps
+
+* iOS pod dependency: `ZeroSettleKit ~> 1.3.5`.
+* Plugin tracks Kit's 1.3.x line in lockstep.
+
 ## 1.3.4
 
 Tracks ZeroSettleKit 1.3.4. Two adopter-visible changes plus a bridge cleanup.
