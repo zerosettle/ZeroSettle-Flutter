@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "zerosettle", targets: ["zerosettle"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/zerosettle/ZeroSettleKit.git", from: "1.3.5"),
+        .package(url: "https://github.com/zerosettle/ZeroSettleKit.git", from: "1.3.6"),
     ],
     targets: [
         .target(

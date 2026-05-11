@@ -1,6 +1,6 @@
 ## 1.4.0
 
-Tracks ZeroSettleKit 1.3.5. Two headline changes:
+Tracks ZeroSettleKit 1.3.6. Two headline changes plus a Kit-level bug fix:
 
 1. **Auto-bookkeeping for offer checkouts.** `ZeroSettle.instance.presentPaymentSheet(...)` and `ZeroSettle.instance.purchase(...)` now run the offer state machine automatically when the productId matches the active offer's `checkoutProductId`. Adopters using `OfferManager` no longer need to call `manager.present()` or `manager.markCheckoutSucceeded()` manually.
 2. **Swift Package Manager support.** The plugin's iOS layer now supports SPM in addition to CocoaPods. Apps on Flutter 3.41+ with `flutter config --enable-swift-package-manager` get the SPM resolution path, which pulls ZeroSettleKit directly from `github.com/zerosettle/ZeroSettleKit` (bypassing the CocoaPods chain). CocoaPods adopters continue to work unchanged.
@@ -17,7 +17,11 @@ The `OfferManager.stateUpdates` stream surfaces every transition — reactive UI
 
 ### Swift Package Manager support
 
-Apps on Flutter 3.41+ can opt into SPM resolution with `flutter config --enable-swift-package-manager` (or via per-project pubspec config). The plugin's iOS layer at `ios/zerosettle/Sources/zerosettle/` is now SPM-conventional, and a new `ios/zerosettle/Package.swift` declares ZeroSettleKit as an SPM dependency (`~> 1.3.5`).
+Apps on Flutter 3.41+ can opt into SPM resolution with `flutter config --enable-swift-package-manager` (or via per-project pubspec config). The plugin's iOS layer at `ios/zerosettle/Sources/zerosettle/` is now SPM-conventional, and a new `ios/zerosettle/Package.swift` declares ZeroSettleKit as an SPM dependency (`~> 1.3.6`).
+
+### Kit 1.3.6 fix: checkout sheet no longer shrinks mid-presentation
+
+`CheckoutPreloaderPool.ensureReady` (in ZeroSettleKit) previously returned the moment `buttonsReady` fired, before `measureContentJS` had completed and `measuredContentHeight` was set. `CheckoutSheet`'s internal init then read `measuredContentHeight = 0`, the WebView fell back to a 300pt placeholder frame, and the live geometry observer later reported the real height — causing a visible sheet shrink during presentation. Kit 1.3.6 extends `ensureReady` to also wait for the `isReady` signal (which fires alongside `measuredContentHeight`). Flutter adopters using `presentPaymentSheet` benefit automatically by tracking Kit `~> 1.3.6`.
 
 CocoaPods adopters: nothing changes. The podspec stays as the fallback resolution path; iOS sources just live at a different path internally (transparent to consumers).
 
@@ -49,7 +53,7 @@ If your app uses `manager.startCheckout()` for raw URL flows, no change — that
 
 ### Bumps
 
-* iOS pod dependency: `ZeroSettleKit ~> 1.3.5`.
+* iOS pod dependency: `ZeroSettleKit ~> 1.3.6`.
 * Plugin tracks Kit's 1.3.x line in lockstep.
 
 ## 1.3.4
