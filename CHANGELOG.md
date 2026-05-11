@@ -1,8 +1,11 @@
-## 1.3.5
+## 1.4.0
 
-Tracks ZeroSettleKit 1.3.5. Auto-bookkeeping for offer checkouts arrives transparently — `ZeroSettle.instance.presentPaymentSheet(productId:)` and `ZeroSettle.instance.purchase(productId:)` now run the offer state machine automatically when the productId matches the active offer's `checkoutProductId`.
+Tracks ZeroSettleKit 1.3.5. Two headline changes:
 
-### What's new
+1. **Auto-bookkeeping for offer checkouts.** `ZeroSettle.instance.presentPaymentSheet(...)` and `ZeroSettle.instance.purchase(...)` now run the offer state machine automatically when the productId matches the active offer's `checkoutProductId`. Adopters using `OfferManager` no longer need to call `manager.present()` or `manager.markCheckoutSucceeded()` manually.
+2. **Swift Package Manager support.** The plugin's iOS layer now supports SPM in addition to CocoaPods. Apps on Flutter 3.41+ with `flutter config --enable-swift-package-manager` get the SPM resolution path, which pulls ZeroSettleKit directly from `github.com/zerosettle/ZeroSettleKit` (bypassing the CocoaPods chain). CocoaPods adopters continue to work unchanged.
+
+### Auto-bookkeeping (the headline change)
 
 Adopters using `ZeroSettle.instance.presentPaymentSheet(...)` to accept a migration or upgrade offer no longer need to call `manager.present()` or `manager.markCheckoutSucceeded()`. The SDK detects active offer context and runs the state machine itself:
 
@@ -12,7 +15,13 @@ Adopters using `ZeroSettle.instance.presentPaymentSheet(...)` to accept a migrat
 
 The `OfferManager.stateUpdates` stream surfaces every transition — reactive UI driven from this stream works identically before and after this release.
 
-### Adopter migration
+### Swift Package Manager support
+
+Apps on Flutter 3.41+ can opt into SPM resolution with `flutter config --enable-swift-package-manager` (or via per-project pubspec config). The plugin's iOS layer at `ios/zerosettle/Sources/zerosettle/` is now SPM-conventional, and a new `ios/zerosettle/Package.swift` declares ZeroSettleKit as an SPM dependency (`~> 1.3.5`).
+
+CocoaPods adopters: nothing changes. The podspec stays as the fallback resolution path; iOS sources just live at a different path internally (transparent to consumers).
+
+### Adopter migration (auto-bookkeeping)
 
 If your app calls `manager.present()` and `manager.markCheckoutSucceeded()` around `ZeroSettle.instance.presentPaymentSheet(...)`, delete both calls. The SDK now handles them. Compile-time deprecation warnings will guide you.
 
@@ -31,6 +40,12 @@ If your app uses `manager.startCheckout()` for raw URL flows, no change — that
 ### Example app
 
 `MigrationOfferCard` renamed to `OfferCard`, switched to `OfferManager`, and updated to demonstrate the canonical 1-call `_accept()` flow. The example now has zero deprecation warnings.
+
+### Minimum requirements
+
+* **Flutter:** `>=3.41.0` (required for SPM plugin tooling; apps on older Flutter pin to 1.3.4).
+* **Dart SDK:** `^3.11.0`.
+* **iOS deployment target:** `18.0` (matches ZeroSettleKit minimum).
 
 ### Bumps
 
