@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zerosettle/zerosettle.dart';
@@ -96,5 +98,24 @@ void main() {
       // ignore: deprecated_member_use_from_same_package
       throwsA(isA<ZSException>()),
     );
+  });
+
+  group('MigrationManager class-level deprecation', () {
+    test('class is annotated with @Deprecated', () {
+      final source = File('lib/managers/migration_manager.dart').readAsStringSync();
+      // Find the class declaration
+      final classIdx = source.indexOf('class MigrationManager');
+      expect(classIdx, isPositive, reason: 'class MigrationManager declaration not found');
+
+      // Verify @Deprecated appears immediately before the class
+      final lastDeprecatedIdx = source.lastIndexOf('@Deprecated(', classIdx);
+      expect(lastDeprecatedIdx, isPositive,
+          reason: '@Deprecated must appear before class MigrationManager');
+
+      // Verify the deprecation message points adopters at OfferManager
+      final annotationBlock = source.substring(lastDeprecatedIdx, classIdx);
+      expect(annotationBlock.toLowerCase(), contains('offermanager'),
+          reason: 'deprecation message should mention OfferManager');
+    });
   });
 }

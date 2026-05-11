@@ -16,6 +16,11 @@ import '../models/migration_offer.dart';
 /// owning widget tears down to release the per-handle channel subscriptions
 /// — the iOS-side manager is cached per `(userId, stripeCustomerId)` and
 /// outlives the handle.
+@Deprecated(
+  'Use OfferManager via ZeroSettle.instance.offerManager() — a strict superset '
+  'that handles migration, StoreKit→web upgrade, and web→web upgrade flows. '
+  'Will be removed in 2.0.',
+)
 class MigrationManager {
   /// Opaque handle ID issued by the iOS bridge.
   final String _handleId;
