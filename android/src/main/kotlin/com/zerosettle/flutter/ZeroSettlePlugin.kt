@@ -3,6 +3,7 @@ package com.zerosettle.flutter
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import com.zerosettle.flutter.handlers.ApplePayStubsHandler
 import com.zerosettle.flutter.handlers.CatalogHandler
 import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
@@ -86,11 +87,13 @@ import kotlinx.coroutines.cancel
  *     [ZeroSettleHostActivity] — distinct from the F12 save-the-sale
  *     `iOS-only forever` stubs); `fetchUpgradeOfferConfig` forwards to
  *     the SDK
- *   - **F15** iOS-only stubs (Android returns the tagged error today;
- *     **`presentSaveTheSaleSheet` is iOS-only per user direction and will
- *     stay `notImplemented` on Android indefinitely**):
- *     `recommendedAppAccountToken`, `presentApplePaySetup`,
- *     `getIsApplePayOnly`, `getApplePayState`
+ *   - **F15** iOS Apple-Pay stubs (landed — see [ApplePayStubsHandler]):
+ *     `recommendedAppAccountToken` and `presentApplePaySetup` return
+ *     `not_implemented` (no Android analogue); `getIsApplePayOnly` returns
+ *     `false`; `getApplePayState` returns the literal string `"unavailable"`
+ *     (per the Known-gaps contract below). `presentSaveTheSaleSheet` is
+ *     iOS-only per user direction and falls through to `notImplemented()` —
+ *     it is NOT routed through this handler.
  *   - **F16** misc: `handleUniversalLink`, `getRemoteConfig`,
  *     `getDetectedJurisdiction`, `getPendingCheckout`, `setBaseUrlOverride`,
  *     `trackEvent`, `trackMigrationConversion`, `resetMigrateTipState`,
@@ -115,9 +118,9 @@ import kotlinx.coroutines.cancel
  *     task either wires it or removes the Dart side.
  *   - Per-handle migration-manager channels (`zerosettle/migration_manager_<id>`)
  *     — same.
- *   - `getApplePayState` Android contract is documented to return
- *     `"unavailable"` (see Dart `getApplePayState`); for now F7 returns the
- *     tagged error and F15 lands the real `"unavailable"` literal.
+ *   - `getApplePayState` Android contract returns the literal string
+ *     `"unavailable"` (see Dart `getApplePayState`); landed by F15 via
+ *     [ApplePayStubsHandler].
  */
 class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
@@ -205,6 +208,17 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var modalsHandler: ModalsHandler
 
     /**
+     * F15 iOS Apple-Pay stubs handler. Owns four iOS-only methods on the
+     * main channel — `recommendedAppAccountToken` + `presentApplePaySetup`
+     * return `not_implemented` (no Android analogue, callers must gate by
+     * `Platform.isIOS`); `getIsApplePayOnly` returns `false`;
+     * `getApplePayState` returns the literal string `"unavailable"` per the
+     * documented Android wire contract. Same allocation pattern as
+     * F8/F9/F10/F11/F12/F13.
+     */
+    private lateinit var applePayStubsHandler: ApplePayStubsHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -261,6 +275,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         pendingClaimsHandler = PendingClaimsHandler(handlerDeps)
         subscriptionMgmtHandler = SubscriptionMgmtHandler(handlerDeps)
         modalsHandler = ModalsHandler(handlerDeps)
+        applePayStubsHandler = ApplePayStubsHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
@@ -282,7 +297,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
         Log.i(
             "ZeroSettle",
-            "Android plugin attached (F8-F13 handlers wired; F15-F17 still WIP stubs)"
+            "Android plugin attached (F8-F13 + F15 handlers wired; F16-F17 still WIP stubs)"
         )
     }
 
@@ -329,27 +344,20 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         // dispatch below if no handler claims the call. F8 owns identity,
         // F9 owns catalog + entitlements, F10 owns purchase + payment sheet,
         // F11 owns pending claims, F12 owns subscription mgmt, F13 owns
-        // modal launches + upgrade-offer fetch; F15-F17 are still WIP-error
-        // stubs.
+        // modal launches + upgrade-offer fetch, F15 owns the iOS Apple-Pay
+        // stubs; F16-F17 are still WIP-error stubs.
+        //
+        // `presentSaveTheSaleSheet` is iOS-only per user direction and is NOT
+        // owned by any handler — it falls through to `notImplemented()` below.
         if (identityHandler.handle(call, result)) return
         if (catalogHandler.handle(call, result)) return
         if (purchaseHandler.handle(call, result)) return
         if (pendingClaimsHandler.handle(call, result)) return
         if (subscriptionMgmtHandler.handle(call, result)) return
         if (modalsHandler.handle(call, result)) return
+        if (applePayStubsHandler.handle(call, result)) return
 
         when (call.method) {
-            // === F15 — iOS-only stubs ===
-            // `presentSaveTheSaleSheet` is iOS-only per user direction (the
-            // Save-the-Sale flow has no Android counterpart). It falls
-            // through to `notImplemented()` rather than the tagged error
-            // because no Android task will ever land it.
-            "recommendedAppAccountToken",
-            "presentApplePaySetup",
-            "getIsApplePayOnly",
-            "getApplePayState" ->
-                notYetImplemented(call.method, "F15", result)
-
             // === F16 — Misc (universal links, remote config, tracking, history) ===
             "handleUniversalLink",
             "getRemoteConfig",

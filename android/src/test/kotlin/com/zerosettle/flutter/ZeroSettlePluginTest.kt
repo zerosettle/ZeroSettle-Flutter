@@ -370,8 +370,18 @@ class ZeroSettlePluginTest {
     }
 
     @Test
-    fun `F15 iOS-only method routes to F15 task id`() {
-        assertNotYetImplemented(method = "getApplePayState", expectedTask = "F15")
+    fun `F15 getApplePayState routes through ApplePayStubsHandler not WIP stub`() {
+        // Positive routing: handler returns the literal string "unavailable"
+        // per the plugin-header Known-gaps contract rather than the tagged
+        // F15 wip error. The handler-level test exercises the other three
+        // F15 methods; here we only need a dispatch-table check that the
+        // call moved off the WIP table.
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("getApplePayState", null), result)
+        verify { result.success("unavailable") }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+        verify(exactly = 0) { result.notImplemented() }
     }
 
     @Test

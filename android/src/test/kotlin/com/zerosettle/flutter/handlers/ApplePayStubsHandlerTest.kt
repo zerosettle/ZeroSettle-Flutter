@@ -1,0 +1,175 @@
+package com.zerosettle.flutter.handlers
+
+import android.app.Activity
+import android.content.Context
+import com.google.common.truth.Truth.assertThat
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+import io.mockk.CapturingSlot
+import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+/**
+ * Unit tests for [ApplePayStubsHandler].
+ *
+ * The handler is fully synchronous (no SDK calls, no coroutines) so the
+ * scope / activity / context dependencies are unused at runtime. We still
+ * pass them in matching the F8-F13 pattern for consistency.
+ *
+ * Wire-shape claims under test:
+ *   - `recommendedAppAccountToken` returns `not_implemented` error (deviates
+ *     from a `success(null)` reading of the iOS Kit; Dart force-unwraps the
+ *     result so `null` would NPE — see handler KDoc rationale).
+ *   - `presentApplePaySetup` returns `not_implemented` error (iOS Wallet
+ *     only; no Android analogue).
+ *   - `getIsApplePayOnly` returns `success(false)` (Android is never
+ *     Apple-Pay-only).
+ *   - `getApplePayState` returns `success("unavailable")` per the
+ *     plugin-header Known-gaps contract (NOT a `not_implemented` error —
+ *     that would break adopters that switch on the
+ *     `ApplePayAvailabilityState` enum string).
+ *   - Unknown method → `handle` returns `false` so the plugin can fall
+ *     through to the next handler / WIP error.
+ *   - Each `not_implemented` message names the offending method so devs
+ *     reading logs can find the call site.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+class ApplePayStubsHandlerTest {
+
+    private val scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher())
+    private val appContext: Context = mockk(relaxed = true)
+    private val activity: Activity = mockk(relaxed = true)
+    private lateinit var handler: ApplePayStubsHandler
+
+    @Before
+    fun setUp() {
+        val deps = HandlerDependencies(
+            scope = scope,
+            activityProvider = { activity },
+            applicationContextProvider = { appContext },
+        )
+        handler = ApplePayStubsHandler(deps)
+    }
+
+    @After
+    fun tearDown() {
+        scope.cancel()
+    }
+
+    private fun call(method: String, args: Map<String, Any?>? = null) = MethodCall(method, args)
+    private fun newResult() = mockk<MethodChannel.Result>(relaxed = true)
+
+    // ─── handle() routing ───────────────────────────────────────────────
+
+    @Test
+    fun `handle returns false for unknown method`() {
+        val result = newResult()
+        val consumed = handler.handle(call("definitelyNotMine"), result)
+        assertThat(consumed).isFalse()
+        verify(exactly = 0) { result.success(any()) }
+        verify(exactly = 0) { result.error(any(), any(), any()) }
+    }
+
+    @Test
+    fun `handle returns true for each owned method`() {
+        listOf(
+            "recommendedAppAccountToken",
+            "presentApplePaySetup",
+            "getIsApplePayOnly",
+            "getApplePayState",
+        ).forEach { method ->
+            val consumed = handler.handle(call(method), newResult())
+            assertThat(consumed).isTrue()
+        }
+    }
+
+    // ─── recommendedAppAccountToken — deviation from the plan ──────────
+
+    @Test
+    fun `recommendedAppAccountToken returns not_implemented error`() {
+        // The Dart wire (lib/zerosettle_method_channel.dart) is:
+        //   final result = await methodChannel.invokeMethod<String>(
+        //     'recommendedAppAccountToken',
+        //   );
+        //   return result!;
+        // The force-unwrap (`result!`) on a non-nullable `Future<String>`
+        // return type means `null` from Android would throw a Dart
+        // null-check `_TypeError` on every caller. A `PlatformException`
+        // (from `result.error(...)`) is in-contract because iOS dispatches
+        // failures the same way (`result(error.toFlutterError())`).
+        val result = newResult()
+        val codeSlot: CapturingSlot<String> = slot()
+        val messageSlot: CapturingSlot<String> = slot()
+
+        val consumed = handler.handle(call("recommendedAppAccountToken"), result)
+
+        assertThat(consumed).isTrue()
+        verify { result.error(capture(codeSlot), capture(messageSlot), null) }
+        verify(exactly = 0) { result.success(any()) }
+        assertThat(codeSlot.captured).isEqualTo("not_implemented")
+        assertThat(messageSlot.captured).contains("recommendedAppAccountToken")
+        // The message must hint at the platform gate so developers fix the
+        // call site rather than try to catch the exception generically.
+        assertThat(messageSlot.captured).contains("Platform.isIOS")
+    }
+
+    // ─── presentApplePaySetup ────────────────────────────────────────────
+
+    @Test
+    fun `presentApplePaySetup returns not_implemented error`() {
+        val result = newResult()
+        val codeSlot: CapturingSlot<String> = slot()
+        val messageSlot: CapturingSlot<String> = slot()
+
+        val consumed = handler.handle(call("presentApplePaySetup"), result)
+
+        assertThat(consumed).isTrue()
+        verify { result.error(capture(codeSlot), capture(messageSlot), null) }
+        verify(exactly = 0) { result.success(any()) }
+        assertThat(codeSlot.captured).isEqualTo("not_implemented")
+        assertThat(messageSlot.captured).contains("presentApplePaySetup")
+        assertThat(messageSlot.captured).contains("Platform.isIOS")
+    }
+
+    // ─── getIsApplePayOnly ───────────────────────────────────────────────
+
+    @Test
+    fun `getIsApplePayOnly returns success false`() {
+        val result = newResult()
+        val consumed = handler.handle(call("getIsApplePayOnly"), result)
+
+        assertThat(consumed).isTrue()
+        verify { result.success(false) }
+        verify(exactly = 0) { result.error(any(), any(), any()) }
+    }
+
+    // ─── getApplePayState ────────────────────────────────────────────────
+
+    @Test
+    fun `getApplePayState returns success with literal string unavailable`() {
+        // The plugin-header doc pins this to the literal "unavailable" so
+        // the Dart-side `ApplePayAvailabilityState` enum decodes cleanly.
+        // Returning a `not_implemented` error here would break callers
+        // that switch on the state string (the iOS Kit's three values are
+        // "ready" / "setupRequired" / "unavailable"; Android is always the
+        // third).
+        val result = newResult()
+        val consumed = handler.handle(call("getApplePayState"), result)
+
+        assertThat(consumed).isTrue()
+        verify { result.success("unavailable") }
+        verify(exactly = 0) { result.error(any(), any(), any()) }
+    }
+}
