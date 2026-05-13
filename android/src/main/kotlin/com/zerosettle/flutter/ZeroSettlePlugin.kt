@@ -6,6 +6,7 @@ import android.util.Log
 import com.zerosettle.flutter.handlers.CatalogHandler
 import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
+import com.zerosettle.flutter.handlers.PurchaseHandler
 import com.zerosettle.flutter.offermanager.OfferManagerHandleRegistry
 import com.zerosettle.flutter.offermanager.OfferManagerStaticHandler
 import com.zerosettle.flutter.platformviews.MigrateTipViewFactory
@@ -64,8 +65,9 @@ import kotlinx.coroutines.cancel
  *   - **F9** catalog / entitlements (landed — see [CatalogHandler]):
  *     `fetchProducts`, `getProducts`, `product`, `hasActiveEntitlement`,
  *     `getEntitlements`, `restoreEntitlements`
- *   - **F10** purchase: `purchase`, `purchaseViaStoreKit`,
- *     `presentPaymentSheet`, `preloadPaymentSheet`, `warmUpPaymentSheet`
+ *   - **F10** purchase + payment sheet (landed — see [PurchaseHandler]):
+ *     `purchase`, `purchaseViaStoreKit`, `presentPaymentSheet`,
+ *     `preloadPaymentSheet`, `warmUpPaymentSheet`
  *   - **F11** pending claims: `getPendingClaims`
  *   - **F12** subscription mgmt: `openCustomerPortal`,
  *     `showManageSubscription`, `cancelSubscription`, `pauseSubscription`,
@@ -155,6 +157,16 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var catalogHandler: CatalogHandler
 
     /**
+     * F10 purchase + payment-sheet handler. Owns five methods on the main
+     * channel — `purchase` (web checkout via Custom Tab),
+     * `purchaseViaStoreKit` + `presentPaymentSheet` (iOS-only stubs), and
+     * `preloadPaymentSheet` + `warmUpPaymentSheet` (no-ops with arg
+     * validation; Android's preload is configure-time only). Same
+     * allocation pattern as F8/F9.
+     */
+    private lateinit var purchaseHandler: PurchaseHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -207,6 +219,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         )
         identityHandler = IdentityHandler(handlerDeps)
         catalogHandler = CatalogHandler(handlerDeps)
+        purchaseHandler = PurchaseHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
@@ -273,19 +286,13 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         // `handle(call, result)` returns true if it owned the method, false
         // otherwise — fall through to the next handler / the WIP-error
         // dispatch below if no handler claims the call. F8 owns identity,
-        // F9 owns catalog + entitlements; F10-F17 are still WIP-error stubs.
+        // F9 owns catalog + entitlements, F10 owns purchase + payment sheet;
+        // F11-F17 are still WIP-error stubs.
         if (identityHandler.handle(call, result)) return
         if (catalogHandler.handle(call, result)) return
+        if (purchaseHandler.handle(call, result)) return
 
         when (call.method) {
-            // === F10 — Purchase + payment sheet ===
-            "purchase",
-            "purchaseViaStoreKit",
-            "presentPaymentSheet",
-            "preloadPaymentSheet",
-            "warmUpPaymentSheet" ->
-                notYetImplemented(call.method, "F10", result)
-
             // === F11 — Pending claims ===
             "getPendingClaims" ->
                 notYetImplemented(call.method, "F11", result)

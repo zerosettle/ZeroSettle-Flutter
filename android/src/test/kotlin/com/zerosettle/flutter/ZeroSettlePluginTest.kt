@@ -266,8 +266,29 @@ class ZeroSettlePluginTest {
     }
 
     @Test
-    fun `F10 purchase method routes to F10 task id`() {
-        assertNotYetImplemented(method = "purchase", expectedTask = "F10")
+    fun `F10 purchase routes through PurchaseHandler, not WIP error`() {
+        // Positive routing: with no activity attached, the handler returns
+        // an activity_required error rather than the tagged F10 wip error.
+        // The mocked ZeroSettle.purchase(...) is never reached on this path.
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(
+            MethodCall("purchase", mapOf("productId" to "com.app.coins")),
+            result,
+        )
+        verify { result.error(eq("activity_required"), any(), null) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+    }
+
+    @Test
+    fun `F10 purchaseViaStoreKit routes through PurchaseHandler with not_implemented`() {
+        // Positive routing: handler issues the iOS-only stub error rather
+        // than the tagged F10 wip error.
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("purchaseViaStoreKit", null), result)
+        verify { result.error(eq("not_implemented"), any(), null) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
     }
 
     @Test
