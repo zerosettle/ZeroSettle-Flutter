@@ -6,6 +6,7 @@ import android.util.Log
 import com.zerosettle.flutter.handlers.CatalogHandler
 import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
+import com.zerosettle.flutter.handlers.ModalsHandler
 import com.zerosettle.flutter.handlers.PendingClaimsHandler
 import com.zerosettle.flutter.handlers.PurchaseHandler
 import com.zerosettle.flutter.handlers.SubscriptionMgmtHandler
@@ -79,8 +80,12 @@ import kotlinx.coroutines.cancel
  *     `fetchCancelFlowConfig` return `not_implemented` (the first two
  *     match iOS — both APIs were removed from ZeroSettleKit; the last
  *     four are the iOS-only Save-the-Sale headless surface)
- *   - **F13** modal launches: `presentCancelFlow`, `presentUpgradeOffer`,
- *     `fetchUpgradeOfferConfig`
+ *   - **F13** modal launches (landed — see [ModalsHandler]):
+ *     `presentCancelFlow`, `presentUpgradeOffer` return `not_implemented`
+ *     pending Task F6 (Compose Mode dispatch in
+ *     [ZeroSettleHostActivity] — distinct from the F12 save-the-sale
+ *     `iOS-only forever` stubs); `fetchUpgradeOfferConfig` forwards to
+ *     the SDK
  *   - **F15** iOS-only stubs (Android returns the tagged error today;
  *     **`presentSaveTheSaleSheet` is iOS-only per user direction and will
  *     stay `notImplemented` on Android indefinitely**):
@@ -191,6 +196,15 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var subscriptionMgmtHandler: SubscriptionMgmtHandler
 
     /**
+     * F13 modal-presentation handler. Owns three methods on the main
+     * channel — `presentCancelFlow` and `presentUpgradeOffer` return
+     * `not_implemented` pending Task F6 (Compose Mode dispatch in
+     * [ZeroSettleHostActivity]); `fetchUpgradeOfferConfig` forwards to the
+     * SDK. Same allocation pattern as F8/F9/F10/F11/F12.
+     */
+    private lateinit var modalsHandler: ModalsHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -246,6 +260,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         purchaseHandler = PurchaseHandler(handlerDeps)
         pendingClaimsHandler = PendingClaimsHandler(handlerDeps)
         subscriptionMgmtHandler = SubscriptionMgmtHandler(handlerDeps)
+        modalsHandler = ModalsHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
@@ -267,7 +282,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
         Log.i(
             "ZeroSettle",
-            "Android plugin attached (F8-F12 handlers wired; F13-F17 still WIP stubs)"
+            "Android plugin attached (F8-F13 handlers wired; F15-F17 still WIP stubs)"
         )
     }
 
@@ -313,21 +328,17 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         // otherwise — fall through to the next handler / the WIP-error
         // dispatch below if no handler claims the call. F8 owns identity,
         // F9 owns catalog + entitlements, F10 owns purchase + payment sheet,
-        // F11 owns pending claims, F12 owns subscription mgmt; F13-F17 are
-        // still WIP-error stubs.
+        // F11 owns pending claims, F12 owns subscription mgmt, F13 owns
+        // modal launches + upgrade-offer fetch; F15-F17 are still WIP-error
+        // stubs.
         if (identityHandler.handle(call, result)) return
         if (catalogHandler.handle(call, result)) return
         if (purchaseHandler.handle(call, result)) return
         if (pendingClaimsHandler.handle(call, result)) return
         if (subscriptionMgmtHandler.handle(call, result)) return
+        if (modalsHandler.handle(call, result)) return
 
         when (call.method) {
-            // === F13 — Modal launches (cancel flow / upgrade offer) ===
-            "presentCancelFlow",
-            "presentUpgradeOffer",
-            "fetchUpgradeOfferConfig" ->
-                notYetImplemented(call.method, "F13", result)
-
             // === F15 — iOS-only stubs ===
             // `presentSaveTheSaleSheet` is iOS-only per user direction (the
             // Save-the-Sale flow has no Android counterpart). It falls

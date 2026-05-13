@@ -10,6 +10,7 @@ import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
 import com.zerosettle.sdk.models.ProductCatalog
 import com.zerosettle.sdk.models.ProductType
+import com.zerosettle.sdk.models.UpgradeOffer
 import com.zerosettle.sdk.models.UserOffer
 import com.zerosettle.sdk.offers.OfferManager
 
@@ -512,3 +513,55 @@ fun OfferManager.toCompositeStateMap(): Map<String, Any?> {
     }
     return map
 }
+
+/**
+ * Encode the Android [UpgradeOffer.Config] for the Flutter wire.
+ *
+ * **Shape divergence from iOS.** The Android SDK's `UpgradeOffer.Config` is
+ * the chunk-4 placeholder (`fromProductId` / `toProductId` /
+ * `savingsPercent` / `display{ offer_* / accepted_* / completed_* }`); the
+ * iOS plugin emits the chunk-5 wire shape (`available`, `currentProduct`,
+ * `targetProduct`, `proration`, `display{title, body, ctaText, ...}`,
+ * `variantId`, …). The Android `UpgradeOffer.kt` file carries a
+ * `TODO(chunk-5)` to align with the real `GET /v1/iap/upgrade-offer/`
+ * response — that alignment is **out of F13 scope**.
+ *
+ * Until chunk-5 lands, this encoder reflects the *Android-side* placeholder
+ * shape as-is: Dart code that consumes this map must know it's looking at
+ * the Android shape. Cross-platform Dart parsers will see different keys on
+ * each platform. This is a known gap recorded in the plan at row 238.
+ *
+ * **Runtime risk.** kotlinx-serialization's decode of the backend response
+ * into `UpgradeOffer.Config` may fail with `MissingFieldException` if the
+ * server emits the chunk-5 shape (which lacks `from_product_id` /
+ * `to_product_id` as top-level keys). The handler surfaces decode failure
+ * as `sdk_error` via the shared `sendError` extension — the encoder itself
+ * is never reached in that path.
+ *
+ * **Wire keys are camelCase** to match the rest of the encoders in this
+ * file. The `@SerialName` snake_case annotations on the model are for the
+ * backend boundary only.
+ */
+fun UpgradeOffer.Config.toFlutterMap(): Map<String, Any?> = mapOf(
+    "fromProductId" to fromProductId,
+    "toProductId" to toProductId,
+    "savingsPercent" to savingsPercent,
+    "display" to display.toFlutterMap(),
+)
+
+/**
+ * Encode the legacy [UpgradeOffer.Display] block. Keys mirror the
+ * `@SerialName` snake_case wire (e.g. `offerTitle`, `acceptedMessage`) in
+ * camelCase form to match the Flutter wire convention; see encoder above
+ * for the chunk-5 alignment caveat.
+ */
+fun UpgradeOffer.Display.toFlutterMap(): Map<String, Any?> = mapOf(
+    "offerTitle" to offerTitle,
+    "offerMessage" to offerMessage,
+    "offerCta" to offerCta,
+    "acceptedTitle" to acceptedTitle,
+    "acceptedMessage" to acceptedMessage,
+    "acceptedCta" to acceptedCta,
+    "completedTitle" to completedTitle,
+    "completedMessage" to completedMessage,
+)

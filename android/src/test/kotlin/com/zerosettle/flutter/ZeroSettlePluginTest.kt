@@ -337,8 +337,36 @@ class ZeroSettlePluginTest {
     }
 
     @Test
-    fun `F13 modal method routes to F13 task id`() {
-        assertNotYetImplemented(method = "presentCancelFlow", expectedTask = "F13")
+    fun `F13 presentCancelFlow routes through ModalsHandler with not_implemented pending F6`() {
+        // Positive routing: handler issues the not_implemented (pending F6)
+        // stub error rather than the tagged F13 wip error. Distinct from
+        // the F12 save-the-sale "iOS-only forever" stubs — F13 stubs are
+        // temporary, tracked at F6 in the same plan. One representative
+        // test; presentUpgradeOffer follows the same code path.
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(
+            MethodCall("presentCancelFlow", mapOf("productId" to "com.app.sub")),
+            result,
+        )
+        verify { result.error(eq("not_implemented"), any(), null) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+    }
+
+    @Test
+    fun `F13 fetchUpgradeOfferConfig routes through ModalsHandler not WIP stub`() {
+        // Positive routing: the suspend SDK call resolves on the plugin's
+        // Main scope, so we can't await it from a non-test dispatcher. What
+        // we CAN verify is that the dispatch table moved off the WIP error
+        // — the call must NOT return `zerosettle_phase2_wip` and must NOT
+        // hit the final `result.notImplemented()`. Both are observed by
+        // checking neither was invoked synchronously. The handler-level
+        // test exercises the suspend wire-shape paths.
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("fetchUpgradeOfferConfig", null), result)
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+        verify(exactly = 0) { result.notImplemented() }
     }
 
     @Test
