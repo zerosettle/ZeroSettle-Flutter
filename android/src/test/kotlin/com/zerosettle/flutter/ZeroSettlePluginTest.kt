@@ -415,8 +415,35 @@ class ZeroSettlePluginTest {
     }
 
     @Test
-    fun `F17 handle-resolution method routes to F17 task id`() {
-        assertNotYetImplemented(method = "resolveOfferManagerHandle", expectedTask = "F17")
+    fun `F17 resolveOfferManagerHandle routes through HandleResolutionHandler not WIP stub`() {
+        // Positive routing: after F17 landed, the call must NOT return the
+        // tagged `zerosettle_phase2_wip` error and must NOT hit the final
+        // `result.notImplemented()`. The handler issues `result.success(id)`
+        // with the stringified registry id (matches iOS's UUID().uuidString).
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(
+            MethodCall("resolveOfferManagerHandle", mapOf("stripeCustomerId" to "cus_x")),
+            result,
+        )
+        verify { result.success(any<String>()) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+        verify(exactly = 0) { result.notImplemented() }
+    }
+
+    @Test
+    fun `F17 resolveMigrationManagerHandle routes through HandleResolutionHandler with not_implemented`() {
+        // Positive routing: handler issues `not_implemented` (Android folds
+        // migration into OfferManager) rather than the tagged WIP error.
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(
+            MethodCall("resolveMigrationManagerHandle", null),
+            result,
+        )
+        verify { result.error(eq("not_implemented"), any(), null) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+        verify(exactly = 0) { result.notImplemented() }
     }
 
     @Test
@@ -438,40 +465,6 @@ class ZeroSettlePluginTest {
         verify { result.notImplemented() }
     }
 
-    // ─── Helpers ────────────────────────────────────────────────────────
-
-    /**
-     * Run the dispatcher for [method] and assert it returned the tagged
-     * `zerosettle_phase2_wip` error with a message containing the expected
-     * task ID. The message format is the contract: future tasks rewrite
-     * `notYetImplemented` to the real handler, so the test failing once
-     * the handler lands is the cue to update the test.
-     */
-    private fun assertNotYetImplemented(method: String, expectedTask: String) {
-        plugin.onAttachedToEngine(binding)
-        val result = mockk<MethodChannel.Result>(relaxed = true)
-        val messageSlot = slotMessage(result)
-        plugin.onMethodCall(MethodCall(method, null), result)
-        val message = messageSlot()
-        assertThat(message).contains(method)
-        assertThat(message).contains(expectedTask)
-    }
-
-    /**
-     * Capture the [String?] message passed to `result.error(code, message, details)`.
-     * Returns a function that yields the captured message after the call.
-     */
-    private fun slotMessage(result: MethodChannel.Result): () -> String {
-        val codeSlot = io.mockk.slot<String>()
-        val messageSlot = io.mockk.slot<String>()
-        every {
-            result.error(capture(codeSlot), capture(messageSlot), any())
-        } answers { }
-        return {
-            assertThat(codeSlot.isCaptured).isTrue()
-            assertThat(codeSlot.captured).isEqualTo("zerosettle_phase2_wip")
-            assertThat(messageSlot.isCaptured).isTrue()
-            messageSlot.captured
-        }
-    }
+    // Helpers — assertNotYetImplemented / slotMessage removed after F17
+    // landed (no more `zerosettle_phase2_wip` paths to assert).
 }

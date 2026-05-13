@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.zerosettle.flutter.handlers.ApplePayStubsHandler
 import com.zerosettle.flutter.handlers.CatalogHandler
+import com.zerosettle.flutter.handlers.HandleResolutionHandler
 import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
 import com.zerosettle.flutter.handlers.MiscHandler
@@ -33,11 +34,13 @@ import kotlinx.coroutines.cancel
 
 /**
  * Android counterpart to the iOS plugin core (see
- * `ios/zerosettle/Sources/zerosettle/ZeroSettlePlugin.swift`). F7 lands the
- * scaffold — channels, factories, registry, lifecycle. Each per-domain
- * branch of [onMethodCall] still returns the tagged `zerosettle_phase2_wip`
- * error pointing at the responsible task ID; F8–F17 replace each branch
- * with the real handler.
+ * `ios/zerosettle/Sources/zerosettle/ZeroSettlePlugin.swift`). F7 landed the
+ * scaffold — channels, factories, registry, lifecycle — and F8–F17 landed
+ * the per-domain handlers. The `when` block that previously dispatched
+ * tagged `zerosettle_phase2_wip` errors is gone; every Dart method on the
+ * main channel either routes through a domain handler or falls through to
+ * `result.notImplemented()` (currently only `presentSaveTheSaleSheet`,
+ * which is iOS-only per product direction).
  *
  * ## Wire layout
  *
@@ -105,8 +108,16 @@ import kotlinx.coroutines.cancel
  *     `success(null)` (no SDK API); `fetchTransactionHistory` returns
  *     `not_implemented` (SDK currently returns raw JSON — typed model
  *     blocked on a follow-up SDK task).
- *   - **F17** handle resolution: `resolveOfferManagerHandle`,
- *     `resolveMigrationManagerHandle`
+ *   - **F17** handle resolution (landed — see [HandleResolutionHandler]):
+ *     `resolveOfferManagerHandle` allocates a fresh
+ *     [OfferManagerHandleRegistry] entry, starts an
+ *     [com.zerosettle.flutter.offermanager.OfferManagerHandleBridge] to
+ *     wire the per-handle method + state channels, and returns the id as
+ *     a String (matching iOS's `UUID().uuidString`).
+ *     `resolveMigrationManagerHandle` returns `not_implemented` — the
+ *     Android SDK folds migration into `OfferManager`, and Dart's
+ *     `MigrationManager` is `@Deprecated` in 1.4.0 with explicit migration
+ *     guidance.
  *
  * Methods on **per-handle** channels (`zerosettle/offer_manager_<id>`,
  * `zerosettle/migration_manager_<id>`) — `getState`, `present`, `dismiss`,
@@ -240,6 +251,20 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var miscHandler: MiscHandler
 
     /**
+     * F17 handle-resolution handler. Owns the two `resolveXxxHandle`
+     * methods on the main channel. `resolveOfferManagerHandle` allocates a
+     * fresh registry entry, starts an [OfferManagerHandleBridge] to wire
+     * the per-handle method + state channels, and returns the id as a
+     * String (matching iOS's `UUID().uuidString`).
+     * `resolveMigrationManagerHandle` returns `not_implemented` — Android's
+     * SDK folds migration into OfferManager. Same allocation pattern as
+     * F8/F9/F10/F11/F12/F13/F15/F16. Holds a reference to
+     * [offerManagerRegistry] in addition to the shared deps because the
+     * registry is plugin-singleton, not per-handler.
+     */
+    private lateinit var handleResolutionHandler: HandleResolutionHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -300,7 +325,12 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         miscHandler = MiscHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
+        // Built before F17's handler because F17 needs a reference to it.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
+
+        // F17 handle-resolution handler — depends on the registry, so it's
+        // constructed after `offerManagerRegistry` is in scope.
+        handleResolutionHandler = HandleResolutionHandler(handlerDeps, offerManagerRegistry)
 
         // OfferManager static channel (F19).
         offerManagerStaticHandler = OfferManagerStaticHandler(pluginScope)
@@ -319,7 +349,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
         Log.i(
             "ZeroSettle",
-            "Android plugin attached (F8-F13 + F15-F16 handlers wired; F17 still WIP stub)"
+            "Android plugin attached (F8-F13 + F15-F17 handlers wired; all per-domain handlers landed)"
         )
     }
 
@@ -362,14 +392,18 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     override fun onMethodCall(call: MethodCall, result: Result) {
         // Per-domain handlers consume their own methods. Each handler's
         // `handle(call, result)` returns true if it owned the method, false
-        // otherwise — fall through to the next handler / the WIP-error
-        // dispatch below if no handler claims the call. F8 owns identity,
-        // F9 owns catalog + entitlements, F10 owns purchase + payment sheet,
-        // F11 owns pending claims, F12 owns subscription mgmt, F13 owns
-        // modal launches + upgrade-offer fetch, F15 owns the iOS Apple-Pay
-        // stubs, F16 owns the misc grab-bag (universal link, remote config,
-        // jurisdiction, pending checkout, base url, tracking, transaction
-        // history); F17 is still a WIP-error stub.
+        // otherwise — fall through to the next handler if no handler claims
+        // the call. F8 owns identity, F9 owns catalog + entitlements, F10
+        // owns purchase + payment sheet, F11 owns pending claims, F12 owns
+        // subscription mgmt, F13 owns modal launches + upgrade-offer fetch,
+        // F15 owns the iOS Apple-Pay stubs, F16 owns the misc grab-bag
+        // (universal link, remote config, jurisdiction, pending checkout,
+        // base url, tracking, transaction history), F17 owns the headless
+        // handle-resolution methods.
+        //
+        // After F17 landed, every method Dart calls on the main channel
+        // has a real handler (or a sensible stub). Unknown methods fall
+        // through to `result.notImplemented()` below.
         //
         // `presentSaveTheSaleSheet` is iOS-only per user direction and is NOT
         // owned by any handler — it falls through to `notImplemented()` below.
@@ -381,31 +415,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         if (modalsHandler.handle(call, result)) return
         if (applePayStubsHandler.handle(call, result)) return
         if (miscHandler.handle(call, result)) return
+        if (handleResolutionHandler.handle(call, result)) return
 
-        when (call.method) {
-            // === F17 — Handle resolution (offer + migration managers) ===
-            "resolveOfferManagerHandle",
-            "resolveMigrationManagerHandle" ->
-                notYetImplemented(call.method, "F17", result)
-
-            else -> result.notImplemented()
-        }
-    }
-
-    /**
-     * Tagged error returned for every dispatched method whose real handler
-     * hasn't landed yet. The error code matches the previous WIP stub
-     * (`zerosettle_phase2_wip`) so any tooling watching for it keeps
-     * working. The message bakes in the responsible task ID so logs point
-     * directly at the next-step file in the plan.
-     */
-    private fun notYetImplemented(method: String, taskId: String, result: Result) {
-        result.error(
-            "zerosettle_phase2_wip",
-            "Method '$method' lands in task $taskId of feat/1.3.0-parity. " +
-                "Plan: docs/superpowers/plans/2026-05-12-flutter-android-parity-plan.md",
-            null,
-        )
+        result.notImplemented()
     }
 }
 
