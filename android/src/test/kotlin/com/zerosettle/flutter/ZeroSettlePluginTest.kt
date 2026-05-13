@@ -385,8 +385,33 @@ class ZeroSettlePluginTest {
     }
 
     @Test
-    fun `F16 misc method routes to F16 task id`() {
-        assertNotYetImplemented(method = "handleUniversalLink", expectedTask = "F16")
+    fun `F16 getPendingCheckout routes through MiscHandler not WIP stub`() {
+        // Positive routing: handler reads ZeroSettle.pendingCheckout.value
+        // synchronously and emits a Boolean. After F16 landed, this call
+        // must NOT return the tagged zerosettle_phase2_wip error.
+        every { ZeroSettle.pendingCheckout } returns MutableStateFlow(false)
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("getPendingCheckout", null), result)
+        verify { result.success(false) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+    }
+
+    @Test
+    fun `F16 handleUniversalLink routes through MiscHandler not WIP stub`() {
+        // Positive routing: handler returns success(false) — no SDK API on
+        // Android — rather than the tagged F16 wip error.
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(
+            MethodCall(
+                "handleUniversalLink",
+                mapOf("url" to "https://example.com/checkout-success"),
+            ),
+            result,
+        )
+        verify { result.success(false) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
     }
 
     @Test

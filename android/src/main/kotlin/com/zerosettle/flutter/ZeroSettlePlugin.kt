@@ -7,6 +7,7 @@ import com.zerosettle.flutter.handlers.ApplePayStubsHandler
 import com.zerosettle.flutter.handlers.CatalogHandler
 import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
+import com.zerosettle.flutter.handlers.MiscHandler
 import com.zerosettle.flutter.handlers.ModalsHandler
 import com.zerosettle.flutter.handlers.PendingClaimsHandler
 import com.zerosettle.flutter.handlers.PurchaseHandler
@@ -94,10 +95,16 @@ import kotlinx.coroutines.cancel
  *     (per the Known-gaps contract below). `presentSaveTheSaleSheet` is
  *     iOS-only per user direction and falls through to `notImplemented()` —
  *     it is NOT routed through this handler.
- *   - **F16** misc: `handleUniversalLink`, `getRemoteConfig`,
- *     `getDetectedJurisdiction`, `getPendingCheckout`, `setBaseUrlOverride`,
- *     `trackEvent`, `trackMigrationConversion`, `resetMigrateTipState`,
- *     `fetchTransactionHistory`
+ *   - **F16** misc (landed — see [MiscHandler]): `getPendingCheckout`
+ *     reads `ZeroSettle.pendingCheckout`; `trackMigrationConversion`
+ *     forwards to the SDK with `PLAY_STORE` source baked in;
+ *     `setBaseUrlOverride` logs + no-ops (constructor-only on Android);
+ *     `handleUniversalLink` returns `false` (no SDK API);
+ *     `getRemoteConfig` / `getDetectedJurisdiction` return `null` (no
+ *     SDK API); `trackEvent` / `resetMigrateTipState` return
+ *     `success(null)` (no SDK API); `fetchTransactionHistory` returns
+ *     `not_implemented` (SDK currently returns raw JSON — typed model
+ *     blocked on a follow-up SDK task).
  *   - **F17** handle resolution: `resolveOfferManagerHandle`,
  *     `resolveMigrationManagerHandle`
  *
@@ -219,6 +226,20 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var applePayStubsHandler: ApplePayStubsHandler
 
     /**
+     * F16 misc handler. Owns nine methods on the main channel —
+     * `getPendingCheckout` and `trackMigrationConversion` forward to real
+     * SDK surfaces; `setBaseUrlOverride` logs + no-ops (constructor-only
+     * on Android); `handleUniversalLink` returns `false`; four
+     * `success(null)` / null-tolerant stubs cover the no-SDK-API cases
+     * (`getRemoteConfig`, `getDetectedJurisdiction`, `trackEvent`,
+     * `resetMigrateTipState`); `fetchTransactionHistory` returns
+     * `not_implemented` until the SDK lands its typed
+     * CheckoutTransaction model. Same allocation pattern as
+     * F8/F9/F10/F11/F12/F13/F15.
+     */
+    private lateinit var miscHandler: MiscHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -276,6 +297,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         subscriptionMgmtHandler = SubscriptionMgmtHandler(handlerDeps)
         modalsHandler = ModalsHandler(handlerDeps)
         applePayStubsHandler = ApplePayStubsHandler(handlerDeps)
+        miscHandler = MiscHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
@@ -297,7 +319,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
         Log.i(
             "ZeroSettle",
-            "Android plugin attached (F8-F13 + F15 handlers wired; F16-F17 still WIP stubs)"
+            "Android plugin attached (F8-F13 + F15-F16 handlers wired; F17 still WIP stub)"
         )
     }
 
@@ -345,7 +367,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         // F9 owns catalog + entitlements, F10 owns purchase + payment sheet,
         // F11 owns pending claims, F12 owns subscription mgmt, F13 owns
         // modal launches + upgrade-offer fetch, F15 owns the iOS Apple-Pay
-        // stubs; F16-F17 are still WIP-error stubs.
+        // stubs, F16 owns the misc grab-bag (universal link, remote config,
+        // jurisdiction, pending checkout, base url, tracking, transaction
+        // history); F17 is still a WIP-error stub.
         //
         // `presentSaveTheSaleSheet` is iOS-only per user direction and is NOT
         // owned by any handler — it falls through to `notImplemented()` below.
@@ -356,20 +380,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         if (subscriptionMgmtHandler.handle(call, result)) return
         if (modalsHandler.handle(call, result)) return
         if (applePayStubsHandler.handle(call, result)) return
+        if (miscHandler.handle(call, result)) return
 
         when (call.method) {
-            // === F16 — Misc (universal links, remote config, tracking, history) ===
-            "handleUniversalLink",
-            "getRemoteConfig",
-            "getDetectedJurisdiction",
-            "getPendingCheckout",
-            "setBaseUrlOverride",
-            "trackEvent",
-            "trackMigrationConversion",
-            "resetMigrateTipState",
-            "fetchTransactionHistory" ->
-                notYetImplemented(call.method, "F16", result)
-
             // === F17 — Handle resolution (offer + migration managers) ===
             "resolveOfferManagerHandle",
             "resolveMigrationManagerHandle" ->
