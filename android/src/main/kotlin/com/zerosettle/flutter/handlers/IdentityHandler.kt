@@ -130,12 +130,21 @@ internal class IdentityHandler(private val deps: HandlerDependencies) {
             )
         }
         val preloadCheckout = call.argument<Boolean>("preloadCheckout") ?: false
+        // Pick up the pending baseUrlOverride that the Dart side staged via
+        // setBaseUrlOverride(...) before this configure call. Required for
+        // staging / ngrok dev wiring — Android's ZeroSettleConfig is
+        // immutable, so we consume the override here. See BaseUrlOverrideStore.
+        val baseUrlOverride = BaseUrlOverrideStore.consume()
+        if (baseUrlOverride != null) {
+            Log.i("ZeroSettle", "configure: applying baseUrlOverride=$baseUrlOverride")
+        }
         try {
             ZeroSettle.configure(
                 context = context,
                 config = ZeroSettleConfig(
                     publishableKey = publishableKey,
                     preloadCheckout = preloadCheckout,
+                    baseUrlOverride = baseUrlOverride,
                 ),
             )
             result.success(null)

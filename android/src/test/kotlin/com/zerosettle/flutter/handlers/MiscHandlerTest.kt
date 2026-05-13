@@ -46,9 +46,11 @@ import org.robolectric.RobolectricTestRunner
  *     String? return type).
  *   - `getPendingCheckout` reads `ZeroSettle.pendingCheckout.value` and
  *     returns `success(Boolean)` synchronously.
- *   - `setBaseUrlOverride` logs + returns `success(null)` (constructor-only
- *     on Android). Verified via `verify(exactly = 0) { result.error(...) }`
- *     so we don't break tooling expecting non-erroring stub behaviour.
+ *   - `setBaseUrlOverride` stages the override in `BaseUrlOverrideStore`
+ *     and returns `success(null)`. `IdentityHandler.configure(...)`
+ *     consumes the staged value when building `ZeroSettleConfig`. Bridges
+ *     Dart's "set then configure" call sequence with Android's immutable
+ *     config.
  *   - `trackEvent` returns `success(null)` regardless of args (no SDK API,
  *     Dart fire-and-forget swallows errors).
  *   - `trackMigrationConversion` forwards to
@@ -197,28 +199,39 @@ class MiscHandlerTest {
         verify(exactly = 0) { result.error(any(), any(), any()) }
     }
 
-    // ─── setBaseUrlOverride — constructor-only, logs + no-op ────────────
+    // ─── setBaseUrlOverride — stages override for next configure() ──────
 
     @Test
-    fun `setBaseUrlOverride returns success(null) when url provided`() {
+    fun `setBaseUrlOverride stages url in BaseUrlOverrideStore`() {
+        BaseUrlOverrideStore.consume() // clear any leftover state
         val result = newResult()
         handler.handle(
-            call("setBaseUrlOverride", mapOf("url" to "https://staging.example.com")),
+            call("setBaseUrlOverride", mapOf("url" to "https://api-staging.zerosettle.io/v1")),
             result,
         )
         verify { result.success(null) }
         verify(exactly = 0) { result.error(any(), any(), any()) }
+        assertThat(BaseUrlOverrideStore.consume()).isEqualTo("https://api-staging.zerosettle.io/v1")
     }
 
     @Test
-    fun `setBaseUrlOverride returns success(null) when url omitted (clear case)`() {
+    fun `setBaseUrlOverride clears the store when url omitted`() {
         // Dart's Future<void> setBaseUrlOverride(String? url) sends an
-        // empty args map when url is null — clearing the override on iOS.
-        // Android no-ops in both cases (constructor-only).
+        // empty args map when url is null — clearing the override.
+        BaseUrlOverrideStore.set("https://stale.example.com")
         val result = newResult()
         handler.handle(call("setBaseUrlOverride", emptyMap<String, Any?>()), result)
         verify { result.success(null) }
-        verify(exactly = 0) { result.error(any(), any(), any()) }
+        assertThat(BaseUrlOverrideStore.consume()).isNull()
+    }
+
+    @Test
+    fun `setBaseUrlOverride clears the store on blank url`() {
+        BaseUrlOverrideStore.set("https://stale.example.com")
+        val result = newResult()
+        handler.handle(call("setBaseUrlOverride", mapOf("url" to "")), result)
+        verify { result.success(null) }
+        assertThat(BaseUrlOverrideStore.consume()).isNull()
     }
 
     // ─── trackEvent — no SDK API, Dart swallows errors → success(null) ──

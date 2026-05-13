@@ -179,17 +179,14 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
 
     private fun setBaseUrlOverride(call: MethodCall, result: MethodChannel.Result) {
         val url = call.argument<String>("url")
-        // iOS exposes a `#if DEBUG`-gated dynamic setter. Android's
-        // `ZeroSettleConfig.baseUrlOverride` is constructor-only — there's no
-        // setter to call. Log the override so a dev pointing their wire at
-        // ngrok / staging in test sees a clear breadcrumb explaining why
-        // their override didn't take.
-        Log.i(
-            "ZeroSettle",
-            "setBaseUrlOverride is constructor-only on Android " +
-                "(ZeroSettleConfig.baseUrlOverride); ignoring url=$url. " +
-                "Set via the next configure() call instead.",
-        )
+        // iOS exposes this as a `#if DEBUG`-gated mutable static
+        // (`ZeroSettle.baseURLOverride`). Android's `ZeroSettleConfig` is
+        // immutable, so we stage the override in BaseUrlOverrideStore and
+        // pick it up inside IdentityHandler.configure(). The Dart facade
+        // documents the contract: setBaseUrlOverride must be called before
+        // configure().
+        BaseUrlOverrideStore.set(url)
+        Log.i("ZeroSettle", "setBaseUrlOverride staged url=$url (applied on next configure())")
         result.success(null)
     }
 
