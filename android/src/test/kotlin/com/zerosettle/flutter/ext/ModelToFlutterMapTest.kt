@@ -10,6 +10,8 @@ import com.zerosettle.sdk.models.PendingClaim
 import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
 import com.zerosettle.sdk.models.ProductType
+import com.zerosettle.sdk.models.UserOffer
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
@@ -322,5 +324,319 @@ class ModelToFlutterMapTest {
         assertThat(map["type"]).isEqualTo("manual_play_cancel")
         assertThat(map["transactionId"]).isEqualTo("txn_cancel_via_base")
         assertThat(map).doesNotContainKey("expiresAtIso")
+    }
+
+    // ---------------------------------------------------------------------
+    // UserOffer.OfferData adapter — Android `actionType` discriminator →
+    // iOS-legacy `Offer.OfferData` wire shape (`flowType` + `upgradeType`)
+    // that Dart's `OfferData.fromMap` reads. See ModelToFlutterMap.kt for
+    // the field-by-field mapping rationale.
+    // ---------------------------------------------------------------------
+
+    private val fullDisplay = UserOffer.OfferDisplay(
+        title = "Save 20%",
+        body = "Switch to direct billing for 20% off.",
+        ctaText = "Switch Now",
+        dismissText = "Maybe Later",
+        acceptedTitle = "Almost done",
+        acceptedBody = "Complete checkout to finish switching.",
+        completedTitle = "All set!",
+        completedBody = "You're now on direct billing.",
+        appleCancelInstructions = "Cancel your Apple subscription in Settings.",
+    )
+
+    @Test
+    fun `UserOffer OfferData with MIGRATE_STOREKIT_TO_WEB encodes as flowType migration`() {
+        val data = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "com.app.pro_monthly_web",
+            fromProductId = null,
+            savingsPercent = 20,
+            freeTrialDays = 7,
+            minSubscriptionDays = 30,
+            maxSubscriptionDays = 365,
+            rolloutPercent = 100,
+            display = fullDisplay,
+            experimentVariantId = 3,
+            checkoutPresentation = UserOffer.CheckoutPresentation.SAFARI_VC,
+        )
+
+        val map = data.toFlutterMap()
+
+        // Required keys.
+        assertThat(map["flowType"]).isEqualTo("migration")
+        assertThat(map["productId"]).isEqualTo("com.app.pro_monthly_web")
+        // Migration: no upgradeType.
+        assertThat(map).doesNotContainKey("upgradeType")
+        // Migration: no from/to product IDs on the wire — productId IS the target.
+        assertThat(map).doesNotContainKey("fromProductId")
+        assertThat(map).doesNotContainKey("toProductId")
+        // eligibleProductIds is always emitted (per iOS encoder); empty list when
+        // Android has no source for it.
+        @Suppress("UNCHECKED_CAST")
+        assertThat(map["eligibleProductIds"] as List<String>).isEmpty()
+        // Scalars.
+        assertThat(map["savingsPercent"]).isEqualTo(20)
+        assertThat(map["freeTrialDays"]).isEqualTo(7)
+        assertThat(map["minSubscriptionDays"]).isEqualTo(30)
+        assertThat(map["maxSubscriptionDays"]).isEqualTo(365)
+        assertThat(map["rolloutPercent"]).isEqualTo(100)
+        assertThat(map["variantId"]).isEqualTo(3)
+        // SAFARI_VC → "safari_vc" (overlapping with Dart enum).
+        assertThat(map["checkoutPresentation"]).isEqualTo("safari_vc")
+        // Display sub-map.
+        @Suppress("UNCHECKED_CAST")
+        val display = map["display"] as Map<String, Any?>
+        assertThat(display["offerTitle"]).isEqualTo("Save 20%")
+        assertThat(display["offerMessage"])
+            .isEqualTo("Switch to direct billing for 20% off.")
+        assertThat(display["offerCta"]).isEqualTo("Switch Now")
+        assertThat(display["acceptedTitle"]).isEqualTo("Almost done")
+        assertThat(display["acceptedMessage"])
+            .isEqualTo("Complete checkout to finish switching.")
+        assertThat(display["completedTitle"]).isEqualTo("All set!")
+        assertThat(display["completedMessage"])
+            .isEqualTo("You're now on direct billing.")
+        // No Android-equivalent — emit empty string for iOS shape parity.
+        assertThat(display["acceptedCta"]).isEqualTo("")
+        // Android-only display keys MUST NOT leak onto the wire.
+        assertThat(display).doesNotContainKey("dismissText")
+        assertThat(display).doesNotContainKey("appleCancelInstructions")
+    }
+
+    @Test
+    fun `UserOffer OfferData with UPGRADE_STOREKIT_TO_WEB encodes as upgrade flow`() {
+        val data = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.UPGRADE_STOREKIT_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "com.app.pro_yearly_web",
+            fromProductId = "com.app.pro_monthly",
+            savingsPercent = 30,
+            display = fullDisplay,
+        )
+
+        val map = data.toFlutterMap()
+
+        assertThat(map["flowType"]).isEqualTo("upgrade")
+        assertThat(map["upgradeType"]).isEqualTo("storekit_to_web")
+        // iOS-legacy semantics: `productId` = source, `toProductId` = target.
+        // `Offer.OfferData.checkoutProductId` is `toProductId ?? productId`.
+        assertThat(map["productId"]).isEqualTo("com.app.pro_monthly")
+        assertThat(map["fromProductId"]).isEqualTo("com.app.pro_monthly")
+        assertThat(map["toProductId"]).isEqualTo("com.app.pro_yearly_web")
+        @Suppress("UNCHECKED_CAST")
+        assertThat(map["eligibleProductIds"] as List<String>).isEmpty()
+    }
+
+    @Test
+    fun `UserOffer OfferData with UPGRADE_WEB_TO_WEB encodes as web_to_web upgrade`() {
+        val data = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.UPGRADE_WEB_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "com.app.pro_yearly_web",
+            fromProductId = "com.app.pro_monthly_web",
+            display = fullDisplay,
+        )
+
+        val map = data.toFlutterMap()
+
+        assertThat(map["flowType"]).isEqualTo("upgrade")
+        assertThat(map["upgradeType"]).isEqualTo("web_to_web")
+        assertThat(map["productId"]).isEqualTo("com.app.pro_monthly_web")
+        assertThat(map["fromProductId"]).isEqualTo("com.app.pro_monthly_web")
+        assertThat(map["toProductId"]).isEqualTo("com.app.pro_yearly_web")
+    }
+
+    @Test
+    fun `UserOffer OfferData upgrade with null fromProductId falls back to checkoutProductId`() {
+        // Edge case: backend (or future Android SDK) returns an upgrade offer
+        // without a `from_product_id`. The encoder must still produce a valid
+        // wire shape — fall back to `checkoutProductId` for `productId` and
+        // `fromProductId` so Dart's parse doesn't blow up on a null required
+        // field.
+        val data = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.UPGRADE_WEB_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "com.app.pro_yearly_web",
+            fromProductId = null,
+            display = fullDisplay,
+        )
+
+        val map = data.toFlutterMap()
+
+        assertThat(map["productId"]).isEqualTo("com.app.pro_yearly_web")
+        // fromProductId is null on the Android source → omitted on the wire.
+        assertThat(map).doesNotContainKey("fromProductId")
+        assertThat(map["toProductId"]).isEqualTo("com.app.pro_yearly_web")
+    }
+
+    @Test
+    fun `UserOffer OfferData with NO_ACTION throws IllegalStateException`() {
+        // Callers should null-check `eligibleOffer` before encoding. The encoder
+        // is loud-fail to surface mis-encoding bugs immediately — silent null
+        // return would be wider than the wire contract (Dart requires non-null
+        // flowType + productId + display).
+        val data = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.NO_ACTION,
+            isEligible = false,
+            checkoutProductId = "",
+            display = null,
+        )
+
+        assertThrows(IllegalStateException::class.java) {
+            data.toFlutterMap()
+        }
+    }
+
+    @Test
+    fun `UserOffer OfferData with null Display emits empty-string Display map`() {
+        // Dart's OfferData.fromMap requires `display` non-null. When Android's
+        // backend omits the display block (nullable on OfferData), the encoder
+        // must still emit a valid Display map — populated with empty strings,
+        // which Dart's OfferDisplay.fromMap tolerates (each field is `?? ''`).
+        val data = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "com.app.pro_monthly_web",
+            display = null,
+        )
+
+        val map = data.toFlutterMap()
+
+        @Suppress("UNCHECKED_CAST")
+        val display = map["display"] as Map<String, Any?>
+        assertThat(display["offerTitle"]).isEqualTo("")
+        assertThat(display["offerMessage"]).isEqualTo("")
+        assertThat(display["offerCta"]).isEqualTo("")
+        assertThat(display["acceptedTitle"]).isEqualTo("")
+        assertThat(display["acceptedMessage"]).isEqualTo("")
+        assertThat(display["acceptedCta"]).isEqualTo("")
+        assertThat(display["completedTitle"]).isEqualTo("")
+        assertThat(display["completedMessage"]).isEqualTo("")
+    }
+
+    @Test
+    fun `UserOffer OfferData omits non-overlapping CheckoutPresentation values`() {
+        // Dart's OfferCheckoutPresentation has {inline, sheet, safari_vc, safari}.
+        // Android's CheckoutPresentation has {webview, native_pay, safari_vc, safari}.
+        // For non-overlapping values (WEBVIEW, NATIVE_PAY), the encoder MUST
+        // omit the key — Dart's `fromRawValue` would silently downgrade to
+        // `inline` (its orElse fallback), which is a hidden behaviour bug.
+        // Omitting → Dart sees null → SDK uses the global `checkoutType`.
+        val webview = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "p",
+            display = fullDisplay,
+            checkoutPresentation = UserOffer.CheckoutPresentation.WEBVIEW,
+        )
+        val nativePay = webview.copy(
+            checkoutPresentation = UserOffer.CheckoutPresentation.NATIVE_PAY,
+        )
+        val safariVc = webview.copy(
+            checkoutPresentation = UserOffer.CheckoutPresentation.SAFARI_VC,
+        )
+        val safari = webview.copy(
+            checkoutPresentation = UserOffer.CheckoutPresentation.SAFARI,
+        )
+        val none = webview.copy(checkoutPresentation = null)
+
+        assertThat(webview.toFlutterMap()).doesNotContainKey("checkoutPresentation")
+        assertThat(nativePay.toFlutterMap()).doesNotContainKey("checkoutPresentation")
+        assertThat(safariVc.toFlutterMap()["checkoutPresentation"])
+            .isEqualTo("safari_vc")
+        assertThat(safari.toFlutterMap()["checkoutPresentation"])
+            .isEqualTo("safari")
+        assertThat(none.toFlutterMap()).doesNotContainKey("checkoutPresentation")
+    }
+
+    @Test
+    fun `UserOffer OfferData omits Android-only fields`() {
+        // proration, appleSubscription, source, requiresAppleCancel are not in
+        // the iOS-legacy wire shape. Dart computes `needsAppleCancel` from
+        // `flowType + upgradeType`, so requiresAppleCancel is redundant.
+        val data = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.UPGRADE_WEB_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "com.app.pro_yearly_web",
+            fromProductId = "com.app.pro_monthly_web",
+            display = fullDisplay,
+            proration = UserOffer.OfferProration(
+                amountCents = 250,
+                currency = "USD",
+                nextBillingDate = "2026-06-01",
+            ),
+            requiresAppleCancel = true,
+            appleSubscription = UserOffer.AppleSubscriptionSummary(
+                isActive = true,
+                expiresAt = "2026-06-01",
+                statusCode = 1,
+                autoRenewEnabled = true,
+            ),
+            source = UserOffer.SourceStorefront.STORE_KIT,
+        )
+
+        val map = data.toFlutterMap()
+
+        assertThat(map).doesNotContainKey("proration")
+        assertThat(map).doesNotContainKey("appleSubscription")
+        assertThat(map).doesNotContainKey("source")
+        assertThat(map).doesNotContainKey("requiresAppleCancel")
+        // Also: perProductPrompts has no Android source; must not appear.
+        assertThat(map).doesNotContainKey("perProductPrompts")
+    }
+
+    @Test
+    fun `UserOffer OfferData omits null optional scalars`() {
+        val data = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "com.app.pro_monthly_web",
+            // maxSubscriptionDays defaulted to null, experimentVariantId null,
+            // checkoutPresentation null.
+            display = fullDisplay,
+        )
+
+        val map = data.toFlutterMap()
+
+        assertThat(map).doesNotContainKey("maxSubscriptionDays")
+        assertThat(map).doesNotContainKey("variantId")
+        assertThat(map).doesNotContainKey("checkoutPresentation")
+        assertThat(map).doesNotContainKey("upgradeType")
+        // rolloutPercent has a non-null default (100); always emitted.
+        assertThat(map["rolloutPercent"]).isEqualTo(100)
+    }
+
+    @Test
+    fun `UserOffer OfferDisplay encoder maps Android fields to iOS-legacy keys`() {
+        val display = UserOffer.OfferDisplay(
+            title = "T",
+            body = "B",
+            ctaText = "C",
+            dismissText = "D",
+            acceptedTitle = "AT",
+            acceptedBody = "AB",
+            completedTitle = "CT",
+            completedBody = "CB",
+            appleCancelInstructions = "ACI",
+        )
+
+        val map = display.toFlutterMap()
+
+        // iOS-legacy keys derived from Android source.
+        assertThat(map["offerTitle"]).isEqualTo("T")
+        assertThat(map["offerMessage"]).isEqualTo("B")
+        assertThat(map["offerCta"]).isEqualTo("C")
+        assertThat(map["acceptedTitle"]).isEqualTo("AT")
+        assertThat(map["acceptedMessage"]).isEqualTo("AB")
+        assertThat(map["completedTitle"]).isEqualTo("CT")
+        assertThat(map["completedMessage"]).isEqualTo("CB")
+        // iOS has acceptedCta; Android does not → empty string for parity with
+        // the iOS encoder which always emits all 8 keys.
+        assertThat(map["acceptedCta"]).isEqualTo("")
+        // Android-only fields MUST NOT leak.
+        assertThat(map).doesNotContainKey("dismissText")
+        assertThat(map).doesNotContainKey("appleCancelInstructions")
     }
 }

@@ -9,6 +9,7 @@ import com.zerosettle.sdk.models.PendingClaim
 import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
 import com.zerosettle.sdk.models.ProductType
+import com.zerosettle.sdk.models.UserOffer
 
 /**
  * SDK-domain → `Map<String, Any?>` encoders for the Flutter MethodChannel wire.
@@ -205,4 +206,192 @@ fun PendingAction.ManualPlayCancel.toFlutterMap(): Map<String, Any?> {
     )
     expiresAtIso?.let { map["expiresAtIso"] = it }
     return map
+}
+
+// ---------------------------------------------------------------------------
+// UserOffer.OfferData adapter
+// ---------------------------------------------------------------------------
+//
+// Android's [UserOffer.OfferData] is the *modern* offer shape (discriminated by
+// [UserOffer.ActionType]). The Dart-side `OfferData.fromMap` at
+// `lib/models/offer.dart` reads the *iOS-legacy* `Offer.OfferData` shape
+// (discriminated by `flowType` + optional `upgradeType`). This adapter bridges
+// those two shapes so Android can keep using its modern internal model while
+// publishing the wire shape the existing Dart parser expects.
+//
+// Mapping summary:
+//   - `ActionType.MIGRATE_STOREKIT_TO_WEB` → `flowType=migration` (no upgradeType)
+//   - `ActionType.UPGRADE_STOREKIT_TO_WEB` → `flowType=upgrade`, `upgradeType=storekit_to_web`
+//   - `ActionType.UPGRADE_WEB_TO_WEB`      → `flowType=upgrade`, `upgradeType=web_to_web`
+//   - `ActionType.NO_ACTION`               → throws `IllegalStateException`
+//     (callers MUST null-check via `UserOffer.Response.eligibleOffer` first;
+//     silent null-return would be wider than the Dart wire contract, which
+//     requires non-null `flowType` + `productId` + `display`).
+//
+// Field-by-field rules (see `lib/models/offer.dart:258-300`):
+//
+//   - `productId`: For *migrations* this is the target (`checkoutProductId`).
+//     For *upgrades* this is the source — iOS legacy semantics treat
+//     `productId` as the source and `toProductId` as the target (see the
+//     computed property `Offer.OfferData.checkoutProductId: toProductId ?? productId`).
+//     If Android's `fromProductId` is null on an upgrade, fall back to
+//     `checkoutProductId` so the required Dart field stays non-null.
+//
+//   - `eligibleProductIds`: Always emitted (matches iOS encoder shape). Android
+//     has no equivalent source field on `UserOffer.OfferData`, so this is the
+//     empty list. Dart tolerates empty via `?? <String>[]`. Fabricating a
+//     single-element list would invent data — the "drop fields, don't invent"
+//     principle wins.
+//
+//   - `display`: Required by Dart (`OfferData.fromMap` decodes it as
+//     `Map<String, dynamic>.from(map['display'] as Map)` — null would crash).
+//     When Android's `display` is null, emit an empty-string Display map; each
+//     iOS-legacy field is `?? ''` on the Dart side, so this is graceful.
+//
+//   - `checkoutPresentation`: Dart's `OfferCheckoutPresentation` is
+//     `{inline, sheet, safari_vc, safari}`. Android's `CheckoutPresentation`
+//     is `{webview, native_pay, safari_vc, safari}`. Only `safari_vc` and
+//     `safari` overlap. For non-overlapping values (`WEBVIEW`, `NATIVE_PAY`),
+//     OMIT the key — Dart's `fromRawValue` would silently fall back to
+//     `inline` (its `orElse`), which is a hidden behaviour bug. Omitting →
+//     Dart sees null → SDK uses the global `checkoutType`.
+//
+//   - `OfferDisplay`: Android uses different field names. Mapping:
+//       Android.title   → iOS.offerTitle
+//       Android.body    → iOS.offerMessage
+//       Android.ctaText → iOS.offerCta
+//       Android.acceptedTitle → iOS.acceptedTitle      (name matches)
+//       Android.acceptedBody  → iOS.acceptedMessage
+//       Android.completedTitle → iOS.completedTitle    (name matches)
+//       Android.completedBody  → iOS.completedMessage
+//       Android.dismissText             → DROP (no iOS equivalent)
+//       Android.appleCancelInstructions → DROP (no iOS equivalent)
+//       iOS.acceptedCta                 → emit empty string (no Android source).
+//     The iOS encoder always emits all 8 keys; we match that shape exactly.
+//
+//   - `variantId`: Android's `experimentVariantId` → Dart's `variantId`.
+//
+//   - DROPPED (not in the iOS-legacy wire contract):
+//       proration, appleSubscription, source, requiresAppleCancel,
+//       perProductPrompts (Android has no source field).
+//     `requiresAppleCancel` is computed Dart-side via `flowType + upgradeType`,
+//     so it would be redundant data anyway.
+
+/**
+ * Encodes Android's modern [UserOffer.OfferData] into the iOS-legacy
+ * `Offer.OfferData` wire shape that Dart's `OfferData.fromMap` consumes.
+ *
+ * **Caller contract:** Only call this for offers where
+ * [UserOffer.OfferData.actionType] is NOT [UserOffer.ActionType.NO_ACTION].
+ * The recommended path is to encode `UserOffer.Response.eligibleOffer` (which
+ * filters on both `isEligible` and `actionType != NO_ACTION`); calling on a
+ * `NO_ACTION` offer throws [IllegalStateException].
+ *
+ * @throws IllegalStateException if [UserOffer.OfferData.actionType] is
+ *   [UserOffer.ActionType.NO_ACTION] — encoding a no-action offer would emit
+ *   a Map missing the required `flowType` semantics. Caller should null-check.
+ */
+fun UserOffer.OfferData.toFlutterMap(): Map<String, Any?> {
+    val flow: String = when (actionType) {
+        UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB -> "migration"
+        UserOffer.ActionType.UPGRADE_STOREKIT_TO_WEB -> "upgrade"
+        UserOffer.ActionType.UPGRADE_WEB_TO_WEB -> "upgrade"
+        UserOffer.ActionType.NO_ACTION -> throw IllegalStateException(
+            "Cannot encode UserOffer.OfferData with actionType=NO_ACTION — " +
+                "caller should null-check via UserOffer.Response.eligibleOffer " +
+                "before encoding."
+        )
+    }
+    val isMigration = actionType == UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB
+    // iOS-legacy `productId` semantics:
+    //   migration: target product (what the user will buy on web)
+    //   upgrade:   source product (the user's current sub; target lives in `toProductId`)
+    val productIdOut: String = if (isMigration) {
+        checkoutProductId
+    } else {
+        fromProductId ?: checkoutProductId
+    }
+
+    val map = mutableMapOf<String, Any?>(
+        "flowType" to flow,
+        "productId" to productIdOut,
+        // Always emit (matches iOS shape). Android has no source field → empty list.
+        "eligibleProductIds" to emptyList<String>(),
+        "savingsPercent" to savingsPercent,
+        // Dart requires a non-null Display map. Synthesize an empty one when
+        // Android's optional Display is absent.
+        "display" to (display?.toFlutterMap() ?: emptyOfferDisplayMap()),
+        "freeTrialDays" to freeTrialDays,
+        "minSubscriptionDays" to minSubscriptionDays,
+        // `rolloutPercent` has a non-null Android default (100); always emit.
+        "rolloutPercent" to rolloutPercent,
+    )
+    maxSubscriptionDays?.let { map["maxSubscriptionDays"] = it }
+    // Upgrade-only keys.
+    if (!isMigration) {
+        map["upgradeType"] = when (actionType) {
+            UserOffer.ActionType.UPGRADE_STOREKIT_TO_WEB -> "storekit_to_web"
+            UserOffer.ActionType.UPGRADE_WEB_TO_WEB -> "web_to_web"
+            // Unreachable: the migration/no_action branches return earlier.
+            else -> error("upgradeType requested for non-upgrade actionType=$actionType")
+        }
+        fromProductId?.let { map["fromProductId"] = it }
+        map["toProductId"] = checkoutProductId
+    }
+    experimentVariantId?.let { map["variantId"] = it }
+    checkoutPresentation?.toWireStringOrNull()?.let { map["checkoutPresentation"] = it }
+    // Intentionally omitted (not in the iOS-legacy wire contract): proration,
+    // appleSubscription, source, requiresAppleCancel, perProductPrompts.
+    return map
+}
+
+/**
+ * Maps an Android [UserOffer.OfferDisplay] to the iOS-legacy `Offer.Display`
+ * wire shape. Android-only fields (`dismissText`, `appleCancelInstructions`)
+ * are dropped — they have no iOS analogue. The iOS-only `acceptedCta` field
+ * is emitted as an empty string for shape parity with the iOS encoder, which
+ * always emits all 8 keys.
+ */
+fun UserOffer.OfferDisplay.toFlutterMap(): Map<String, Any?> = mapOf(
+    "offerTitle" to title,
+    "offerMessage" to body,
+    "offerCta" to ctaText,
+    "acceptedTitle" to acceptedTitle,
+    "acceptedMessage" to acceptedBody,
+    // Android has no `acceptedCta` analogue; emit empty so the iOS shape's
+    // 8-key layout is preserved (Dart's `OfferDisplay.fromMap` does `?? ''`).
+    "acceptedCta" to "",
+    "completedTitle" to completedTitle,
+    "completedMessage" to completedBody,
+)
+
+/** Empty-string Display map for the null-Display fallback path. */
+private fun emptyOfferDisplayMap(): Map<String, Any?> = mapOf(
+    "offerTitle" to "",
+    "offerMessage" to "",
+    "offerCta" to "",
+    "acceptedTitle" to "",
+    "acceptedMessage" to "",
+    "acceptedCta" to "",
+    "completedTitle" to "",
+    "completedMessage" to "",
+)
+
+/**
+ * Returns the Dart-side `OfferCheckoutPresentation` rawValue for the values
+ * that overlap, and `null` for values that don't.
+ *
+ * Dart enum:    inline, sheet, safari_vc, safari
+ * Android enum: webview, native_pay, safari_vc, safari
+ *
+ * For `WEBVIEW` / `NATIVE_PAY`, Dart's `fromRawValue` would silently fall back
+ * to `inline` (its `orElse` clause), masking the underlying mismatch. Returning
+ * null here causes the encoder to omit the key, which makes Dart use the
+ * SDK's global `checkoutType` — the correct default.
+ */
+private fun UserOffer.CheckoutPresentation.toWireStringOrNull(): String? = when (this) {
+    UserOffer.CheckoutPresentation.SAFARI_VC -> "safari_vc"
+    UserOffer.CheckoutPresentation.SAFARI -> "safari"
+    UserOffer.CheckoutPresentation.WEBVIEW -> null
+    UserOffer.CheckoutPresentation.NATIVE_PAY -> null
 }
