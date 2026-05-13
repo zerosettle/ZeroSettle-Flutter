@@ -116,7 +116,7 @@ void main() {
     });
   });
 
-  group('OfferOfferData', () {
+  group('OfferData', () {
     test('fromMap/toMap migration with all fields populated', () {
       final map = {
         'flowType': 'migration',
@@ -131,7 +131,7 @@ void main() {
         'variantId': 3,
         'checkoutPresentation': 'sheet',
       };
-      final d = OfferOfferData.fromMap(map);
+      final d = OfferData.fromMap(map);
       expect(d.flowType, OfferFlowType.migration);
       expect(d.productId, 'pro_monthly');
       expect(d.eligibleProductIds, ['pro_monthly', 'pro_weekly']);
@@ -174,7 +174,7 @@ void main() {
         'fromProductId': 'pro_monthly',
         'toProductId': 'pro_yearly',
       };
-      final d = OfferOfferData.fromMap(map);
+      final d = OfferData.fromMap(map);
       expect(d.flowType, OfferFlowType.upgrade);
       expect(d.upgradeType, OfferUpgradeType.webToWeb);
       expect(d.fromProductId, 'pro_monthly');
@@ -198,7 +198,7 @@ void main() {
         'fromProductId': 'pro_monthly_sk',
         'toProductId': 'pro_yearly',
       };
-      final d = OfferOfferData.fromMap(map);
+      final d = OfferData.fromMap(map);
       expect(d.upgradeType, OfferUpgradeType.storekitToWeb);
       expect(d.needsAppleCancel, isTrue);
     });
@@ -220,7 +220,7 @@ void main() {
           },
         },
       };
-      final d = OfferOfferData.fromMap(map);
+      final d = OfferData.fromMap(map);
       expect(d.perProductPrompts, isNotNull);
       expect(d.perProductPrompts!.length, 1);
       final override = d.perProductPrompts!['pro_monthly']!;
@@ -247,7 +247,7 @@ void main() {
         // eligibleProductIds all omitted — Swift uses
         // decodeIfPresent ?? 0 / [].
       };
-      final d = OfferOfferData.fromMap(map);
+      final d = OfferData.fromMap(map);
       expect(d.savingsPercent, 0);
       expect(d.freeTrialDays, 0);
       expect(d.minSubscriptionDays, 0);
@@ -266,8 +266,8 @@ void main() {
         'freeTrialDays': 0,
         'minSubscriptionDays': 0,
       };
-      final a = OfferOfferData.fromMap(Map<String, dynamic>.from(base));
-      final b = OfferOfferData.fromMap(Map<String, dynamic>.from(base));
+      final a = OfferData.fromMap(Map<String, dynamic>.from(base));
+      final b = OfferData.fromMap(Map<String, dynamic>.from(base));
       expect(a, b);
       expect(a.hashCode, b.hashCode);
     });

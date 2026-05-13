@@ -4,8 +4,11 @@
 /// `Offer` on iOS is a public enum used purely as a namespace for the
 /// nested types: `FlowType`, `UpgradeType`, `CheckoutPresentation`,
 /// `State`, `Display`, `PerProductOffer`, and `OfferData`. Dart names
-/// keep the `Offer` prefix to mirror that nesting (e.g. `OfferOfferData`
-/// matches Swift's `Offer.OfferData`).
+/// keep the `Offer` prefix to mirror that nesting (e.g. `OfferFlowType`,
+/// `OfferDisplay`), EXCEPT `OfferData` itself — the doubled-prefix form
+/// (`OfferOfferData`) was too awkward to live with, so the bare
+/// `OfferData` name was chosen instead. Same field-for-field shape as
+/// Swift's `Offer.OfferData`.
 library;
 
 /// The type of offer flow, determined by the server. Mirrors
@@ -207,7 +210,7 @@ class OfferPerProductOffer {
 ///
 /// The Dart class name keeps the `Offer` prefix to mirror Swift's
 /// nested `Offer.OfferData` namespacing.
-class OfferOfferData {
+class OfferData {
   final OfferFlowType flowType;
   final String productId;
   final List<String> eligibleProductIds;
@@ -234,7 +237,7 @@ class OfferOfferData {
   // Checkout presentation mode (nil = use global checkoutType)
   final OfferCheckoutPresentation? checkoutPresentation;
 
-  const OfferOfferData({
+  const OfferData({
     required this.flowType,
     required this.productId,
     required this.eligibleProductIds,
@@ -252,7 +255,7 @@ class OfferOfferData {
     this.checkoutPresentation,
   });
 
-  factory OfferOfferData.fromMap(Map<String, dynamic> map) {
+  factory OfferData.fromMap(Map<String, dynamic> map) {
     final rawPerProduct = map['perProductPrompts'];
     Map<String, OfferPerProductOffer>? perProduct;
     if (rawPerProduct is Map) {
@@ -266,7 +269,7 @@ class OfferOfferData {
       );
     }
 
-    return OfferOfferData(
+    return OfferData(
       flowType: OfferFlowType.fromRawValue(map['flowType'] as String),
       productId: map['productId'] as String,
       eligibleProductIds: (map['eligibleProductIds'] as List?)
@@ -337,7 +340,7 @@ class OfferOfferData {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    if (other is! OfferOfferData) return false;
+    if (other is! OfferData) return false;
     if (flowType != other.flowType) return false;
     if (productId != other.productId) return false;
     if (savingsPercent != other.savingsPercent) return false;
@@ -397,7 +400,7 @@ class OfferOfferData {
 /// Emitted on every state-property change via the manager's stream.
 class OfferManagerState {
   final OfferState state;
-  final OfferOfferData? offerData;
+  final OfferData? offerData;
   final String? checkoutErrorMessage;
   final bool isLoading;
   final bool storekitCancelRequired;
@@ -414,7 +417,7 @@ class OfferManagerState {
     return OfferManagerState(
       state: OfferState.fromRawValue(map['state'] as String),
       offerData: map['offerData'] != null
-          ? OfferOfferData.fromMap(
+          ? OfferData.fromMap(
               Map<String, dynamic>.from(map['offerData'] as Map),
             )
           : null,

@@ -118,7 +118,7 @@ class OfferManager {
   }
 
   /// Mark the checkout as succeeded; transitions state toward `accepted`
-  /// (when [OfferOfferData.needsAppleCancel] is true) or `completed`.
+  /// (when [OfferData.needsAppleCancel] is true) or `completed`.
   @Deprecated('Bookkeeping is automatic when you call ZeroSettle.instance.presentPaymentSheet or ZeroSettle.instance.purchase. The body of this method is preserved through 1.x for adopters using `startCheckout` (raw URL escape hatch) who need to call it manually after their out-of-band checkout completes. Will be removed in 2.0.')
   Future<void> markCheckoutSucceeded({String? transactionId}) async {
     _ensureNotDisposed();
