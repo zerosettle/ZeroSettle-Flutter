@@ -3,6 +3,8 @@ package com.zerosettle.flutter
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import com.zerosettle.flutter.handlers.HandlerDependencies
+import com.zerosettle.flutter.handlers.IdentityHandler
 import com.zerosettle.flutter.offermanager.OfferManagerHandleRegistry
 import com.zerosettle.flutter.offermanager.OfferManagerStaticHandler
 import com.zerosettle.flutter.platformviews.MigrateTipViewFactory
@@ -54,9 +56,10 @@ import kotlinx.coroutines.cancel
  * cross-checked against `ios/zerosettle/Sources/zerosettle/ZeroSettlePlugin.swift`.
  * Methods are grouped by the task ID that lands the real handler:
  *
- *   - **F8** identity: `configure`, `bootstrap`, `identify`, `logout`,
- *     `setCustomer`, `transferStoreKitOwnershipToCurrentUser`,
- *     `getCurrentUserId`, `getIsBootstrapped`, `getIsConfigured`
+ *   - **F8** identity (landed — see [IdentityHandler]): `configure`,
+ *     `bootstrap`, `identify`, `logout`, `setCustomer`,
+ *     `transferStoreKitOwnershipToCurrentUser`, `getCurrentUserId`,
+ *     `getIsBootstrapped`, `getIsConfigured`
  *   - **F9** catalog / entitlements: `fetchProducts`, `getProducts`,
  *     `product`, `hasActiveEntitlement`, `getEntitlements`,
  *     `restoreEntitlements`
@@ -138,6 +141,13 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     internal lateinit var offerManagerRegistry: OfferManagerHandleRegistry
 
     /**
+     * F8 identity/lifecycle handler. Owns the 9 lifecycle methods Dart
+     * calls on the main channel. Allocated on engine attach so it sees
+     * the freshly-constructed scope + activity provider.
+     */
+    private lateinit var identityHandler: IdentityHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -177,6 +187,18 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         applePayStateEventChannel = EventChannel(messenger, "zerosettle/apple_pay_state_updates").apply {
             setStreamHandler(applePayStateStreamHandler)
         }
+
+        // F8 identity/lifecycle handler. Build the shared HandlerDependencies
+        // bundle here so F9-F17 can adopt the same plumbing without each
+        // handler needing the plugin's private fields exposed. The lambdas
+        // capture `this`, so the activity/context providers always reflect
+        // the plugin's current state (post-config-change reattach included).
+        val handlerDeps = HandlerDependencies(
+            scope = pluginScope,
+            activityProvider = activityProvider,
+            applicationContextProvider = applicationContextProvider,
+        )
+        identityHandler = IdentityHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
@@ -239,19 +261,14 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     // ── MethodCallHandler ────────────────────────────────────────────
 
     override fun onMethodCall(call: MethodCall, result: Result) {
-        when (call.method) {
-            // === F8 — Identity surface ===
-            "configure",
-            "bootstrap",
-            "identify",
-            "logout",
-            "setCustomer",
-            "transferStoreKitOwnershipToCurrentUser",
-            "getCurrentUserId",
-            "getIsBootstrapped",
-            "getIsConfigured" ->
-                notYetImplemented(call.method, "F8", result)
+        // Per-domain handlers consume their own methods. Each handler's
+        // `handle(call, result)` returns true if it owned the method, false
+        // otherwise — fall through to the next handler / the WIP-error
+        // dispatch below if no handler claims the call. F8 owns identity;
+        // F9-F17 are still WIP-error stubs.
+        if (identityHandler.handle(call, result)) return
 
+        when (call.method) {
             // === F9 — Catalog + entitlements ===
             "fetchProducts",
             "getProducts",

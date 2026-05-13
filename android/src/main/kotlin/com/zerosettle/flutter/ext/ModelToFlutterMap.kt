@@ -8,6 +8,7 @@ import com.zerosettle.sdk.models.PendingAction
 import com.zerosettle.sdk.models.PendingClaim
 import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
+import com.zerosettle.sdk.models.ProductCatalog
 import com.zerosettle.sdk.models.ProductType
 import com.zerosettle.sdk.models.UserOffer
 import com.zerosettle.sdk.offers.OfferManager
@@ -121,6 +122,17 @@ fun Entitlement.toFlutterMap(): Map<String, Any?> {
     // playPurchaseToken, originalPurchaseDate.
     return map
 }
+
+/**
+ * Encode the SDK's [ProductCatalog] for the Flutter wire. iOS publishes a
+ * `{"products": [...], "config": {...}}` shape (see
+ * `ZeroSettlePlugin.swift:1585`). Android's [ProductCatalog] has no
+ * `config` field — emit only `products`. Dart parsers tolerate the missing
+ * key.
+ */
+fun ProductCatalog.toFlutterMap(): Map<String, Any?> = mapOf(
+    "products" to products.map { it.toFlutterMap() },
+)
 
 fun Product.toFlutterMap(): Map<String, Any?> {
     val map = mutableMapOf<String, Any?>(

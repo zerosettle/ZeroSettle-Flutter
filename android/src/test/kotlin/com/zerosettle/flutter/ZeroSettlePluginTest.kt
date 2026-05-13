@@ -15,6 +15,7 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -210,11 +211,33 @@ class ZeroSettlePluginTest {
         assertThat(plugin.activityProvider()).isSameInstanceAs(after)
     }
 
-    // ─── onMethodCall — per-domain dispatch returns tagged error ────────
+    // ─── onMethodCall — per-domain dispatch ─────────────────────────────
 
     @Test
-    fun `F8 identity method routes to F8 task id`() {
-        assertNotYetImplemented(method = "identify", expectedTask = "F8")
+    fun `F8 identity getIsConfigured routes through IdentityHandler, not WIP error`() {
+        // Positive routing check: getIsConfigured reads ZeroSettle.isConfigured.value
+        // via the handler. After F8 landed, this call must NOT return the
+        // tagged F8 zerosettle_phase2_wip error — it should return a Boolean.
+        // The mocked ZeroSettle returns false for un-stubbed StateFlow reads;
+        // we assert success(false) rather than error(...).
+        every { ZeroSettle.isConfigured } returns MutableStateFlow(false)
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("getIsConfigured", null), result)
+        verify { result.success(false) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+    }
+
+    @Test
+    fun `F8 identity getCurrentUserId routes through IdentityHandler, not WIP error`() {
+        // Same positive-routing check for getCurrentUserId. The StateFlow's
+        // initial value is null until identify(.user) runs.
+        every { ZeroSettle.currentUserId } returns MutableStateFlow(null)
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("getCurrentUserId", null), result)
+        verify { result.success(null) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
     }
 
     @Test
