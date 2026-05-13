@@ -74,7 +74,24 @@ ZSMigrateTipView(
 
 ## How It Works
 
-This plugin is a thin Dart wrapper around the native [ZeroSettleKit](https://github.com/zerosettle/ZeroSettleKit) SDK. On iOS, it pulls ZeroSettleKit via CocoaPods — no xcframework is bundled in this repo.
+This plugin is a thin Dart wrapper around the native [ZeroSettleKit](https://github.com/zerosettle/ZeroSettleKit) (iOS) and [ZeroSettle-Android](https://github.com/zerosettle/ZeroSettle-Android) SDKs. On iOS, the plugin pulls ZeroSettleKit via Swift Package Manager. On Android, it declares an exact-pinned Maven coord (`io.zerosettle:zerosettle-android:1.0.0` + `…-ui:1.0.0`); adopter apps resolve from Maven Central at build time.
+
+## Local development against an in-tree Android SDK
+
+For plugin development against an unpublished ZeroSettle-Android checkout, use `mavenLocal()` publishing — the conventional Android multi-repo workflow.
+
+From the ZeroSettle-Android checkout, after every SDK source change:
+
+```bash
+cd /path/to/ZeroSettle-Android
+./gradlew :core:publishToMavenLocal :ui:publishToMavenLocal
+```
+
+This produces `~/.m2/repository/io/zerosettle/zerosettle-android/1.0.0/...` and `…-ui/1.0.0/...`. The plugin's `android/build.gradle` already lists `mavenLocal()` first in its repositories, so the in-tree build will pick up the locally-published artifacts.
+
+When the SDK version on `main` differs from the published Maven Central version, the plugin's pinned coord (`1.0.0`) needs a matching local publish for resolution to succeed; otherwise builds fall through to Maven Central as normal.
+
+**Why not composite-build / `includeBuild`?** Composite-build couples the AGP version across all repos (you'd need plugin / example / SDK all on the same AGP line). The plugin and the SDK ship on independent release cadences; mavenLocal keeps them decoupled. Production resolution is also identical to dev resolution (both go through the Maven coord), reducing "works in dev, fails in prod" surprises.
 
 ## Links
 
