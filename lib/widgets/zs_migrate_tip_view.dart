@@ -2,20 +2,31 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Embeds the native iOS migration tip view (`MigrationTipView` from
-/// ZeroSettleKit) inside a Flutter app.
+/// Embeds the native migration tip view inside a Flutter app:
+/// SwiftUI `MigrationTipView` on iOS (from ZeroSettleKit), Compose
+/// `ZeroSettleOfferTip` on Android (from ZeroSettle-Android `:ui`).
 ///
-/// The native SwiftUI view is intrinsically self-sizing — its height changes
-/// based on event state (CTA swap when Apple Pay needs setup, dismissal,
-/// loading state, etc.). A fixed `SizedBox` would either clip taller content
-/// or reserve dead space when the view collapses.
+/// The native view is intrinsically self-sizing — its height changes based
+/// on event state (CTA swap when Apple Pay needs setup, dismissal, loading
+/// state, etc.). A fixed `SizedBox` would either clip taller content or
+/// reserve dead space when the view collapses.
 ///
 /// This widget subscribes to a per-view MethodChannel that the native
-/// container pushes size updates to whenever its `layoutSubviews()` fires.
-/// Flutter rebuilds with the new height, so the surrounding layout always
+/// container pushes size updates to whenever its layout fires. The wire
+/// shape (`setSize` with `{height: Double}`) and channel name format
+/// (`zerosettle/migrate_tip_view_<viewId>`) are identical on both
+/// platforms, so the height-bridge code is platform-agnostic. Flutter
+/// rebuilds with the new height, so the surrounding layout always
 /// matches the actual rendered content.
 ///
-/// Renders nothing on Android.
+/// The PlatformView `viewType` differs by platform (iOS uses
+/// `zerosettle/migrate_tip_view`, Android uses
+/// `com.zerosettle/migrate_tip_view`) — this matches each platform's
+/// factory registration (`ZSMigrateTipViewFactory.swift:188` /
+/// `MigrateTipViewFactory.kt`).
+///
+/// Renders an empty `SizedBox.shrink()` on platforms other than iOS and
+/// Android (e.g. desktop, web).
 ///
 /// Example:
 /// ```dart
@@ -74,22 +85,45 @@ class _MigrationTipViewState extends State<MigrationTipView> {
 
   @override
   Widget build(BuildContext context) {
-    if (defaultTargetPlatform != TargetPlatform.iOS) {
-      return const SizedBox.shrink();
+    // Creation params are shared between iOS and Android — both decoders
+    // accept the same key set (`userId`, `backgroundColor` ARGB int).
+    // Android's MigrateTipViewFactory also accepts an optional
+    // `stripeCustomerId` we don't expose here for parity with iOS.
+    final creationParams = <String, Object?>{
+      'backgroundColor': widget.backgroundColor.toARGB32(),
+      'userId': widget.userId,
+    };
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        return SizedBox(
+          height: _height,
+          child: UiKitView(
+            viewType: 'zerosettle/migrate_tip_view',
+            creationParams: creationParams,
+            creationParamsCodec: const StandardMessageCodec(),
+            onPlatformViewCreated: _onPlatformViewCreated,
+          ),
+        );
+      case TargetPlatform.android:
+        // F24 registers the Android factory under `com.zerosettle/...`
+        // (Android convention prefixes with the org id); the per-view
+        // height-bridge channel name format matches iOS exactly so
+        // _onPlatformViewCreated is unchanged.
+        return SizedBox(
+          height: _height,
+          child: AndroidView(
+            viewType: 'com.zerosettle/migrate_tip_view',
+            creationParams: creationParams,
+            creationParamsCodec: const StandardMessageCodec(),
+            onPlatformViewCreated: _onPlatformViewCreated,
+          ),
+        );
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        return const SizedBox.shrink();
     }
-
-    return SizedBox(
-      height: _height,
-      child: UiKitView(
-        viewType: 'zerosettle/migrate_tip_view',
-        creationParams: {
-          'backgroundColor': widget.backgroundColor.toARGB32(),
-          'userId': widget.userId,
-        },
-        creationParamsCodec: const StandardMessageCodec(),
-        onPlatformViewCreated: _onPlatformViewCreated,
-      ),
-    );
   }
 }
 

@@ -142,6 +142,18 @@ void main() {
               'purchasedAt': '2025-03-01T08:00:00.000Z',
               'originalTransactionId': '2000000000000000',
             };
+          case 'purchaseViaPlayBilling':
+            return {
+              'id': 'GPA.0000-0000-0000-00000',
+              'productId': 'premium_monthly',
+              'status': 'completed',
+              // Wire source is `play_store` — same EntitlementSource value
+              // as a cross-platform Play purchase (see ext/ModelToFlutterMap.kt).
+              'source': 'play_store',
+              'purchasedAt': '2026-05-12T08:00:00.000Z',
+            };
+          case 'transferPlayOwnershipToCurrentUser':
+            return null;
           case 'getCurrentUserId':
             return 'u_42';
           case 'getIsBootstrapped':
@@ -487,6 +499,45 @@ void main() {
     final call = channelCalls.firstWhere((c) => c.method == 'purchaseViaStoreKit');
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['productId'], 'premium_monthly');
+    expect(args.containsKey('userId'), isFalse);
+  });
+
+  // ==== 1.5.0 D1: purchaseViaPlayBilling Android peer ====
+
+  test('purchaseViaPlayBilling channel call carries productId only', () async {
+    final result =
+        await platform.purchaseViaPlayBilling(productId: 'premium_monthly');
+    expect(result['id'], 'GPA.0000-0000-0000-00000');
+    // Wire source is `play_store` — same EntitlementSource value as a
+    // cross-platform Play purchase (matches ext/ModelToFlutterMap.kt).
+    expect(result['source'], 'play_store');
+    final call =
+        channelCalls.firstWhere((c) => c.method == 'purchaseViaPlayBilling');
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args['productId'], 'premium_monthly');
+    // No userId / originalTransactionId / presentation — purchase identity
+    // comes from the prior identify() call.
+    expect(args.containsKey('userId'), isFalse);
+    expect(args.containsKey('originalTransactionId'), isFalse);
+    expect(args.containsKey('presentation'), isFalse);
+  });
+
+  // ==== 1.5.0 D2: transferPlayOwnershipToCurrentUser Android peer ====
+
+  test(
+      'transferPlayOwnershipToCurrentUser channel call carries productId + originalTransactionId',
+      () async {
+    await platform.transferPlayOwnershipToCurrentUser(
+      productId: 'premium_monthly',
+      originalTransactionId: 'GPA.token_abc',
+    );
+    final call = channelCalls.firstWhere(
+      (c) => c.method == 'transferPlayOwnershipToCurrentUser',
+    );
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args['productId'], 'premium_monthly');
+    expect(args['originalTransactionId'], 'GPA.token_abc');
+    // No userId on the wire — current-user-scoped (matches the StoreKit peer).
     expect(args.containsKey('userId'), isFalse);
   });
 

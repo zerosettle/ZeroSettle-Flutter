@@ -424,6 +424,20 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 }
             }
 
+        case "transferPlayOwnershipToCurrentUser":
+            // Android-only — peer of `transferStoreKitOwnershipToCurrentUser`.
+            // Returning a tagged `not_implemented` error (rather than the
+            // generic `FlutterMethodNotImplemented` default) matches the
+            // pattern used for other intentionally-unavailable methods
+            // (e.g. `presentSaveTheSaleSheet`); Dart's `_wrap` rethrows
+            // as a `ZeroSettleException` callers can pattern-match on.
+            result(FlutterError(
+                code: "not_implemented",
+                message: "transferPlayOwnershipToCurrentUser is Android-only. " +
+                    "On iOS, use transferStoreKitOwnershipToCurrentUser(productId).",
+                details: nil
+            ))
+
         case "hasActiveEntitlement":
             guard let productId = args?["productId"] as? String else {
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
@@ -547,6 +561,18 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                     result(error.toFlutterError())
                 }
             }
+
+        case "purchaseViaPlayBilling":
+            // Android-only — peer of `purchaseViaStoreKit`. Returning a
+            // tagged `not_implemented` error matches the pattern for
+            // intentionally-unavailable methods on the iOS side; Dart's
+            // `_wrap` rethrows as a `ZeroSettleException`.
+            result(FlutterError(
+                code: "not_implemented",
+                message: "purchaseViaPlayBilling is Android-only. " +
+                    "On iOS, use purchaseViaStoreKit(productId).",
+                details: nil
+            ))
 
         case "preloadPaymentSheet":
             guard let productId = args?["productId"] as? String else {

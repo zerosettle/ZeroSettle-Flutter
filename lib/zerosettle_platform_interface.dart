@@ -58,6 +58,18 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('transferStoreKitOwnershipToCurrentUser() has not been implemented.');
   }
 
+  /// Android peer of [transferStoreKitOwnershipToCurrentUser]. Takes both
+  /// `productId` and `originalTransactionId` (the Play purchase token) —
+  /// the SDK needs both to resolve the source purchase via the Play API.
+  Future<void> transferPlayOwnershipToCurrentUser({
+    required String productId,
+    required String originalTransactionId,
+  }) {
+    throw UnimplementedError(
+      'transferPlayOwnershipToCurrentUser() has not been implemented.',
+    );
+  }
+
   Future<bool> hasActiveEntitlement({required String productId}) {
     throw UnimplementedError('hasActiveEntitlement() has not been implemented.');
   }
@@ -103,6 +115,17 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     required String productId,
   }) {
     throw UnimplementedError('purchaseViaStoreKit() has not been implemented.');
+  }
+
+  /// Android peer of [purchaseViaStoreKit]. Routes through the Google Play
+  /// Billing dialog and returns the resulting `CheckoutTransaction` shape
+  /// (`source == "play_billing"`).
+  Future<Map<String, dynamic>> purchaseViaPlayBilling({
+    required String productId,
+  }) {
+    throw UnimplementedError(
+      'purchaseViaPlayBilling() has not been implemented.',
+    );
   }
 
   Future<void> preloadPaymentSheet({required String productId, String? userId}) {

@@ -179,6 +179,17 @@ class MockZeroSettlePlatform
   }
 
   @override
+  Future<void> transferPlayOwnershipToCurrentUser({
+    required String productId,
+    required String originalTransactionId,
+  }) async {
+    _record('transferPlayOwnershipToCurrentUser', {
+      'productId': productId,
+      'originalTransactionId': originalTransactionId,
+    });
+  }
+
+  @override
   Future<bool> hasActiveEntitlement({required String productId}) async {
     _record('hasActiveEntitlement', {'productId': productId});
     return hasActiveEntitlementReturn;
@@ -392,6 +403,19 @@ class MockZeroSettlePlatform
     return purchaseViaStoreKitReturnValue;
   }
 
+  /// Test-controlled return for `purchaseViaPlayBilling` (D1 — 1.5.0).
+  /// Default uses a Play-Billing-shaped transaction (`source: play_billing`).
+  Map<String, dynamic> purchaseViaPlayBillingReturnValue =
+      _samplePlayBillingTransactionMap();
+
+  @override
+  Future<Map<String, dynamic>> purchaseViaPlayBilling({
+    required String productId,
+  }) async {
+    _record('purchaseViaPlayBilling', {'productId': productId});
+    return purchaseViaPlayBillingReturnValue;
+  }
+
   @override
   Future<String?> getCurrentUserId() async {
     _record('getCurrentUserId');
@@ -554,6 +578,20 @@ Map<String, dynamic> _sampleStoreKitTransactionMap() => {
   'source': 'store_kit',
   'purchasedAt': '2025-03-01T08:00:00.000Z',
   'originalTransactionId': '2000000000000000',
+};
+
+Map<String, dynamic> _samplePlayBillingTransactionMap() => {
+  // Mirrors the Android bridge's CheckoutTransaction → Flutter map shape
+  // for Play-Billing-sourced purchases. The wire `source` is `play_store`
+  // — same enum value as a cross-platform Play purchase (see
+  // `ext/ModelToFlutterMap.kt:73-77` and `lib/models/enums.dart:32`).
+  // `originalTransactionId` is absent for new purchases — only present
+  // when the SDK hydrates from a token.
+  'id': 'GPA.0000-0000-0000-00000',
+  'productId': 'premium_monthly',
+  'status': 'completed',
+  'source': 'play_store',
+  'purchasedAt': '2026-05-12T08:00:00.000Z',
 };
 
 // -- Tests --
@@ -795,6 +833,23 @@ void main() {
       expect(mockPlatform.calls.last['productId'], 'p1');
     });
 
+    // ==== 1.5.0 D2: transferPlayOwnershipToCurrentUser Android peer ====
+
+    test(
+        'transferPlayOwnershipToCurrentUser forwards productId + originalTransactionId',
+        () async {
+      await ZeroSettle.instance.transferPlayOwnershipToCurrentUser(
+        productId: 'p1',
+        originalTransactionId: 'GPA.token_abc',
+      );
+      expect(
+        mockPlatform.calls.last['method'],
+        'transferPlayOwnershipToCurrentUser',
+      );
+      expect(mockPlatform.calls.last['productId'], 'p1');
+      expect(mockPlatform.calls.last['originalTransactionId'], 'GPA.token_abc');
+    });
+
     // ==== 1.3.0: No-userId facade methods ====
     //
     // These test the new userId-less overloads that mirror identify(). Each
@@ -931,6 +986,21 @@ void main() {
       expect(txn, isA<CheckoutTransaction>());
       expect(txn.source, EntitlementSource.storeKit);
       expect(mockPlatform.calls.last['method'], 'purchaseViaStoreKit');
+      expect(mockPlatform.calls.last['productId'], 'premium_monthly');
+    });
+
+    // ==== 1.5.0 D1: purchaseViaPlayBilling Android peer ====
+
+    test(
+        'purchaseViaPlayBilling() returns CheckoutTransaction sourced from Play Store',
+        () async {
+      final txn = await ZeroSettle.instance
+          .purchaseViaPlayBilling(productId: 'premium_monthly');
+      expect(txn, isA<CheckoutTransaction>());
+      // Wire enum value for Play Billing transactions is `playStore` —
+      // matches the cross-platform Play wire string (see enums.dart).
+      expect(txn.source, EntitlementSource.playStore);
+      expect(mockPlatform.calls.last['method'], 'purchaseViaPlayBilling');
       expect(mockPlatform.calls.last['productId'], 'premium_monthly');
     });
 

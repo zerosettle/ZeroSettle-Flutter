@@ -26,7 +26,7 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
 
-    testWidgets('renders empty SizedBox on Android',
+    testWidgets('renders AndroidView on Android (1.5.0 D3)',
         (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
@@ -41,11 +41,80 @@ void main() {
         ),
       );
 
-      // On Android, should be empty
-      expect(find.byType(SizedBox), findsOneWidget);
+      // On Android (1.5.0+), the widget mounts the F24 PlatformView
+      // (`com.zerosettle/migrate_tip_view`) via AndroidView. UiKitView is
+      // never instantiated on this platform.
+      expect(find.byType(AndroidView), findsOneWidget);
       expect(find.byType(UiKitView), findsNothing);
 
       debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('passes correct viewType + creation params on Android',
+        (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+      const testColor = Color(0xFFAABBCC);
+      const testUserId = 'user_android_42';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MigrationTipView(
+              userId: testUserId,
+              backgroundColor: testColor,
+            ),
+          ),
+        ),
+      );
+
+      final androidView =
+          tester.widget<AndroidView>(find.byType(AndroidView));
+
+      // Android factory key — note the `com.` prefix (org-id convention),
+      // distinct from iOS's `zerosettle/migrate_tip_view`. The F24
+      // MigrateTipViewFactory registers under exactly this string.
+      expect(androidView.viewType, 'com.zerosettle/migrate_tip_view');
+
+      // Creation params share the iOS shape (userId + backgroundColor ARGB).
+      expect(androidView.creationParams, isA<Map<String, Object?>>());
+      final params = androidView.creationParams as Map<String, Object?>;
+      expect(params['backgroundColor'], testColor.toARGB32());
+      expect(params['userId'], testUserId);
+
+      // StandardMessageCodec matches F24's PlatformViewFactory.
+      expect(androidView.creationParamsCodec, isA<StandardMessageCodec>());
+
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(
+        'renders empty SizedBox on non-mobile platforms (linux / macOS / windows)',
+        (WidgetTester tester) async {
+      for (final platform in [
+        TargetPlatform.linux,
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+      ]) {
+        debugDefaultTargetPlatformOverride = platform;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: MigrationTipView(
+                userId: 'test_user',
+                backgroundColor: Colors.black,
+              ),
+            ),
+          ),
+        );
+
+        expect(find.byType(SizedBox), findsWidgets);
+        expect(find.byType(UiKitView), findsNothing);
+        expect(find.byType(AndroidView), findsNothing);
+
+        debugDefaultTargetPlatformOverride = null;
+      }
     });
 
     testWidgets('passes correct creation params on iOS',

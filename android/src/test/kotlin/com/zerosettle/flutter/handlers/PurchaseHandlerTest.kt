@@ -128,12 +128,17 @@ class PurchaseHandlerTest {
     @Test
     fun `handle returns true for each owned method`() {
         // Stub the SDK so the suspend purchase happy path doesn't actually
-        // launch a Custom Tab. The other methods return synchronously.
+        // launch a Custom Tab / Play dialog. The other methods return
+        // synchronously.
         coEvery { ZeroSettle.purchase(any(), any()) } returns Result.failure(
+            ZeroSettleError.UserNotIdentified,
+        )
+        coEvery { ZeroSettle.purchaseViaPlayBilling(any(), any()) } returns Result.failure(
             ZeroSettleError.UserNotIdentified,
         )
         listOf(
             "purchase" to mapOf("productId" to "x"),
+            "purchaseViaPlayBilling" to mapOf("productId" to "x"),
             "purchaseViaStoreKit" to null,
             "presentPaymentSheet" to null,
             "preloadPaymentSheet" to mapOf("productId" to "x"),
@@ -266,6 +271,120 @@ class PurchaseHandlerTest {
         handler.handle(call("purchaseViaStoreKit", mapOf("productId" to "com.app.coins")), result)
 
         verify { result.error(eq("not_implemented"), any(), null) }
+    }
+
+    // ─── purchaseViaPlayBilling (D1) ─────────────────────────────────────
+
+    @Test
+    fun `purchaseViaPlayBilling returns wire-encoded transaction on success`() = runTest {
+        val txn = newTransaction(id = "GPA.123", productId = "com.app.coins")
+        coEvery {
+            ZeroSettle.purchaseViaPlayBilling(activity, "com.app.coins")
+        } returns Result.success(txn)
+        val mapSlot = slot<Map<String, Any?>>()
+        val result = newResult()
+        every { result.success(capture(mapSlot)) } answers { }
+
+        handler.handle(
+            call("purchaseViaPlayBilling", mapOf("productId" to "com.app.coins")),
+            result,
+        )
+
+        coVerify { ZeroSettle.purchaseViaPlayBilling(activity, "com.app.coins") }
+        assertThat(mapSlot.captured["id"]).isEqualTo("GPA.123")
+        assertThat(mapSlot.captured["productId"]).isEqualTo("com.app.coins")
+        assertThat(mapSlot.captured["status"]).isEqualTo("completed")
+    }
+
+    @Test
+    fun `purchaseViaPlayBilling errors on missing productId`() {
+        val result = newResult()
+
+        handler.handle(
+            call("purchaseViaPlayBilling", emptyMap<String, Any?>()),
+            result,
+        )
+
+        verify { result.error("INVALID_ARGUMENTS", "productId is required", null) }
+        coVerify(exactly = 0) { ZeroSettle.purchaseViaPlayBilling(any(), any()) }
+    }
+
+    @Test
+    fun `purchaseViaPlayBilling errors activity_required when no Activity attached`() {
+        val noActivityHandler = handlerWithoutActivity()
+        val result = newResult()
+
+        noActivityHandler.handle(
+            call("purchaseViaPlayBilling", mapOf("productId" to "com.app.coins")),
+            result,
+        )
+
+        verify { result.error(eq("activity_required"), any(), null) }
+        coVerify(exactly = 0) { ZeroSettle.purchaseViaPlayBilling(any(), any()) }
+    }
+
+    @Test
+    fun `purchaseViaPlayBilling maps SDK throw to sdk_error`() = runTest {
+        coEvery { ZeroSettle.purchaseViaPlayBilling(any(), any()) } throws RuntimeException("boom")
+        val result = newResult()
+
+        handler.handle(
+            call("purchaseViaPlayBilling", mapOf("productId" to "com.app.coins")),
+            result,
+        )
+
+        verify { result.error("sdk_error", "boom", null) }
+    }
+
+    @Test
+    fun `purchaseViaPlayBilling maps CheckoutInFlight to checkout_in_flight wire code`() = runTest {
+        // The Phase 1 A3 deferred-bridge collision case mirrors A2 for web
+        // — two concurrent Play purchases fail the second with this typed
+        // error so Dart can surface "another checkout already running" UX.
+        coEvery { ZeroSettle.purchaseViaPlayBilling(any(), any()) } returns Result.failure(
+            ZeroSettleError.CheckoutInFlight,
+        )
+        val result = newResult()
+
+        handler.handle(
+            call("purchaseViaPlayBilling", mapOf("productId" to "com.app.coins")),
+            result,
+        )
+
+        verify { result.error(eq("checkout_in_flight"), any(), null) }
+    }
+
+    @Test
+    fun `purchaseViaPlayBilling maps PurchaseCancelled to cancelled wire code`() = runTest {
+        coEvery { ZeroSettle.purchaseViaPlayBilling(any(), any()) } returns Result.failure(
+            ZeroSettleError.PurchaseCancelled,
+        )
+        val result = newResult()
+
+        handler.handle(
+            call("purchaseViaPlayBilling", mapOf("productId" to "com.app.coins")),
+            result,
+        )
+
+        verify { result.error(eq("cancelled"), any(), null) }
+    }
+
+    @Test
+    fun `purchaseViaPlayBilling does NOT fabricate checkout events`() = runTest {
+        // Parity is with iOS purchaseViaStoreKit, not the web purchase() flow.
+        // Play Billing's dialog drives its own UX; the checkout-event channel
+        // is for web Custom Tab where Flutter is hidden. See class doc.
+        val txn = newTransaction(id = "GPA.456", productId = "com.app.coins")
+        coEvery {
+            ZeroSettle.purchaseViaPlayBilling(activity, "com.app.coins")
+        } returns Result.success(txn)
+
+        handler.handle(
+            call("purchaseViaPlayBilling", mapOf("productId" to "com.app.coins")),
+            newResult(),
+        )
+
+        assertThat(checkoutEvents).isEmpty()
     }
 
     // ─── presentPaymentSheet (iOS-only stub) ────────────────────────────

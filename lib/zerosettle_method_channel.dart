@@ -97,6 +97,17 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
+  Future<void> transferPlayOwnershipToCurrentUser({
+    required String productId,
+    required String originalTransactionId,
+  }) async {
+    await methodChannel.invokeMethod('transferPlayOwnershipToCurrentUser', {
+      'productId': productId,
+      'originalTransactionId': originalTransactionId,
+    });
+  }
+
+  @override
   Future<bool> hasActiveEntitlement({required String productId}) async {
     final result = await methodChannel.invokeMethod<bool>('hasActiveEntitlement', {
       'productId': productId,
@@ -163,6 +174,16 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     required String productId,
   }) async {
     final result = await methodChannel.invokeMethod<Map>('purchaseViaStoreKit', {
+      'productId': productId,
+    });
+    return Map<String, dynamic>.from(result!);
+  }
+
+  @override
+  Future<Map<String, dynamic>> purchaseViaPlayBilling({
+    required String productId,
+  }) async {
+    final result = await methodChannel.invokeMethod<Map>('purchaseViaPlayBilling', {
       'productId': productId,
     });
     return Map<String, dynamic>.from(result!);

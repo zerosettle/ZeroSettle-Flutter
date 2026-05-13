@@ -145,8 +145,32 @@ class ZeroSettle {
 
   /// Transfer a StoreKit-originated entitlement to the currently identified user.
   /// Replaces the deprecated `claimEntitlement`.
+  ///
+  /// **iOS-only.** On Android the bridge returns `not_implemented` — use
+  /// [transferPlayOwnershipToCurrentUser] for the Play Billing equivalent.
   Future<void> transferStoreKitOwnershipToCurrentUser({required String productId}) =>
       _wrap(() => _platform.transferStoreKitOwnershipToCurrentUser(productId: productId));
+
+  /// Transfer a Google Play purchase's ownership to the currently-identified
+  /// user. Use after an [identify] call when you want to claim a Play
+  /// purchase that was previously made under a different ZeroSettle account.
+  ///
+  /// Both [productId] and [originalTransactionId] are required — the Play
+  /// API needs the purchase token (carried as `originalTransactionId`) in
+  /// addition to the product reference to resolve which purchase is being
+  /// transferred. Typical usage: render a [PendingClaim], then call this
+  /// with the claim's `productId` + `originalTransactionId`.
+  ///
+  /// **Android-only.** On iOS the bridge returns `not_implemented` — use
+  /// [transferStoreKitOwnershipToCurrentUser] for the StoreKit equivalent.
+  Future<void> transferPlayOwnershipToCurrentUser({
+    required String productId,
+    required String originalTransactionId,
+  }) =>
+      _wrap(() => _platform.transferPlayOwnershipToCurrentUser(
+            productId: productId,
+            originalTransactionId: originalTransactionId,
+          ));
 
   /// Quick check: does the user have an active entitlement for [productId]?
   Future<bool> hasActiveEntitlement({required String productId}) =>
@@ -274,9 +298,35 @@ class ZeroSettle {
   ///
   /// Throws a [ZeroSettleException] on cancellation, verification failure, or
   /// when no StoreKit product is available for [productId].
+  ///
+  /// **iOS-only.** On Android the bridge returns `not_implemented` — use
+  /// [purchaseViaPlayBilling] for the Play Billing equivalent.
   Future<CheckoutTransaction> purchaseViaStoreKit({required String productId}) {
     return _wrap(() async {
       final map = await _platform.purchaseViaStoreKit(productId: productId);
+      return CheckoutTransaction.fromMap(map);
+    });
+  }
+
+  /// Purchase via Google Play Billing (Android-specific).
+  ///
+  /// Routes the purchase through the Google Play Billing dialog and returns
+  /// the resulting [CheckoutTransaction] (`source == EntitlementSource.playStore`).
+  /// Use this when the developer opts for Play Store distribution alongside
+  /// (or instead of) ZeroSettle's web-checkout route on Android.
+  ///
+  /// Requires `ZeroSettleConfig.syncPlayPurchases = true` on the Android SDK
+  /// side; the configure-time flag is what wires the Play billing client to
+  /// the SDK. Identity comes from the prior [identify] call.
+  ///
+  /// **Android-only.** On iOS the bridge returns `not_implemented` — use
+  /// [purchaseViaStoreKit] for the StoreKit equivalent.
+  ///
+  /// Throws a [ZeroSettleException] on cancellation, billing-not-supported,
+  /// network failure, or when no Play product is available for [productId].
+  Future<CheckoutTransaction> purchaseViaPlayBilling({required String productId}) {
+    return _wrap(() async {
+      final map = await _platform.purchaseViaPlayBilling(productId: productId);
       return CheckoutTransaction.fromMap(map);
     });
   }

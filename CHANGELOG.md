@@ -1,3 +1,86 @@
+## 1.5.0
+
+Full Android feature parity with iOS. The Flutter plugin's Android
+implementation now mirrors the iOS surface: identity/lifecycle,
+products/entitlements, web-checkout purchase via Custom Tabs, Play
+Billing purchase route, pending claims, subscription mutations,
+Switch & Save migration tip, inline platform views (OfferTip,
+PendingActionBanner, MigrateTipView), and event-channel updates
+for entitlements/pending-claims/checkout events.
+
+### Added (Android)
+
+- `ZeroSettle.instance.purchaseViaPlayBilling({productId})` — Android-side
+  peer of `purchaseViaStoreKit`. Routes through the Google Play Billing
+  dialog and returns the resulting `CheckoutTransaction` (`source ==
+  EntitlementSource.playStore`). On iOS this throws a
+  `ZeroSettleException` with code `not_implemented` — gate the call with
+  `Platform.isAndroid`.
+- `ZeroSettle.instance.transferPlayOwnershipToCurrentUser({productId,
+  originalTransactionId})` — Android-side peer of
+  `transferStoreKitOwnershipToCurrentUser`. Both args are required (the
+  Play API needs the purchase token to resolve which purchase is being
+  transferred). On iOS this throws a `ZeroSettleException` with code
+  `not_implemented`.
+- `MigrationTipView` now renders on Android via the F24
+  `com.zerosettle/migrate_tip_view` PlatformView (Compose
+  `ZeroSettleOfferTip` from ZeroSettle-Android `:ui`). Same constructor,
+  same height-bridge wire shape (`setSize` with `{height: Double}` on
+  `zerosettle/migrate_tip_view_<viewId>`), no Dart-side migration
+  required.
+
+### Changed (Android)
+
+- The plugin's Android Kotlin layer is now a real implementation backed by
+  `io.zerosettle:zerosettle-android:1.0.0` instead of the 0.15.0-era
+  WIP scaffold. Configure-time `preloadCheckout` maps to
+  `ZeroSettleConfig.preloadCheckout`; the iOS-only configure args
+  (`syncStoreKitTransactions`, `appleMerchantId`, `maxPreloadedWebViews`,
+  `applePaySetupBehavior`) are silently dropped on Android.
+
+### Notes — iOS-only methods on Android
+
+The following methods return `PlatformException(code: "not_implemented")`
+on Android (Dart's `_wrap` surfaces them as `ZeroSettleException` with
+the same code). Gate the call sites with `Platform.isIOS`:
+
+- `purchaseViaStoreKit({productId})` — use `purchaseViaPlayBilling` on
+  Android.
+- `transferStoreKitOwnershipToCurrentUser({productId})` — use
+  `transferPlayOwnershipToCurrentUser` on Android.
+- `presentPaymentSheet({...})` — Android has no in-app payment sheet;
+  use `purchase({productId})` (web checkout via Custom Tabs).
+- `presentApplePaySetup()` / `recommendedAppAccountToken()` — Apple
+  Wallet / StoreKit `appAccountToken` derivation, no Android analogue.
+- `acceptSaveOffer`, `submitCancelFlowResponse`, `getCancelFlowConfig`,
+  `fetchCancelFlowConfig`, `openCustomerPortal`,
+  `showManageSubscription` — Save-the-Sale / subscription portal flows
+  are iOS-only in this release; symmetric with iOS where applicable.
+- `presentCancelFlow` / `presentUpgradeOffer` — return
+  `PlatformException(code: "not_implemented")` pending the F6 Compose
+  Mode dispatch design.
+- `fetchTransactionHistory({userId})` — typed-model SDK API pending;
+  returns `not_implemented` rather than throwing a null-check error.
+- `resolveMigrationManagerHandle` — `MigrationManager` is iOS-only; use
+  `OfferManager` (via `ZeroSettle.instance.offerManager()`), which is
+  fully wired on both platforms.
+
+The following methods return sensible Android defaults (never throw):
+
+- `getApplePayState()` → `ApplePayAvailabilityState.unavailable`.
+- `getIsApplePayOnly()` → `false`.
+- `getRemoteConfig()` → `null` (SDK API pending).
+- `getDetectedJurisdiction()` → `null` (SDK API pending).
+- `handleUniversalLink(url)` → `false` (Android uses Custom Tabs
+  intent-scheme deep-link, not universal links).
+
+### Migration from 1.4.x
+
+Existing iOS-only deployments need no code changes. Cross-platform
+deployments that previously stubbed Android in the host app can delete
+those stubs and replace them with platform-gated calls per the Notes
+list above. The wire contract is stable.
+
 ## 1.4.0
 
 Tracks ZeroSettleKit 1.3.6. Two headline changes plus a Kit-level bug fix:

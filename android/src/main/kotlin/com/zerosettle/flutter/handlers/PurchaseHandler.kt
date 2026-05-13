@@ -15,8 +15,10 @@ import kotlinx.coroutines.launch
 /**
  * F10 — purchase + payment-sheet domain handler.
  *
- * Owns five methods Dart calls on the main `zerosettle` channel:
+ * Owns six methods Dart calls on the main `zerosettle` channel:
  *   - `purchase` — web checkout via Custom Tab; returns `CheckoutTransaction`
+ *   - `purchaseViaPlayBilling` — Android peer of iOS `purchaseViaStoreKit`;
+ *     routes through the Play Billing dialog and returns `CheckoutTransaction`
  *   - `purchaseViaStoreKit` — iOS-only; returns `not_implemented`
  *   - `presentPaymentSheet` — iOS-only; returns `not_implemented`
  *     (Android has no native payment sheet; web checkout is the only route)
@@ -100,15 +102,26 @@ import kotlinx.coroutines.launch
  *
  * ## `purchaseViaStoreKit` / `presentPaymentSheet` — iOS-only
  *
- * `purchaseViaStoreKit` has an Android analogue (`purchaseViaPlayBilling`)
- * but the Dart wire method targets the iOS flow specifically — the
- * Android route uses `purchase()` (web checkout) instead. Returning
- * `not_implemented` lets Dart's `_wrap` surface a `PlatformException`
- * adopters can pattern-match on.
+ * `purchaseViaStoreKit` is the iOS peer of [purchaseViaPlayBilling]
+ * (which D1 wires through to `ZeroSettle.purchaseViaPlayBilling`). The
+ * Dart facade exposes both methods; each platform returns
+ * `not_implemented` for the other's wire name. Returning `not_implemented`
+ * lets Dart's `_wrap` surface a `PlatformException` adopters can
+ * pattern-match on.
  *
  * `presentPaymentSheet` is the iOS-only imperative "show the in-app
  * sheet now" entry. Android has no native payment sheet — the only
  * checkout route is `purchase()` (web). Same `not_implemented` contract.
+ *
+ * ## `purchaseViaPlayBilling` — no checkout-event fabrication
+ *
+ * Unlike `purchase()` (web Custom Tab) we do NOT fabricate
+ * `checkoutDidBegin/Complete/Cancel/Fail` events for the Play Billing
+ * path. Parity is with iOS `purchaseViaStoreKit`, which also doesn't
+ * emit those events — the checkout-event channel exists for the
+ * web flow specifically (Custom Tab hides Flutter and the host needs
+ * spinner/lifecycle signals). Play Billing's dialog drives its own
+ * UX, same as StoreKit.
  */
 internal class PurchaseHandler(private val deps: HandlerDependencies) {
 
@@ -121,10 +134,11 @@ internal class PurchaseHandler(private val deps: HandlerDependencies) {
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
             "purchase" -> purchase(call, result)
+            "purchaseViaPlayBilling" -> purchaseViaPlayBilling(call, result)
             "purchaseViaStoreKit" ->
                 result.error(
                     "not_implemented",
-                    "purchaseViaStoreKit is iOS-only; use purchase() on Android",
+                    "purchaseViaStoreKit is iOS-only; use purchaseViaPlayBilling() on Android",
                     null,
                 )
             "presentPaymentSheet" ->
@@ -209,6 +223,46 @@ internal class PurchaseHandler(private val deps: HandlerDependencies) {
                     )
                     result.sendError(err)
                 },
+            )
+        }
+    }
+
+    // ── purchaseViaPlayBilling ─────────────────────────────────────────
+
+    private fun purchaseViaPlayBilling(call: MethodCall, result: MethodChannel.Result) {
+        val productId = call.argument<String>("productId")
+        if (productId == null) {
+            result.error("INVALID_ARGUMENTS", "productId is required", null)
+            return
+        }
+        val activity = deps.activityProvider()
+        if (activity == null) {
+            // Same guard as `purchase()` — the SDK's Play Billing launch
+            // needs a foreground Activity to attach its dialog to.
+            result.error(
+                "activity_required",
+                "Foreground Activity required for purchaseViaPlayBilling (Play Billing dialog launch)",
+                null,
+            )
+            return
+        }
+        // No checkout-event fabrication on this path — see class doc.
+        // Parity is with iOS `purchaseViaStoreKit`, not the web `purchase()`
+        // flow that fires `checkoutDidBegin/Complete/Cancel/Fail`.
+        deps.scope.launch {
+            val sdkResult = runCatching {
+                ZeroSettle.purchaseViaPlayBilling(activity, productId)
+            }
+            sdkResult.fold(
+                onSuccess = { res ->
+                    res.fold(
+                        onSuccess = { transaction ->
+                            result.success(transaction.toFlutterMap())
+                        },
+                        onFailure = { err -> result.sendError(err) },
+                    )
+                },
+                onFailure = { err -> result.sendError(err) },
             )
         }
     }
