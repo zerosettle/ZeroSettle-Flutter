@@ -9,7 +9,11 @@ buildscript {
 
     dependencies {
         classpath 'com.android.tools.build:gradle:8.7.3'
+        // Pinned to 2.1.0 to match ZeroSettle-Android :ui module's Kotlin
+        // version. Mismatches between adopter app, plugin, and SDK Kotlin/
+        // Compose versions cause AGP-level compile failures.
         classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0'
+        classpath 'org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.0'
     }
 }
 
@@ -23,6 +27,7 @@ allprojects {
 
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
 android {
     namespace 'com.zerosettle.flutter'
@@ -30,6 +35,10 @@ android {
 
     defaultConfig {
         minSdk 26
+    }
+
+    buildFeatures {
+        compose true
     }
 
     compileOptions {
@@ -43,10 +52,30 @@ android {
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
+        test.java.srcDirs += 'src/test/kotlin'
+    }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            returnDefaultValues = true
+        }
     }
 }
 
 dependencies {
-    api 'io.zerosettle:zerosettle-android:0.15.0'
+    // api-scope so the host app's Compose theming can integrate naturally if
+    // they ever need to.
+    api 'io.zerosettle:zerosettle-android:1.0.0'
+    api 'io.zerosettle:zerosettle-android-ui:1.0.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+    implementation 'androidx.activity:activity-compose:1.9.3'
+
+    // Test dependencies for the new ~90 plugin unit tests (Phase 2 Tasks F3-F25).
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.13'
+    testImplementation 'io.mockk:mockk:1.13.13'
+    testImplementation 'com.google.truth:truth:1.4.4'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'
+    testImplementation 'androidx.test:core-ktx:1.6.1'
 }
