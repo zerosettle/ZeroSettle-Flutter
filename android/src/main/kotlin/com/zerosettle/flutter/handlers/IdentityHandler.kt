@@ -109,8 +109,12 @@ internal class IdentityHandler(private val deps: HandlerDependencies) {
         }
         // iOS-only knobs Dart still sends — log once and drop. preloadCheckout
         // is the only knob with a real Android counterpart on ZeroSettleConfig.
+        //
+        // `syncStoreKitTransactions` is excluded from the watch list because
+        // Dart's `configure({...})` always sends it (default `true`, not
+        // null-gated like `appleMerchantId`). Logging on every call would be
+        // noisy and uninformative — the wire shape includes it by design.
         val droppedArgs = listOf(
-            "syncStoreKitTransactions",
             "appleMerchantId",
             "maxPreloadedWebViews",
             "applePaySetupBehavior",
