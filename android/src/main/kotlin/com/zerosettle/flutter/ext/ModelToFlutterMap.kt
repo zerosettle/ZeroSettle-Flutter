@@ -323,7 +323,15 @@ fun UserOffer.OfferData.toFlutterMap(): Map<String, Any?> {
         "display" to (display?.toFlutterMap() ?: emptyOfferDisplayMap()),
         "freeTrialDays" to freeTrialDays,
         "minSubscriptionDays" to minSubscriptionDays,
-        // `rolloutPercent` has a non-null Android default (100); always emit.
+        // `rolloutPercent` shape divergence vs iOS:
+        //   iOS holds `rolloutPercent: Int?` and omits when null (i.e., when
+        //     the server didn't include the field).
+        //   Android holds `rolloutPercent: Int = 100` and can't distinguish
+        //     "server explicitly sent 100" from "server omitted".
+        //   We always emit — adopting the iOS shape would require
+        //   conditionally omitting when value == 100, which would silently
+        //   drop genuine server-sent 100s. The Dart parser treats it as
+        //   nullable Int, so always-emitting is harmless wire-wise.
         "rolloutPercent" to rolloutPercent,
     )
     maxSubscriptionDays?.let { map["maxSubscriptionDays"] = it }
