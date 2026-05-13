@@ -2,8 +2,12 @@
 <resources>
     <!-- Transparent theme for ZeroSettleHostActivity. The activity hosts a
          Compose ModalBottomSheet; the underlying window must be transparent
-         so the sheet floats over the adopter's Flutter content. -->
-    <style name="Theme.ZeroSettle.Transparent" parent="Theme.Material3.DayNight.NoActionBar">
+         so the sheet floats over the adopter's Flutter content.
+
+         Parent is android:Theme.Translucent.NoTitleBar (framework built-in,
+         no Material Components dep required) — the Compose content handles
+         its own Material3 theming via ZeroSettleTheme inside onCreate. -->
+    <style name="Theme.ZeroSettle.Transparent" parent="android:Theme.Translucent.NoTitleBar">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowNoTitle">true</item>
