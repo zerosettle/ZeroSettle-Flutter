@@ -10,6 +10,7 @@ import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
 import com.zerosettle.sdk.models.ProductType
 import com.zerosettle.sdk.models.UserOffer
+import com.zerosettle.sdk.offers.OfferManager
 
 /**
  * SDK-domain → `Map<String, Any?>` encoders for the Flutter MethodChannel wire.
@@ -402,4 +403,100 @@ private fun UserOffer.CheckoutPresentation.toWireStringOrNull(): String? = when 
     UserOffer.CheckoutPresentation.SAFARI -> "safari"
     UserOffer.CheckoutPresentation.WEBVIEW -> null
     UserOffer.CheckoutPresentation.NATIVE_PAY -> null
+}
+
+// ---------------------------------------------------------------------------
+// OfferManager composite state snapshot (per-handle state-channel wire shape)
+// ---------------------------------------------------------------------------
+//
+// Composite snapshot emitted on the per-handle `zerosettle/offer_manager_<id>_state`
+// EventChannel by [com.zerosettle.flutter.offermanager.OfferManagerHandleBridge].
+// Read by Dart's `OfferManagerState.fromMap` at
+// `lib/models/offer.dart:416-426`. iOS publishes the same shape via
+// `ZSOfferManager.toFlutterStateMap` at `ZeroSettlePlugin.swift:2007-2022`.
+//
+// **iOS wire contract (pinned):**
+//   Required:
+//     - `state`            : String, lowercase enum name
+//                            ("loading" | "ineligible" | "eligible" |
+//                             "presented" | "accepted" | "completed" |
+//                             "dismissed")
+//     - `isLoading`        : Boolean
+//     - `storekitCancelRequired` : Boolean
+//   Optional (omitted when null):
+//     - `offerData`           : Map (via UserOffer.OfferData.toFlutterMap)
+//     - `checkoutErrorMessage`: **String** (NOT a Map — iOS emits
+//                                error.localizedDescription)
+//
+// **Android-specific divergences (handled here, not the wire):**
+//
+//   - **`OfferState.ERROR`** is a Kotlin-SDK-only variant — Dart's `OfferState`
+//     has no `error` value and `fromRawValue` falls back to `loading` on
+//     unknowns. Mapping ERROR -> "loading" is misleading (the manager is not
+//     loading; it's stuck after a failed evaluate). We map ERROR -> "ineligible"
+//     (closest user-facing semantic: "no offer to present") and surface the
+//     underlying error string via `checkoutErrorMessage`. `OfferManager.evaluate`
+//     always sets `_checkoutError.value` when transitioning to ERROR
+//     (`OfferManager.kt:100-102`), so the message is reliably populated.
+//
+//   - **`storekitCancelRequired`** is an iOS-only `@Published Bool` derived from
+//     the migration flow. Android has no equivalent field, but the underlying
+//     semantic (the user must cancel their existing store subscription manually
+//     once the web checkout succeeds) is carried by
+//     `UserOffer.OfferData.needsStoreCancel`. We mirror iOS's wire field by
+//     reading the current offer's `needsStoreCancel` flag — `false` when there
+//     is no offer.
+//
+//   - **`pendingCheckoutUrl`** is an Android-SDK StateFlow (no iOS analogue and
+//     no Dart parser key). NOT emitted on the wire — would be invented data
+//     versus the iOS contract. We still subscribe to it for change detection
+//     (see `OfferManagerHandleBridge.start()`) so a checkout-URL transition can
+//     trigger a re-emit if it correlates with a state change the host needs.
+
+/**
+ * Maps the Kotlin SDK's [OfferManager.OfferState] enum to the lowercase wire
+ * strings Dart's `OfferState.fromRawValue` accepts. The `ERROR` variant is
+ * mapped to `"ineligible"` rather than the Dart parser's default `"loading"`
+ * fallback — see file-level comment for the rationale.
+ */
+fun OfferManager.OfferState.toWireString(): String = when (this) {
+    OfferManager.OfferState.LOADING -> "loading"
+    OfferManager.OfferState.INELIGIBLE -> "ineligible"
+    OfferManager.OfferState.ELIGIBLE -> "eligible"
+    OfferManager.OfferState.PRESENTED -> "presented"
+    OfferManager.OfferState.ACCEPTED -> "accepted"
+    OfferManager.OfferState.COMPLETED -> "completed"
+    OfferManager.OfferState.DISMISSED -> "dismissed"
+    OfferManager.OfferState.ERROR -> "ineligible"
+}
+
+/**
+ * Composite state snapshot for the per-handle OfferManager state channel.
+ *
+ * Required keys always emit: `state`, `isLoading`, `storekitCancelRequired`.
+ * Optional keys omit when their source value is null: `offerData`,
+ * `checkoutErrorMessage` (mirrors iOS's `if let ... { map[...] = ... }`).
+ *
+ * Reads the current value of each StateFlow at call time — designed to be
+ * called from a flow-collection `combine` that fires whenever any source
+ * StateFlow updates (see `OfferManagerHandleBridge.start`).
+ *
+ * The `actionType == NO_ACTION` guard on `OfferData.toFlutterMap` is honoured
+ * defensively: a `NO_ACTION` offer should never reach state PRESENTED on the
+ * SDK side, but if it somehow does we omit `offerData` rather than throwing.
+ */
+fun OfferManager.toCompositeStateMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "state" to state.value.toWireString(),
+        "isLoading" to isLoading.value,
+        "storekitCancelRequired" to (offerData.value?.needsStoreCancel ?: false),
+    )
+    val offer = offerData.value
+    if (offer != null && offer.actionType != UserOffer.ActionType.NO_ACTION) {
+        map["offerData"] = offer.toFlutterMap()
+    }
+    checkoutError.value?.let { err ->
+        map["checkoutErrorMessage"] = err.message ?: err::class.simpleName ?: "unknown error"
+    }
+    return map
 }

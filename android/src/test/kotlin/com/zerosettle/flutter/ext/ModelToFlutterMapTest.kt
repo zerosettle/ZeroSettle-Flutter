@@ -11,6 +11,11 @@ import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
 import com.zerosettle.sdk.models.ProductType
 import com.zerosettle.sdk.models.UserOffer
+import com.zerosettle.sdk.models.ZeroSettleError
+import com.zerosettle.sdk.offers.OfferManager
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -638,5 +643,162 @@ class ModelToFlutterMapTest {
         // Android-only fields MUST NOT leak.
         assertThat(map).doesNotContainKey("dismissText")
         assertThat(map).doesNotContainKey("appleCancelInstructions")
+    }
+
+    // ---------------------------------------------------------------------
+    // OfferManager.toCompositeStateMap  (per-handle state-channel wire pin)
+    // ---------------------------------------------------------------------
+    //
+    // Wire contract: iOS `ZSOfferManager.toFlutterStateMap` at
+    // ZeroSettlePlugin.swift:2007-2022. Required keys (state, isLoading,
+    // storekitCancelRequired) always emit; optionals (offerData,
+    // checkoutErrorMessage) omit when null. State strings are lowercase.
+
+    /**
+     * Builds a stubbed [OfferManager] with the supplied StateFlow values.
+     * The SDK's `state`, `offerData`, `isLoading`, `checkoutError`,
+     * `pendingCheckoutUrl` are read-only StateFlow properties; `mockk` lets
+     * us stub each independently.
+     */
+    private fun stubManager(
+        state: OfferManager.OfferState,
+        offer: UserOffer.OfferData? = null,
+        isLoading: Boolean = false,
+        checkoutError: ZeroSettleError? = null,
+        pendingCheckoutUrl: String? = null,
+    ): OfferManager {
+        val m = mockk<OfferManager>(relaxed = true)
+        every { m.state } returns MutableStateFlow(state)
+        every { m.offerData } returns MutableStateFlow(offer)
+        every { m.isLoading } returns MutableStateFlow(isLoading)
+        every { m.checkoutError } returns MutableStateFlow(checkoutError)
+        every { m.pendingCheckoutUrl } returns MutableStateFlow(pendingCheckoutUrl)
+        return m
+    }
+
+    @Test
+    fun `toCompositeStateMap emits required keys with null-offer defaults`() {
+        val m = stubManager(state = OfferManager.OfferState.LOADING)
+
+        val map = m.toCompositeStateMap()
+
+        assertThat(map["state"]).isEqualTo("loading")
+        assertThat(map["isLoading"]).isEqualTo(false)
+        // No offer -> storekitCancelRequired defaults to false (mirrors iOS,
+        // which keeps the field non-nullable Bool).
+        assertThat(map["storekitCancelRequired"]).isEqualTo(false)
+        // Optionals omitted when null (matches iOS `if let ... { map[...] = ... }`).
+        assertThat(map).doesNotContainKey("offerData")
+        assertThat(map).doesNotContainKey("checkoutErrorMessage")
+        // pendingCheckoutUrl is NOT a wire key (Dart parser doesn't read it).
+        assertThat(map).doesNotContainKey("pendingCheckoutUrl")
+    }
+
+    @Test
+    fun `toCompositeStateMap maps every OfferState to its lowercase wire string`() {
+        // Pin the full enum -> wire mapping. ERROR maps to "ineligible"
+        // (Dart has no "error" variant; mapping to "loading" would lie).
+        val cases = mapOf(
+            OfferManager.OfferState.LOADING to "loading",
+            OfferManager.OfferState.INELIGIBLE to "ineligible",
+            OfferManager.OfferState.ELIGIBLE to "eligible",
+            OfferManager.OfferState.PRESENTED to "presented",
+            OfferManager.OfferState.ACCEPTED to "accepted",
+            OfferManager.OfferState.COMPLETED to "completed",
+            OfferManager.OfferState.DISMISSED to "dismissed",
+            OfferManager.OfferState.ERROR to "ineligible",
+        )
+        for ((kotlinState, wire) in cases) {
+            assertThat(kotlinState.toWireString()).isEqualTo(wire)
+        }
+    }
+
+    @Test
+    fun `toCompositeStateMap encodes offerData when an eligible offer is present`() {
+        val offer = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB,
+            isEligible = true,
+            checkoutProductId = "com.app.pro_yearly_web",
+            requiresAppleCancel = true,
+            display = UserOffer.OfferDisplay(
+                title = "Save 30%",
+                body = "Switch and save",
+                ctaText = "Switch now",
+                dismissText = "No thanks",
+                acceptedTitle = "",
+                acceptedBody = "",
+                completedTitle = "",
+                completedBody = "",
+                appleCancelInstructions = "",
+            ),
+        )
+        val m = stubManager(
+            state = OfferManager.OfferState.PRESENTED,
+            offer = offer,
+            isLoading = false,
+        )
+
+        val map = m.toCompositeStateMap()
+
+        assertThat(map["state"]).isEqualTo("presented")
+        // needsStoreCancel derives from requiresAppleCancel (alias on Android).
+        assertThat(map["storekitCancelRequired"]).isEqualTo(true)
+        // offerData nested map is present and uses the iOS-legacy wire shape.
+        @Suppress("UNCHECKED_CAST")
+        val offerMap = map["offerData"] as Map<String, Any?>
+        assertThat(offerMap["flowType"]).isEqualTo("migration")
+        assertThat(offerMap["productId"]).isEqualTo("com.app.pro_yearly_web")
+    }
+
+    @Test
+    fun `toCompositeStateMap encodes checkoutErrorMessage as String not Map`() {
+        // iOS emits a String (error.localizedDescription); Dart's parser at
+        // offer.dart:424 reads `map['checkoutErrorMessage'] as String?`. A Map
+        // here would silently fail to decode.
+        val m = stubManager(
+            state = OfferManager.OfferState.ERROR,
+            checkoutError = ZeroSettleError.CheckoutFailed("server returned 500"),
+        )
+
+        val map = m.toCompositeStateMap()
+
+        assertThat(map["state"]).isEqualTo("ineligible")
+        assertThat(map["checkoutErrorMessage"]).isInstanceOf(String::class.java)
+        assertThat(map["checkoutErrorMessage"] as String).contains("server returned 500")
+    }
+
+    @Test
+    fun `toCompositeStateMap forwards isLoading`() {
+        val m = stubManager(state = OfferManager.OfferState.LOADING, isLoading = true)
+
+        val map = m.toCompositeStateMap()
+
+        assertThat(map["isLoading"]).isEqualTo(true)
+    }
+
+    @Test
+    fun `toCompositeStateMap omits offerData when actionType is NO_ACTION`() {
+        // Defensive: a NO_ACTION offer should never reach state PRESENTED,
+        // but if it does we omit `offerData` rather than throwing — the
+        // alternative is `UserOffer.OfferData.toFlutterMap()` throwing
+        // IllegalStateException up through the state stream, which crashes
+        // every subsequent emit.
+        val noOpOffer = UserOffer.OfferData(
+            actionType = UserOffer.ActionType.NO_ACTION,
+            isEligible = false,
+            checkoutProductId = "",
+            display = null,
+        )
+        val m = stubManager(
+            state = OfferManager.OfferState.INELIGIBLE,
+            offer = noOpOffer,
+        )
+
+        val map = m.toCompositeStateMap()
+
+        assertThat(map).doesNotContainKey("offerData")
+        // storekitCancelRequired still derives from the offer (which has
+        // requiresAppleCancel=false by default → false on the wire).
+        assertThat(map["storekitCancelRequired"]).isEqualTo(false)
     }
 }
