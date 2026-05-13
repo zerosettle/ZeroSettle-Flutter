@@ -8,6 +8,7 @@ import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
 import com.zerosettle.flutter.handlers.PendingClaimsHandler
 import com.zerosettle.flutter.handlers.PurchaseHandler
+import com.zerosettle.flutter.handlers.SubscriptionMgmtHandler
 import com.zerosettle.flutter.offermanager.OfferManagerHandleRegistry
 import com.zerosettle.flutter.offermanager.OfferManagerStaticHandler
 import com.zerosettle.flutter.platformviews.MigrateTipViewFactory
@@ -71,11 +72,13 @@ import kotlinx.coroutines.cancel
  *     `preloadPaymentSheet`, `warmUpPaymentSheet`
  *   - **F11** pending claims (landed — see [PendingClaimsHandler]):
  *     `getPendingClaims`
- *   - **F12** subscription mgmt: `openCustomerPortal`,
- *     `showManageSubscription`, `cancelSubscription`, `pauseSubscription`,
- *     `resumeSubscription`, `acceptSaveOffer`,
- *     `submitCancelFlowResponse`, `getCancelFlowConfig`,
- *     `fetchCancelFlowConfig`
+ *   - **F12** subscription mgmt (landed — see [SubscriptionMgmtHandler]):
+ *     `cancelSubscription`, `pauseSubscription`, `resumeSubscription`
+ *     forward to the SDK; `openCustomerPortal`, `showManageSubscription`,
+ *     `acceptSaveOffer`, `submitCancelFlowResponse`, `getCancelFlowConfig`,
+ *     `fetchCancelFlowConfig` return `not_implemented` (the first two
+ *     match iOS — both APIs were removed from ZeroSettleKit; the last
+ *     four are the iOS-only Save-the-Sale headless surface)
  *   - **F13** modal launches: `presentCancelFlow`, `presentUpgradeOffer`,
  *     `fetchUpgradeOfferConfig`
  *   - **F15** iOS-only stubs (Android returns the tagged error today;
@@ -177,6 +180,17 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var pendingClaimsHandler: PendingClaimsHandler
 
     /**
+     * F12 subscription-management handler. Owns nine methods on the main
+     * channel — three SDK mutations (`cancelSubscription`,
+     * `pauseSubscription`, `resumeSubscription`) plus six stub methods that
+     * return `not_implemented` to match iOS (`openCustomerPortal`,
+     * `showManageSubscription`) or per product decision (the four
+     * save-the-sale headless methods). Same allocation pattern as
+     * F8/F9/F10/F11.
+     */
+    private lateinit var subscriptionMgmtHandler: SubscriptionMgmtHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -231,6 +245,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         catalogHandler = CatalogHandler(handlerDeps)
         purchaseHandler = PurchaseHandler(handlerDeps)
         pendingClaimsHandler = PendingClaimsHandler(handlerDeps)
+        subscriptionMgmtHandler = SubscriptionMgmtHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
@@ -252,7 +267,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
         Log.i(
             "ZeroSettle",
-            "Android plugin attached (F8-F11 handlers wired; F12-F17 still WIP stubs)"
+            "Android plugin attached (F8-F12 handlers wired; F13-F17 still WIP stubs)"
         )
     }
 
@@ -298,25 +313,15 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         // otherwise — fall through to the next handler / the WIP-error
         // dispatch below if no handler claims the call. F8 owns identity,
         // F9 owns catalog + entitlements, F10 owns purchase + payment sheet,
-        // F11 owns pending claims; F12-F17 are still WIP-error stubs.
+        // F11 owns pending claims, F12 owns subscription mgmt; F13-F17 are
+        // still WIP-error stubs.
         if (identityHandler.handle(call, result)) return
         if (catalogHandler.handle(call, result)) return
         if (purchaseHandler.handle(call, result)) return
         if (pendingClaimsHandler.handle(call, result)) return
+        if (subscriptionMgmtHandler.handle(call, result)) return
 
         when (call.method) {
-            // === F12 — Subscription management ===
-            "openCustomerPortal",
-            "showManageSubscription",
-            "cancelSubscription",
-            "pauseSubscription",
-            "resumeSubscription",
-            "acceptSaveOffer",
-            "submitCancelFlowResponse",
-            "getCancelFlowConfig",
-            "fetchCancelFlowConfig" ->
-                notYetImplemented(call.method, "F12", result)
-
             // === F13 — Modal launches (cancel flow / upgrade offer) ===
             "presentCancelFlow",
             "presentUpgradeOffer",

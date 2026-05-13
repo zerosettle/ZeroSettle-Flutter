@@ -306,8 +306,34 @@ class ZeroSettlePluginTest {
     }
 
     @Test
-    fun `F12 sub mgmt method routes to F12 task id`() {
-        assertNotYetImplemented(method = "cancelSubscription", expectedTask = "F12")
+    fun `F12 cancelSubscription routes through SubscriptionMgmtHandler not WIP stub`() {
+        // Positive routing: with no productId, the handler issues a
+        // synchronous INVALID_ARGUMENTS guard before suspending into the
+        // SDK call — proves dispatch reached F12's handler rather than
+        // falling through to the tagged WIP error. The handler test
+        // exercises the suspend wire-shape paths; here we just need a
+        // dispatch-table check that runs without requiring a test
+        // dispatcher on the plugin's Main scope.
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(
+            MethodCall("cancelSubscription", emptyMap<String, Any?>()),
+            result,
+        )
+        verify { result.error("INVALID_ARGUMENTS", "productId is required", null) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+    }
+
+    @Test
+    fun `F12 openCustomerPortal routes through SubscriptionMgmtHandler with not_implemented`() {
+        // Positive routing: handler issues the iOS-matching not_implemented
+        // stub error rather than the tagged F12 wip error. Save-the-Sale
+        // headless methods follow the same pattern (one representative test).
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("openCustomerPortal", null), result)
+        verify { result.error(eq("not_implemented"), any(), null) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
     }
 
     @Test
