@@ -32,6 +32,14 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel = MethodChannel(binding.binaryMessenger, "zerosettle")
         methodChannel.setMethodCallHandler(this)
+        // Loud logcat marker so a misconfigured release is immediately visible
+        // during integration testing. Real plugin scaffold lands in F7.
+        android.util.Log.w(
+            "ZeroSettle",
+            "[Phase 2 WIP stub] Android plugin is under construction on " +
+                "feat/1.3.0-parity. Every method-channel call will fail with " +
+                "zerosettle_phase2_wip. See plan F7 for the real scaffold."
+        )
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -44,9 +52,16 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     override fun onDetachedFromActivity() = Unit
 
     override fun onMethodCall(call: MethodCall, result: Result) {
-        // All handlers land in F8–F17. Stub returns notImplemented for every
-        // call so the Dart side gets a clear MissingPluginException — same
-        // semantics as if the plugin weren't installed.
-        result.notImplemented()
+        // All handlers land in F8–F17. The stub fails loudly with a tagged
+        // error code rather than notImplemented() so the failure surfaces in
+        // adopter logs — `MissingPluginException` is often swallowed as
+        // "platform not supported" and goes unnoticed.
+        result.error(
+            "zerosettle_phase2_wip",
+            "Android plugin is under construction on feat/1.3.0-parity. " +
+                "Method '${call.method}' is not yet implemented. " +
+                "See docs/superpowers/plans/2026-05-12-flutter-android-parity-plan.md F7.",
+            null,
+        )
     }
 }
