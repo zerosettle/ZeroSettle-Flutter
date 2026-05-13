@@ -241,8 +241,28 @@ class ZeroSettlePluginTest {
     }
 
     @Test
-    fun `F9 catalog method routes to F9 task id`() {
-        assertNotYetImplemented(method = "getProducts", expectedTask = "F9")
+    fun `F9 catalog getProducts routes through CatalogHandler, not WIP error`() {
+        // Positive routing: with the cache empty, the handler returns an
+        // empty List (not the tagged F9 wip error). The mocked ZeroSettle's
+        // `products` StateFlow is stubbed to emptyList() below.
+        every { ZeroSettle.products } returns MutableStateFlow(emptyList())
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("getProducts", null), result)
+        verify { result.success(emptyList<Map<String, Any?>>()) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
+    }
+
+    @Test
+    fun `F9 catalog getEntitlements routes through CatalogHandler, not WIP error`() {
+        // Same positive-routing check: entitlements is initialized to
+        // emptyList() on the SDK, so this returns success(emptyList()).
+        every { ZeroSettle.entitlements } returns MutableStateFlow(emptyList())
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("getEntitlements", null), result)
+        verify { result.success(emptyList<Map<String, Any?>>()) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
     }
 
     @Test

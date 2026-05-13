@@ -3,6 +3,7 @@ package com.zerosettle.flutter
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import com.zerosettle.flutter.handlers.CatalogHandler
 import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
 import com.zerosettle.flutter.offermanager.OfferManagerHandleRegistry
@@ -60,9 +61,9 @@ import kotlinx.coroutines.cancel
  *     `bootstrap`, `identify`, `logout`, `setCustomer`,
  *     `transferStoreKitOwnershipToCurrentUser`, `getCurrentUserId`,
  *     `getIsBootstrapped`, `getIsConfigured`
- *   - **F9** catalog / entitlements: `fetchProducts`, `getProducts`,
- *     `product`, `hasActiveEntitlement`, `getEntitlements`,
- *     `restoreEntitlements`
+ *   - **F9** catalog / entitlements (landed — see [CatalogHandler]):
+ *     `fetchProducts`, `getProducts`, `product`, `hasActiveEntitlement`,
+ *     `getEntitlements`, `restoreEntitlements`
  *   - **F10** purchase: `purchase`, `purchaseViaStoreKit`,
  *     `presentPaymentSheet`, `preloadPaymentSheet`, `warmUpPaymentSheet`
  *   - **F11** pending claims: `getPendingClaims`
@@ -148,6 +149,12 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var identityHandler: IdentityHandler
 
     /**
+     * F9 catalog/entitlements handler. Owns six catalog + entitlement
+     * methods on the main channel. Same allocation pattern as F8.
+     */
+    private lateinit var catalogHandler: CatalogHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -199,6 +206,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             applicationContextProvider = applicationContextProvider,
         )
         identityHandler = IdentityHandler(handlerDeps)
+        catalogHandler = CatalogHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
@@ -264,20 +272,12 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         // Per-domain handlers consume their own methods. Each handler's
         // `handle(call, result)` returns true if it owned the method, false
         // otherwise — fall through to the next handler / the WIP-error
-        // dispatch below if no handler claims the call. F8 owns identity;
-        // F9-F17 are still WIP-error stubs.
+        // dispatch below if no handler claims the call. F8 owns identity,
+        // F9 owns catalog + entitlements; F10-F17 are still WIP-error stubs.
         if (identityHandler.handle(call, result)) return
+        if (catalogHandler.handle(call, result)) return
 
         when (call.method) {
-            // === F9 — Catalog + entitlements ===
-            "fetchProducts",
-            "getProducts",
-            "product",
-            "hasActiveEntitlement",
-            "getEntitlements",
-            "restoreEntitlements" ->
-                notYetImplemented(call.method, "F9", result)
-
             // === F10 — Purchase + payment sheet ===
             "purchase",
             "purchaseViaStoreKit",
