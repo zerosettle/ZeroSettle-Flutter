@@ -61,13 +61,21 @@ class PurchaseHandlerTest {
     private val activity: Activity = mockk(relaxed = true)
     private lateinit var handler: PurchaseHandler
 
+    /**
+     * F25 — captures every checkout event the handler fabricates during a
+     * test. Reset in [setUp]; asserted on in the F25 fabrication tests.
+     */
+    private val checkoutEvents = mutableListOf<Map<String, Any?>>()
+
     @Before
     fun setUp() {
         mockkObject(ZeroSettle)
+        checkoutEvents.clear()
         val deps = HandlerDependencies(
             scope = scope,
             activityProvider = { activity },
             applicationContextProvider = { appContext },
+            checkoutEventEmitter = { event -> checkoutEvents.add(event) },
         )
         handler = PurchaseHandler(deps)
     }
@@ -101,6 +109,7 @@ class PurchaseHandlerTest {
             scope = scope,
             activityProvider = { null },
             applicationContextProvider = { appContext },
+            checkoutEventEmitter = { event -> checkoutEvents.add(event) },
         )
         return PurchaseHandler(deps)
     }
@@ -312,5 +321,107 @@ class PurchaseHandlerTest {
 
         verify { result.error("INVALID_ARGUMENTS", "productId is required", null) }
         verify(exactly = 0) { result.success(any()) }
+    }
+
+    // ─── F25 — checkout-event fabrication ───────────────────────────────
+    //
+    // The handler emits four wire events on the
+    // `zerosettle/checkout_events` EventChannel via
+    // [HandlerDependencies.checkoutEventEmitter]. Wire shapes mirror iOS
+    // exactly (see `ext/EventToFlutterMap.kt`).
+
+    @Test
+    fun `purchase happy path emits checkoutDidBegin then checkoutDidComplete`() {
+        val txn = newTransaction(id = "txn_ok", productId = "com.app.coins")
+        coEvery { ZeroSettle.purchase(activity, "com.app.coins") } returns Result.success(txn)
+
+        handler.handle(call("purchase", mapOf("productId" to "com.app.coins")), newResult())
+
+        // Exactly two fabricated events, in order.
+        assertThat(checkoutEvents).hasSize(2)
+        assertThat(checkoutEvents[0]).isEqualTo(
+            mapOf("event" to "checkoutDidBegin", "productId" to "com.app.coins")
+        )
+        // checkoutDidComplete carries the full transaction map under
+        // "transaction" — same key as iOS (CheckoutTransaction.toFlutterMap()).
+        val complete = checkoutEvents[1]
+        assertThat(complete["event"]).isEqualTo("checkoutDidComplete")
+        @Suppress("UNCHECKED_CAST")
+        val embedded = complete["transaction"] as Map<String, Any?>
+        assertThat(embedded["id"]).isEqualTo("txn_ok")
+        assertThat(embedded["productId"]).isEqualTo("com.app.coins")
+    }
+
+    @Test
+    fun `purchase PurchaseCancelled emits checkoutDidBegin then checkoutDidCancel`() {
+        coEvery { ZeroSettle.purchase(activity, "com.app.coins") } returns Result.failure(
+            ZeroSettleError.PurchaseCancelled,
+        )
+
+        handler.handle(call("purchase", mapOf("productId" to "com.app.coins")), newResult())
+
+        assertThat(checkoutEvents).hasSize(2)
+        assertThat(checkoutEvents[0]["event"]).isEqualTo("checkoutDidBegin")
+        // Cancel carries productId only — no error/message field. Matches iOS.
+        assertThat(checkoutEvents[1]).isEqualTo(
+            mapOf("event" to "checkoutDidCancel", "productId" to "com.app.coins")
+        )
+    }
+
+    @Test
+    fun `purchase non-cancel failure emits checkoutDidBegin then checkoutDidFail`() {
+        coEvery { ZeroSettle.purchase(activity, "com.app.coins") } returns Result.failure(
+            ZeroSettleError.CheckoutInFlight,
+        )
+
+        handler.handle(call("purchase", mapOf("productId" to "com.app.coins")), newResult())
+
+        assertThat(checkoutEvents).hasSize(2)
+        assertThat(checkoutEvents[0]["event"]).isEqualTo("checkoutDidBegin")
+        val fail = checkoutEvents[1]
+        assertThat(fail["event"]).isEqualTo("checkoutDidFail")
+        assertThat(fail["productId"]).isEqualTo("com.app.coins")
+        // Error message falls back to the localized message — never blank.
+        assertThat(fail["error"] as String).isNotEmpty()
+    }
+
+    @Test
+    fun `purchase SDK throw emits checkoutDidBegin then checkoutDidFail with throwable message`() {
+        coEvery { ZeroSettle.purchase(any(), any()) } throws RuntimeException("boom")
+
+        handler.handle(call("purchase", mapOf("productId" to "com.app.coins")), newResult())
+
+        assertThat(checkoutEvents).hasSize(2)
+        assertThat(checkoutEvents[0]["event"]).isEqualTo("checkoutDidBegin")
+        assertThat(checkoutEvents[1]).isEqualTo(
+            mapOf(
+                "event" to "checkoutDidFail",
+                "productId" to "com.app.coins",
+                "error" to "boom",
+            )
+        )
+    }
+
+    @Test
+    fun `purchase without Activity does not fabricate any checkout event`() {
+        // The activity-required guard fires synchronously before any
+        // checkout begins; no fabricated event should escape. Matches iOS,
+        // which never invokes its delegate path until the sheet presents.
+        val noActivityHandler = handlerWithoutActivity()
+        noActivityHandler.handle(
+            call("purchase", mapOf("productId" to "com.app.coins")),
+            newResult(),
+        )
+
+        assertThat(checkoutEvents).isEmpty()
+    }
+
+    @Test
+    fun `purchase missing productId does not fabricate any checkout event`() {
+        // Same rationale as the no-Activity case — the INVALID_ARGUMENTS
+        // guard fires before any begin event would be emitted.
+        handler.handle(call("purchase", emptyMap<String, Any?>()), newResult())
+
+        assertThat(checkoutEvents).isEmpty()
     }
 }

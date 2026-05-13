@@ -1,8 +1,13 @@
 package com.zerosettle.flutter.handlers
 
 import android.util.Log
+import com.zerosettle.flutter.ext.fabricateCheckoutDidBeginEvent
+import com.zerosettle.flutter.ext.fabricateCheckoutDidCancelEvent
+import com.zerosettle.flutter.ext.fabricateCheckoutDidCompleteEvent
+import com.zerosettle.flutter.ext.fabricateCheckoutDidFailEvent
 import com.zerosettle.flutter.ext.toFlutterMap
 import com.zerosettle.sdk.ZeroSettle
+import com.zerosettle.sdk.models.ZeroSettleError
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.launch
@@ -31,6 +36,28 @@ import kotlinx.coroutines.launch
  * [HandlerDependencies.scope] and folds the Result into a Flutter wire
  * response. The intermediate `transactionId` is an implementation detail
  * (the SDK refetches the hydrated record before returning).
+ *
+ * ### F25 — checkout-event fabrication
+ *
+ * In addition to the wire response, the handler emits four fabricated
+ * events on the `zerosettle/checkout_events` EventChannel via
+ * [HandlerDependencies.checkoutEventEmitter]:
+ *
+ *   - `checkoutDidBegin` — synchronously, before the suspend purchase call.
+ *     Adopters use it to show a spinner.
+ *   - `checkoutDidComplete` — on `Result.success`, carries the full
+ *     hydrated `CheckoutTransaction.toFlutterMap()`.
+ *   - `checkoutDidCancel` — on `Result.failure(PurchaseCancelled)`.
+ *   - `checkoutDidFail` — on any other `Result.failure` AND on unexpected
+ *     SDK throws caught by the outer `runCatching`.
+ *
+ * Fabrication is the right strategy here (vs collecting `ZeroSettle.events`)
+ * because the SDK's `PurchaseSucceeded` event carries only
+ * `productId + transactionId`, but iOS's wire shape carries the full
+ * hydrated `CheckoutTransaction`. Re-hydrating from the SDK event stream
+ * would require an extra server round-trip; the handler already has the
+ * transaction from `Result.success`. See `ext/EventToFlutterMap.kt` for
+ * the wire-shape definitions.
  *
  * Concurrent calls fail with [com.zerosettle.sdk.models.ZeroSettleError.CheckoutInFlight] —
  * mapped to wire code `checkout_in_flight` via the shared `sendError`
@@ -124,6 +151,9 @@ internal class PurchaseHandler(private val deps: HandlerDependencies) {
         // `presentation` arg is iOS-only — drop silently (see class doc).
         val activity = deps.activityProvider()
         if (activity == null) {
+            // No checkout actually started — don't fabricate a begin or fail
+            // event for this guard-path. Matches iOS, which never enters its
+            // delegate path until the in-app sheet is presented.
             result.error(
                 "activity_required",
                 "Foreground Activity required for purchase (Custom Tab launch)",
@@ -131,16 +161,54 @@ internal class PurchaseHandler(private val deps: HandlerDependencies) {
             )
             return
         }
+        // F25 — fabricate checkout-event lifecycle for the
+        // `zerosettle/checkout_events` EventChannel. Begin fires synchronously
+        // before the suspend purchase() so adopters can show a spinner; the
+        // remaining three events fold off the SDK Result. The Android SDK's
+        // `PurchaseSucceeded` event carries only productId+transactionId, but
+        // iOS's `checkoutDidComplete` wire shape carries the full hydrated
+        // CheckoutTransaction — fabrication from this handler's
+        // `Result<CheckoutTransaction>` context matches the iOS shape exactly
+        // (see `ext/EventToFlutterMap.kt`).
+        deps.checkoutEventEmitter(fabricateCheckoutDidBeginEvent(productId))
         deps.scope.launch {
             val sdkResult = runCatching { ZeroSettle.purchase(activity, productId) }
             sdkResult.fold(
                 onSuccess = { res ->
                     res.fold(
-                        onSuccess = { transaction -> result.success(transaction.toFlutterMap()) },
-                        onFailure = { result.sendError(it) },
+                        onSuccess = { transaction ->
+                            deps.checkoutEventEmitter(
+                                fabricateCheckoutDidCompleteEvent(transaction)
+                            )
+                            result.success(transaction.toFlutterMap())
+                        },
+                        onFailure = { err ->
+                            // Cancel vs fail split matches iOS's
+                            // checkoutDidCancel / checkoutDidFail delegate
+                            // pair. Cancel carries productId only; fail
+                            // carries productId + the localized error
+                            // message (or class-name fallback).
+                            if (err is ZeroSettleError.PurchaseCancelled) {
+                                deps.checkoutEventEmitter(
+                                    fabricateCheckoutDidCancelEvent(productId)
+                                )
+                            } else {
+                                deps.checkoutEventEmitter(
+                                    fabricateCheckoutDidFailEvent(productId, err)
+                                )
+                            }
+                            result.sendError(err)
+                        },
                     )
                 },
-                onFailure = { result.sendError(it) },
+                onFailure = { err ->
+                    // Unexpected SDK throw — also fail to keep the channel
+                    // event stream complete.
+                    deps.checkoutEventEmitter(
+                        fabricateCheckoutDidFailEvent(productId, err)
+                    )
+                    result.sendError(err)
+                },
             )
         }
     }

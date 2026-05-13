@@ -3,6 +3,7 @@ package com.zerosettle.flutter
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import com.zerosettle.flutter.ext.toFlutterMap
 import com.zerosettle.flutter.handlers.ApplePayStubsHandler
 import com.zerosettle.flutter.handlers.CatalogHandler
 import com.zerosettle.flutter.handlers.HandleResolutionHandler
@@ -18,6 +19,7 @@ import com.zerosettle.flutter.offermanager.OfferManagerStaticHandler
 import com.zerosettle.flutter.platformviews.MigrateTipViewFactory
 import com.zerosettle.flutter.platformviews.OfferTipFactory
 import com.zerosettle.flutter.platformviews.PendingActionBannerFactory
+import com.zerosettle.sdk.ZeroSettle
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -29,8 +31,11 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Android counterpart to the iOS plugin core (see
@@ -163,16 +168,51 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
      * collectors; the buffered-sink pattern lets the plugin emit without
      * juggling onListen/onCancel lifecycle from each emit site.
      *
-     * Apple Pay availability is iOS-only — the channel exists for Dart-side
-     * subscription parity but the Android sink will never emit.
+     * **Replay semantics differ per channel:**
+     *
+     *   - `entitlement_updates` / `pending_claims_updates` carry **current
+     *     state** (StateFlow snapshots). A late Dart subscriber should see
+     *     the current value immediately — `replayLatest = true`.
+     *   - `checkout_events` carries **discrete lifecycle events**
+     *     (begin/complete/cancel/fail). Replaying a stale
+     *     `checkoutDidComplete` on reattach would falsely trigger Dart's
+     *     post-purchase handling — `replayLatest = false` (matches iOS,
+     *     whose `CheckoutStreamHandler` has no `onListenStarted`).
+     *   - `apple_pay_state_updates` is iOS-only — the channel exists for
+     *     Dart-side subscription parity but the Android sink never emits
+     *     at all. Flag is irrelevant; defaults to `true`.
      */
-    internal val entitlementStreamHandler = BufferedStreamHandler()
-    internal val checkoutStreamHandler = BufferedStreamHandler()
-    internal val pendingClaimsStreamHandler = BufferedStreamHandler()
-    internal val applePayStateStreamHandler = BufferedStreamHandler()
+    internal val entitlementStreamHandler = BufferedStreamHandler(replayLatest = true)
+    internal val checkoutStreamHandler = BufferedStreamHandler(replayLatest = false)
+    internal val pendingClaimsStreamHandler = BufferedStreamHandler(replayLatest = true)
+    internal val applePayStateStreamHandler = BufferedStreamHandler(replayLatest = true)
 
     /** Per-handle OfferManager registry (F18). Allocated on engine attach. */
     internal lateinit var offerManagerRegistry: OfferManagerHandleRegistry
+
+    /**
+     * F25 — collectors that pump SDK [StateFlow]s onto buffered EventChannel
+     * sinks. Tracked so [onDetachedFromEngine] can cancel them ahead of
+     * `pluginScope.cancel()` (the scope cancellation tears them down anyway;
+     * the explicit handles make ownership obvious and let tests assert the
+     * pumps are alive after attach).
+     *
+     * `apple_pay_state_updates` has no collector — Apple Pay availability is
+     * an iOS-only concept (see [ApplePayStubsHandler]); the channel is wired
+     * solely so Dart `EventChannel.receiveBroadcastStream()` doesn't fail
+     * with MissingPluginException on Android.
+     *
+     * `checkout_events` also has no collector here — it's driven by the
+     * [PurchaseHandler] fabrication path documented in
+     * `ext/EventToFlutterMap.kt` (the Android SDK's `PurchaseSucceeded`
+     * event carries only `productId + transactionId`, but iOS's
+     * `checkoutDidComplete` wire shape carries the full hydrated
+     * [com.zerosettle.sdk.models.CheckoutTransaction]; fabrication from the
+     * handler's `Result<CheckoutTransaction>` context avoids an extra
+     * server round-trip).
+     */
+    @Volatile private var entitlementPumpJob: Job? = null
+    @Volatile private var pendingClaimsPumpJob: Job? = null
 
     /**
      * F8 identity/lifecycle handler. Owns the 9 lifecycle methods Dart
@@ -314,6 +354,11 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             scope = pluginScope,
             activityProvider = activityProvider,
             applicationContextProvider = applicationContextProvider,
+            // F25 — PurchaseHandler fabricates checkoutDid{Begin,Complete,
+            // Cancel,Fail} events at lifecycle points; this seam routes them
+            // through the buffered stream handler's emit(). Tests pass a
+            // capturing lambda instead.
+            checkoutEventEmitter = checkoutStreamHandler::emit,
         )
         identityHandler = IdentityHandler(handlerDeps)
         catalogHandler = CatalogHandler(handlerDeps)
@@ -347,9 +392,29 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         binding.platformViewRegistry
             .registerViewFactory("com.zerosettle/migrate_tip_view", MigrateTipViewFactory(messenger))
 
+        // F25 — pump SDK StateFlows onto buffered EventChannel sinks. Each
+        // pump runs for the engine's lifetime; pluginScope.cancel() in
+        // onDetachedFromEngine tears them down. StateFlow's behaviour is
+        // "replay-latest on collect", so the initial empty list is consumed
+        // immediately and cached on the BufferedStreamHandler — late Dart
+        // subscribers see it on attach via the handler's replay-on-onListen
+        // path. Wire shapes mirror iOS:
+        //   entitlement_updates: List<Map>, each via Entitlement.toFlutterMap()
+        //   pending_claims_updates: List<Map>, each via PendingClaim.toFlutterMap()
+        entitlementPumpJob = pumpStateFlow(
+            pluginScope,
+            ZeroSettle.entitlements,
+            entitlementStreamHandler,
+        ) { list -> list.map { it.toFlutterMap() } }
+        pendingClaimsPumpJob = pumpStateFlow(
+            pluginScope,
+            ZeroSettle.pendingClaims,
+            pendingClaimsStreamHandler,
+        ) { list -> list.map { it.toFlutterMap() } }
+
         Log.i(
             "ZeroSettle",
-            "Android plugin attached (F8-F13 + F15-F17 handlers wired; all per-domain handlers landed)"
+            "Android plugin attached (F8-F13 + F15-F17 handlers wired; F25 pumps live; all per-domain handlers landed)"
         )
     }
 
@@ -364,6 +429,12 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         checkoutEventChannel.setStreamHandler(null)
         pendingClaimsEventChannel.setStreamHandler(null)
         applePayStateEventChannel.setStreamHandler(null)
+        // F25 pump jobs — `pluginScope.cancel()` below would tear them down
+        // anyway, but explicit cancellation makes ownership obvious.
+        entitlementPumpJob?.cancel()
+        pendingClaimsPumpJob?.cancel()
+        entitlementPumpJob = null
+        pendingClaimsPumpJob = null
         offerManagerRegistry.disposeAll()
         pluginScope.cancel()
         applicationContext = null
@@ -422,21 +493,97 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 }
 
 /**
- * Generic [EventChannel.StreamHandler] that buffers the latest sink so the
- * plugin can emit from coroutines without juggling lifecycle.
+ * F25 — launch a collector that pumps [source]'s emissions through
+ * [encode] and onto [sink]'s buffered channel. Returns the [Job] so callers
+ * can cancel ahead of scope teardown (and so tests can drive the collector
+ * deterministically by passing an `UnconfinedTestDispatcher`-backed scope).
  *
- * `sink` is exposed for F25's SDK-Flow → EventChannel collectors to call.
- * `@Volatile` because the sink is written from the main thread by the
- * Flutter framework (onListen / onCancel callbacks) and read from arbitrary
- * coroutine dispatchers.
+ * Factored as a top-level internal function so the entitlements +
+ * pendingClaims pumps share the same collect-and-encode shape, and unit
+ * tests can exercise the pump against a `MutableStateFlow` + a fake
+ * [BufferedStreamHandler] without standing up the full plugin lifecycle.
+ *
+ * @param scope    plugin coroutine scope; pump lives for its lifetime.
+ * @param source   SDK [StateFlow] to subscribe to.
+ * @param sink     buffered sink that buffers the latest emission for replay.
+ * @param encode   maps each emission to the wire shape (typically
+ *                 `List<Map<String, Any?>>` matching iOS exactly).
  */
-internal class BufferedStreamHandler : EventChannel.StreamHandler {
+internal fun <T> pumpStateFlow(
+    scope: CoroutineScope,
+    source: StateFlow<T>,
+    sink: BufferedStreamHandler,
+    encode: (T) -> Any,
+): Job = scope.launch {
+    source.collect { value -> sink.emit(encode(value)) }
+}
+
+/**
+ * Generic [EventChannel.StreamHandler] that buffers the active sink and,
+ * for [replayLatest] = `true` channels, the most recent emission too.
+ *
+ * **The buffer.** The plugin can emit from coroutines without juggling
+ * onListen/onCancel lifecycle from each emit site — writes go to `sink` if
+ * attached, no-op otherwise.
+ *
+ * **Replay-on-onListen** (when [replayLatest] is `true`): without this, a
+ * `StateFlow.collect` collector launched in `onAttachedToEngine` consumes
+ * the current value before any Dart listener attaches — that emission has
+ * nowhere to go (`sink == null`), so it's dropped. The next time Dart
+ * attaches, it waits for a *new* mutation before seeing anything. iOS
+ * sidesteps this via per-handler `onListenStarted` callbacks that re-read
+ * `ZeroSettle.shared.<stateflow>` on attach; the buffered variant achieves
+ * the same parity by caching the last [emit] and replaying it on [onListen].
+ *
+ * **When NOT to replay** (when [replayLatest] is `false`): channels that
+ * carry *discrete lifecycle events* — like `checkout_events`
+ * (`checkoutDid{Begin,Complete,Cancel,Fail}`) — must NOT replay. Replaying
+ * a stale `checkoutDidComplete` on reattach would falsely trigger Dart's
+ * post-purchase handling (double-grant, duplicate analytics, etc.).
+ * Matches iOS's `CheckoutStreamHandler` (no `onListenStarted`). The
+ * emission is still cached for symmetry, but never surfaced to a fresh sink.
+ *
+ * `@Volatile` because both fields are written from the main thread by the
+ * Flutter framework (onListen / onCancel callbacks) and read from arbitrary
+ * coroutine dispatchers in the F25 pumps and PurchaseHandler emit sites.
+ *
+ * @param replayLatest whether [onListen] should replay the most recent
+ *   [emit] to a fresh sink. `true` for StateFlow/state channels;
+ *   `false` for discrete event channels.
+ */
+internal class BufferedStreamHandler(
+    private val replayLatest: Boolean = true,
+) : EventChannel.StreamHandler {
     @Volatile
     var sink: EventChannel.EventSink? = null
         private set
 
+    /**
+     * Last value pushed via [emit]. When [replayLatest] is `true`, replayed
+     * to fresh sinks on [onListen] so late Dart subscribers don't have to
+     * wait for the next mutation. `null` means "no value cached yet" —
+     * replay is skipped in that case.
+     */
+    @Volatile
+    private var lastEmit: Any? = null
+
+    /**
+     * Push [value] to the current sink (if attached) and remember it for
+     * possible replay on the next [onListen]. Safe to call from any thread.
+     */
+    fun emit(value: Any?) {
+        lastEmit = value
+        sink?.success(value)
+    }
+
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         sink = events
+        // Replay the most recent emission only for state-snapshot channels.
+        // Discrete event channels (replayLatest=false) match iOS's no-replay
+        // behaviour to avoid duplicate post-purchase processing on Dart.
+        if (replayLatest) {
+            lastEmit?.let { events?.success(it) }
+        }
     }
 
     override fun onCancel(arguments: Any?) {
