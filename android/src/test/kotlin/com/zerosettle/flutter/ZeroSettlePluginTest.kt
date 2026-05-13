@@ -292,8 +292,17 @@ class ZeroSettlePluginTest {
     }
 
     @Test
-    fun `F11 pending claims method routes to F11 task id`() {
-        assertNotYetImplemented(method = "getPendingClaims", expectedTask = "F11")
+    fun `F11 getPendingClaims routes through PendingClaimsHandler not WIP stub`() {
+        // Positive routing: handler reads ZeroSettle.pendingClaims and emits
+        // success with a (empty-by-default) list rather than the tagged F11
+        // wip error. The handler test exercises the wire shape — here we
+        // only need to confirm the dispatch path moved off the WIP table.
+        every { ZeroSettle.pendingClaims } returns MutableStateFlow(emptyList())
+        plugin.onAttachedToEngine(binding)
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+        plugin.onMethodCall(MethodCall("getPendingClaims", null), result)
+        verify { result.success(emptyList<Map<String, Any?>>()) }
+        verify(exactly = 0) { result.error(eq("zerosettle_phase2_wip"), any(), any()) }
     }
 
     @Test

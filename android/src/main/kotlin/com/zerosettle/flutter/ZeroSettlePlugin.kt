@@ -6,6 +6,7 @@ import android.util.Log
 import com.zerosettle.flutter.handlers.CatalogHandler
 import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
+import com.zerosettle.flutter.handlers.PendingClaimsHandler
 import com.zerosettle.flutter.handlers.PurchaseHandler
 import com.zerosettle.flutter.offermanager.OfferManagerHandleRegistry
 import com.zerosettle.flutter.offermanager.OfferManagerStaticHandler
@@ -68,7 +69,8 @@ import kotlinx.coroutines.cancel
  *   - **F10** purchase + payment sheet (landed — see [PurchaseHandler]):
  *     `purchase`, `purchaseViaStoreKit`, `presentPaymentSheet`,
  *     `preloadPaymentSheet`, `warmUpPaymentSheet`
- *   - **F11** pending claims: `getPendingClaims`
+ *   - **F11** pending claims (landed — see [PendingClaimsHandler]):
+ *     `getPendingClaims`
  *   - **F12** subscription mgmt: `openCustomerPortal`,
  *     `showManageSubscription`, `cancelSubscription`, `pauseSubscription`,
  *     `resumeSubscription`, `acceptSaveOffer`,
@@ -167,6 +169,14 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var purchaseHandler: PurchaseHandler
 
     /**
+     * F11 pending-claims handler. Owns the single `getPendingClaims` method
+     * on the main channel — synchronous read of [ZeroSettle.pendingClaims].
+     * No coroutine launch required (StateFlow `.value` is non-suspending).
+     * Same allocation pattern as F8/F9/F10.
+     */
+    private lateinit var pendingClaimsHandler: PendingClaimsHandler
+
+    /**
      * Tracked Activity. F8–F17 handlers that launch the host activity
      * (CustomTabs entry, CheckoutSheet entry) read via [activityProvider].
      * `@Volatile` because ActivityAware callbacks fire on the main thread
@@ -220,6 +230,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         identityHandler = IdentityHandler(handlerDeps)
         catalogHandler = CatalogHandler(handlerDeps)
         purchaseHandler = PurchaseHandler(handlerDeps)
+        pendingClaimsHandler = PendingClaimsHandler(handlerDeps)
 
         // OfferManager registry (F18) — per-handle channel allocator.
         offerManagerRegistry = OfferManagerHandleRegistry(messenger)
@@ -241,7 +252,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
         Log.i(
             "ZeroSettle",
-            "Android plugin attached (F7 scaffold; per-domain handlers land in F8-F17)"
+            "Android plugin attached (F8-F11 handlers wired; F12-F17 still WIP stubs)"
         )
     }
 
@@ -286,17 +297,14 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         // `handle(call, result)` returns true if it owned the method, false
         // otherwise — fall through to the next handler / the WIP-error
         // dispatch below if no handler claims the call. F8 owns identity,
-        // F9 owns catalog + entitlements, F10 owns purchase + payment sheet;
-        // F11-F17 are still WIP-error stubs.
+        // F9 owns catalog + entitlements, F10 owns purchase + payment sheet,
+        // F11 owns pending claims; F12-F17 are still WIP-error stubs.
         if (identityHandler.handle(call, result)) return
         if (catalogHandler.handle(call, result)) return
         if (purchaseHandler.handle(call, result)) return
+        if (pendingClaimsHandler.handle(call, result)) return
 
         when (call.method) {
-            // === F11 — Pending claims ===
-            "getPendingClaims" ->
-                notYetImplemented(call.method, "F11", result)
-
             // === F12 — Subscription management ===
             "openCustomerPortal",
             "showManageSubscription",
