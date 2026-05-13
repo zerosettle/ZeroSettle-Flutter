@@ -1,3 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.zerosettle.flutter">
+    <application>
+        <activity
+            android:name=".ZeroSettleHostActivity"
+            android:theme="@style/Theme.ZeroSettle.Transparent"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|uiMode"/>
+    </application>
 </manifest>
