@@ -155,14 +155,31 @@ class OfferManagerHandleBridgeTest {
     }
 
     @Test
-    fun `dismiss maps SDK throw to offer_error`() = runTest {
+    fun `dismiss maps non-typed SDK throw to sdk_error`() = runTest {
+        // Non-ZeroSettleError throwables fall through to the `sdk_error`
+        // fallback in `MethodChannel.Result.sendError`.
         coEvery { manager.dismiss() } throws RuntimeException("boom")
         val handler = startAndCaptureMethodHandler()
         val result = mockk<MethodChannel.Result>(relaxed = true)
 
         handler.onMethodCall(MethodCall("dismiss", null), result)
 
-        verify { result.error("offer_error", "boom", null) }
+        verify { result.error("sdk_error", "boom", null) }
+    }
+
+    @Test
+    fun `dismiss maps typed ZeroSettleError to its wire code`() = runTest {
+        // End-to-end proof that the bridge routes typed errors through the
+        // shared `sendError` extension — adopters can pattern-match
+        // `ZSUserNotIdentifiedException` on OfferManager calls just like every
+        // other Dart API.
+        coEvery { manager.dismiss() } throws com.zerosettle.sdk.models.ZeroSettleError.UserNotIdentified
+        val handler = startAndCaptureMethodHandler()
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+
+        handler.onMethodCall(MethodCall("dismiss", null), result)
+
+        verify { result.error("user_not_identified", any(), null) }
     }
 
     @Test
@@ -194,7 +211,8 @@ class OfferManagerHandleBridgeTest {
     }
 
     @Test
-    fun `startCheckout maps SDK failure to offer_error`() = runTest {
+    fun `startCheckout maps non-typed SDK failure to sdk_error`() = runTest {
+        // Non-ZeroSettleError failure → fallback wire code.
         coEvery { manager.checkoutUrl() } returns
             Result.failure(RuntimeException("network down"))
         val handler = startAndCaptureMethodHandler()
@@ -202,7 +220,7 @@ class OfferManagerHandleBridgeTest {
 
         handler.onMethodCall(MethodCall("startCheckout", null), result)
 
-        verify { result.error("offer_error", "network down", null) }
+        verify { result.error("sdk_error", "network down", null) }
     }
 
     @Test

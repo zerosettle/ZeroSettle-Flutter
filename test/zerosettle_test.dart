@@ -403,7 +403,7 @@ class MockZeroSettlePlatform
     return purchaseViaStoreKitReturnValue;
   }
 
-  /// Test-controlled return for `purchaseViaPlayBilling` (D1 — 1.5.0).
+  /// Test-controlled return for `purchaseViaPlayBilling` (D1 — feat/1.3.0-parity).
   /// Default uses a Play-Billing-shaped transaction (`source: play_billing`).
   Map<String, dynamic> purchaseViaPlayBillingReturnValue =
       _samplePlayBillingTransactionMap();
@@ -833,7 +833,7 @@ void main() {
       expect(mockPlatform.calls.last['productId'], 'p1');
     });
 
-    // ==== 1.5.0 D2: transferPlayOwnershipToCurrentUser Android peer ====
+    // ==== D2: transferPlayOwnershipToCurrentUser Android peer ====
 
     test(
         'transferPlayOwnershipToCurrentUser forwards productId + originalTransactionId',
@@ -989,7 +989,7 @@ void main() {
       expect(mockPlatform.calls.last['productId'], 'premium_monthly');
     });
 
-    // ==== 1.5.0 D1: purchaseViaPlayBilling Android peer ====
+    // ==== D1: purchaseViaPlayBilling Android peer ====
 
     test(
         'purchaseViaPlayBilling() returns CheckoutTransaction sourced from Play Store',

@@ -1,5 +1,6 @@
 package com.zerosettle.flutter.handlers
 
+import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.flutter.ext.toFlutterMap
 import com.zerosettle.sdk.ZeroSettle
 import io.flutter.plugin.common.MethodCall
@@ -13,43 +14,30 @@ import kotlinx.coroutines.launch
  *
  * | Dart method                | Android route                                       |
  * | -------------------------- | --------------------------------------------------- |
- * | `presentCancelFlow`        | `not_implemented` (pending F6 Compose dispatch)     |
- * | `presentUpgradeOffer`      | `not_implemented` (pending F6 Compose dispatch)     |
+ * | `presentCancelFlow`        | `not_implemented` (save-the-sale modal is iOS-only) |
+ * | `presentUpgradeOffer`      | `not_implemented` (use OfferManager / MigrationTipView) |
  * | `fetchUpgradeOfferConfig`  | `ZeroSettle.fetchUpgradeOfferConfig(productId)`     |
  *
  * Wire shapes mirror `ios/zerosettle/Sources/zerosettle/ZeroSettlePlugin.swift`
  * — cases at lines 635-672 (`presentCancelFlow`) and 952-988
  * (`presentUpgradeOffer` / `fetchUpgradeOfferConfig`).
  *
- * ## `presentCancelFlow` / `presentUpgradeOffer` — pending F6, not iOS-only
+ * ## `presentCancelFlow` / `presentUpgradeOffer` — not exposed on Android
  *
- * Unlike the F12 save-the-sale headless surface (`acceptSaveOffer`,
- * `submitCancelFlowResponse`, `getCancelFlowConfig`, `fetchCancelFlowConfig`)
- * which are iOS-only **forever** per product decision, these two modal
- * launches are tracked Android work blocked on Task F6 (Compose Mode
- * dispatch in `ZeroSettleHostActivity`).
+ * Neither method has an Android route today, but for different reasons:
  *
- * Both have:
- *   - **No Android SDK high-level method.** iOS Kit exposes
- *     `ZeroSettle.shared.presentCancelFlow(...) -> CancelFlow.Result` and
- *     `presentUpgradeOffer(...) -> UpgradeOffer.Result` as one-shot async
- *     methods. The Android SDK has only the *config-fetch* layer
- *     (`fetchCancelFlowConfig`, `fetchUpgradeOfferConfig`) plus low-level
- *     `:ui` Composables (`ZeroSettleCancelFlow`, `ZeroSettleUpgradeOffer`)
- *     that take pre-fetched configs and emit decisions. The orchestration
- *     glue (fetch config → show Composable → translate decision → dispatch
- *     server call → return `Result` to Dart) is what F6 will land.
- *   - **No host-activity dispatch yet.** [com.zerosettle.flutter.ZeroSettleHostActivity]
- *     declares `Mode.CancelFlow` / `Mode.UpgradeOffer` but `onCreate`
- *     finishes immediately with `Outcome.Cancelled` (see the file's F5
- *     placeholder note).
+ *   - `presentCancelFlow` is the imperative save-the-sale modal — iOS-only
+ *     forever per product decision. Adopters on Android either build their
+ *     own cancel UX or fall back to the headless config fetch.
+ *   - `presentUpgradeOffer` is being deprecated platform-wide. The canonical
+ *     way to surface upgrade offers is the Unified Offer System
+ *     (`OfferManager` headless API + `MigrationTipView` / `OfferTip`
+ *     PlatformViews); the imperative one-shot API will not be exposed on
+ *     Android.
  *
- * Returning `not_implemented` (rather than the tagged
- * `zerosettle_phase2_wip` task-ID error) reflects that the handler IS
- * landed and owns the methods — the SDK + UI plumbing it depends on is
- * what's missing. Once F6 lands, swap each stub for an
- * `ActivityResultLauncher<ZeroSettleHostContract.Input>` launch + outcome
- * decode (see the plan's wire-table rows 232-233).
+ * Both return `not_implemented` (rather than the tagged
+ * `zerosettle_phase2_wip` task-ID error) so adopters get a deterministic
+ * "won't ship" signal at the call site.
  *
  * ## `fetchUpgradeOfferConfig` — real SDK forward
  *
@@ -89,16 +77,21 @@ internal class ModalsHandler(private val deps: HandlerDependencies) {
      */
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
-            "presentCancelFlow",
+            "presentCancelFlow" ->
+                result.error(
+                    "not_implemented",
+                    "presentCancelFlow is not exposed on Android — the imperative " +
+                        "save-the-sale modal is iOS-only per product decision. Adopters " +
+                        "can use the headless config fetch (fetchCancelFlowConfig) and " +
+                        "build their own UX, or omit cancel save-the-sale on Android.",
+                    null,
+                )
             "presentUpgradeOffer" ->
                 result.error(
                     "not_implemented",
-                    "${call.method} is pending Task F6 (Compose Mode dispatch in " +
-                        "ZeroSettleHostActivity) in feat/1.3.0-parity. The Android SDK lacks " +
-                        "a high-level present method; F6 will wire :ui Composables into the " +
-                        "host activity and the handler will launch via " +
-                        "ActivityResultLauncher<ZeroSettleHostContract.Input>. Plan: " +
-                        "docs/superpowers/plans/2026-05-12-flutter-android-parity-plan.md",
+                    "presentUpgradeOffer is not exposed on Android — use OfferManager + " +
+                        "MigrationTipView/OfferTip (the Unified Offer System) to surface upgrade " +
+                        "offers. The imperative one-shot API is being deprecated platform-wide.",
                     null,
                 )
             "fetchUpgradeOfferConfig" -> fetchUpgradeOfferConfig(call, result)

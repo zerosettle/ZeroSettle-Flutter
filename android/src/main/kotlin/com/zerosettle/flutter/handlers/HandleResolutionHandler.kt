@@ -1,5 +1,6 @@
 package com.zerosettle.flutter.handlers
 
+import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.flutter.offermanager.OfferManagerHandleBridge
 import com.zerosettle.flutter.offermanager.OfferManagerHandleRegistry
 import io.flutter.plugin.common.MethodCall
@@ -117,12 +118,6 @@ internal class HandleResolutionHandler(
 
         try {
             val entry = registry.allocate(stripeCustomerId)
-                ?: return result.error(
-                    "sdk_error",
-                    "OfferManagerHandleRegistry refused to allocate a handle " +
-                        "(registry already disposed?).",
-                    null,
-                )
 
             // F20's bridge wires the method + state channels owned by the
             // registry entry. `onDispose` is invoked by the per-handle

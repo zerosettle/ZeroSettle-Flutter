@@ -1,6 +1,5 @@
 package com.zerosettle.flutter.ext
 
-import com.zerosettle.sdk.core.ZeroSettleEvent
 import com.zerosettle.sdk.models.CheckoutTransaction
 
 /**
@@ -11,10 +10,11 @@ import com.zerosettle.sdk.models.CheckoutTransaction
  * topic. iOS publishes the same Map shapes for the same channel names (see
  * `ZeroSettlePlugin.swift` checkout-event forwarding comments).
  *
- * **Wire channels covered here:**
+ * **Wire channel covered here:**
  * - `zerosettle/checkout_events` -- the four `fabricateCheckoutDid*Event`
- *   helpers below. Unlike the offer channel, this surface is NOT driven from
- *   the SDK's master event stream. The plugin's `purchase` /
+ *   helpers below. This file currently provides checkout-event fabrication
+ *   only. Unlike a master-event-stream consumer, this surface is NOT driven
+ *   from the SDK's master event stream. The plugin's `purchase` /
  *   `purchaseViaPlayBilling` method handlers synthesize all four events
  *   themselves from their handler context, because:
  *     1. iOS doesn't subscribe to a generic event stream either -- it calls
@@ -26,16 +26,10 @@ import com.zerosettle.sdk.models.CheckoutTransaction
  *        full transaction (returned from `purchase()` / `purchaseViaPlayBilling()`
  *        as `Result<CheckoutTransaction>` after SDK tasks A2/A3) and would
  *        otherwise need a network round-trip to re-hydrate it.
- * - Per-handle `OfferManager` `_state` channels -- `toOfferEventMap()` (wiring
- *   added in a later F-task; the encoder shape is fixed here so the channel
- *   reader can land independently). That surface IS driven from the SDK's
- *   master event stream; the discriminator throw protects against misrouting.
  *
- * **Variants intentionally omitted (YAGNI):**
- * `MigrationCompleted`, `SyncFailed`, `EntitlementsRefreshed`, `PendingActionShown`
- * have no dedicated Flutter channel in 1.5.0. Add encoders here only when a
- * channel for them ships -- silent broadcasting of every variant would couple
- * the plugin to SDK-internal events Dart consumers don't subscribe to.
+ * Per-handle `OfferManager` state is published via `toCompositeStateMap` in
+ * `ModelToFlutterMap.kt`, not via per-event encoding -- the Unified Offer
+ * System (MigrationTipView + OfferManager headless API) is the canonical path.
  */
 
 /**
@@ -101,33 +95,3 @@ fun fabricateCheckoutDidFailEvent(productId: String, error: Throwable): Map<Stri
     "productId" to productId,
     "error" to (error.message ?: error::class.simpleName ?: "unknown error"),
 )
-
-/**
- * Encode an offer-related event for forwarding to an `OfferManager` handle's
- * per-handle state channel. NOT a top-level channel -- see the spec's
- * "Per-handle channel layer" section.
- *
- * @throws IllegalArgumentException if the event is not an offer-event variant.
- *         Callers MUST filter the master stream first.
- */
-fun ZeroSettleEvent.toOfferEventMap(): Map<String, Any?> = when (this) {
-    is ZeroSettleEvent.OfferShown -> mapOf(
-        "type" to "offer_shown",
-        "productId" to productId,
-    )
-    is ZeroSettleEvent.OfferAccepted -> mapOf(
-        "type" to "offer_accepted",
-        "productId" to productId,
-    )
-    is ZeroSettleEvent.OfferDismissed -> mapOf(
-        "type" to "offer_dismissed",
-        "productId" to productId,
-    )
-    is ZeroSettleEvent.OfferEvaluationFailed -> mapOf(
-        "type" to "offer_evaluation_failed",
-        "reason" to reason,
-    )
-    else -> throw IllegalArgumentException(
-        "Event $this is not an offer-event variant -- caller must filter the master stream"
-    )
-}

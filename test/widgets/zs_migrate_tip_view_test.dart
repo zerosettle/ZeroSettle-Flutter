@@ -26,7 +26,7 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
 
-    testWidgets('renders AndroidView on Android (1.5.0 D3)',
+    testWidgets('renders AndroidView on Android (D3)',
         (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
@@ -41,7 +41,7 @@ void main() {
         ),
       );
 
-      // On Android (1.5.0+), the widget mounts the F24 PlatformView
+      // On Android, the widget mounts the F24 PlatformView
       // (`com.zerosettle/migrate_tip_view`) via AndroidView. UiKitView is
       // never instantiated on this platform.
       expect(find.byType(AndroidView), findsOneWidget);

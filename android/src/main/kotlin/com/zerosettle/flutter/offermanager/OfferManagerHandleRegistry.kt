@@ -58,11 +58,8 @@ class OfferManagerHandleRegistry(private val messenger: BinaryMessenger) {
      * Allocate a fresh handle id, build the SDK OfferManager instance, allocate
      * the method + state channels. Returns the entry; the caller (F20 bridge)
      * wires the channel handlers.
-     *
-     * The return type is nullable to preserve room for a future
-     * "registry already disposed" race signal — F18 itself never returns null.
      */
-    fun allocate(stripeCustomerId: String?): Entry? = synchronized(lock) {
+    fun allocate(stripeCustomerId: String?): Entry = synchronized(lock) {
         val id = nextId.getAndIncrement()
         val manager = ZeroSettle.offerManager(stripeCustomerId)
         val methodChannel = MethodChannel(messenger, "zerosettle/offer_manager_$id")

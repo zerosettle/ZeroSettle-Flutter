@@ -39,9 +39,11 @@ import org.robolectric.RobolectricTestRunner
  *   - `handle` routes the three F13 methods (`presentCancelFlow`,
  *     `presentUpgradeOffer`, `fetchUpgradeOfferConfig`) and returns `false`
  *     for unknown methods.
- *   - `presentCancelFlow` and `presentUpgradeOffer` return `not_implemented`
- *     with a message pointing at Task F6 — distinct from the F12
- *     save-the-sale "iOS-only forever" stubs.
+ *   - `presentCancelFlow` returns `not_implemented` with a message naming
+ *     the method (save-the-sale modal is iOS-only forever).
+ *   - `presentUpgradeOffer` returns `not_implemented` with a message
+ *     pointing adopters at the Unified Offer System (OfferManager +
+ *     MigrationTipView); the imperative API is being deprecated.
  *   - `fetchUpgradeOfferConfig` happy path forwards to
  *     `ZeroSettle.fetchUpgradeOfferConfig(productId)` and returns the
  *     encoded config map.
@@ -130,13 +132,10 @@ class ModalsHandlerTest {
         }
     }
 
-    // ─── presentCancelFlow / presentUpgradeOffer — pending F6 ──────────
+    // ─── presentCancelFlow / presentUpgradeOffer — not exposed on Android ──
 
     @Test
-    fun `presentCancelFlow returns not_implemented pointing at F6`() {
-        // Pending F6 (Compose Mode dispatch). Distinct from F12's
-        // save-the-sale "iOS-only forever" stubs — the message must
-        // reference F6, not save-the-sale or iOS-only.
+    fun `presentCancelFlow returns not_implemented (iOS-only save-the-sale)`() {
         val result = newResult()
         val codeSlot: CapturingSlot<String> = slot()
         val messageSlot: CapturingSlot<String> = slot()
@@ -148,12 +147,14 @@ class ModalsHandlerTest {
 
         verify { result.error(capture(codeSlot), capture(messageSlot), null) }
         assertThat(codeSlot.captured).isEqualTo("not_implemented")
-        assertThat(messageSlot.captured).contains("F6")
         assertThat(messageSlot.captured).contains("presentCancelFlow")
     }
 
     @Test
-    fun `presentUpgradeOffer returns not_implemented pointing at F6`() {
+    fun `presentUpgradeOffer returns not_implemented pointing at Unified Offer System`() {
+        // The imperative one-shot upgrade-offer API is being deprecated
+        // platform-wide; the message should point adopters at the Unified
+        // Offer System (OfferManager + MigrationTipView).
         val result = newResult()
         val codeSlot: CapturingSlot<String> = slot()
         val messageSlot: CapturingSlot<String> = slot()
@@ -165,8 +166,8 @@ class ModalsHandlerTest {
 
         verify { result.error(capture(codeSlot), capture(messageSlot), null) }
         assertThat(codeSlot.captured).isEqualTo("not_implemented")
-        assertThat(messageSlot.captured).contains("F6")
         assertThat(messageSlot.captured).contains("presentUpgradeOffer")
+        assertThat(messageSlot.captured).contains("OfferManager")
     }
 
     // ─── fetchUpgradeOfferConfig ────────────────────────────────────────

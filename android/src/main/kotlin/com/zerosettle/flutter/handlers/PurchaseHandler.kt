@@ -5,6 +5,7 @@ import com.zerosettle.flutter.ext.fabricateCheckoutDidBeginEvent
 import com.zerosettle.flutter.ext.fabricateCheckoutDidCancelEvent
 import com.zerosettle.flutter.ext.fabricateCheckoutDidCompleteEvent
 import com.zerosettle.flutter.ext.fabricateCheckoutDidFailEvent
+import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.flutter.ext.toFlutterMap
 import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.sdk.models.ZeroSettleError

@@ -1,5 +1,6 @@
 package com.zerosettle.flutter.offermanager
 
+import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.sdk.ZeroSettle
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -25,9 +26,10 @@ import kotlinx.coroutines.launch
  *
  * **Error-code convention:** uppercase `INVALID_ARGUMENTS` matches iOS
  * (`ZeroSettlePlugin.swift:237, 245`) and is the wire contract Dart can
- * pattern-match against if needed. `sdk_error` is the catch-all for SDK
- * throws (most likely `ZeroSettleError.NotConfigured` if the host app forgot
- * `configure(...)`).
+ * pattern-match against if needed. SDK throws are routed through the shared
+ * `MethodChannel.Result.sendError` extension so adopters can pattern-match
+ * typed `ZeroSettleError` variants (e.g., `not_configured`, `network_error`);
+ * unknown throwables fall through to `sdk_error`.
  */
 class OfferManagerStaticHandler(private val scope: CoroutineScope) : MethodChannel.MethodCallHandler {
 
@@ -43,7 +45,7 @@ class OfferManagerStaticHandler(private val scope: CoroutineScope) : MethodChann
                     try {
                         result.success(ZeroSettle.isOfferPermanentlyDismissed(userId))
                     } catch (e: Throwable) {
-                        result.error("sdk_error", e.message ?: e::class.simpleName, null)
+                        result.sendError(e)
                     }
                 }
             }
@@ -59,7 +61,7 @@ class OfferManagerStaticHandler(private val scope: CoroutineScope) : MethodChann
                         ZeroSettle.setOfferDismissed(userId, dismissed)
                         result.success(null)
                     } catch (e: Throwable) {
-                        result.error("sdk_error", e.message ?: e::class.simpleName, null)
+                        result.sendError(e)
                     }
                 }
             }
@@ -69,7 +71,7 @@ class OfferManagerStaticHandler(private val scope: CoroutineScope) : MethodChann
                         ZeroSettle.resetOfferDismissedState()
                         result.success(null)
                     } catch (e: Throwable) {
-                        result.error("sdk_error", e.message ?: e::class.simpleName, null)
+                        result.sendError(e)
                     }
                 }
             }

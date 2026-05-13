@@ -1,5 +1,6 @@
 package com.zerosettle.flutter.offermanager
 
+import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.flutter.ext.toCompositeStateMap
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -113,7 +114,7 @@ class OfferManagerHandleBridge(
                         entry.manager.dismiss()
                         result.success(null)
                     } catch (e: Throwable) {
-                        result.error("offer_error", e.message ?: e::class.simpleName, null)
+                        result.sendError(e)
                     }
                 }
             }
@@ -124,17 +125,15 @@ class OfferManagerHandleBridge(
                 @Suppress("UNUSED_VARIABLE")
                 val stripeCustomerId = call.argument<String>("stripeCustomerId")
                 entry.scope.launch {
-                    val r = entry.manager.checkoutUrl()
-                    r.fold(
-                        onSuccess = { url -> result.success(url) },
-                        onFailure = { err ->
-                            result.error(
-                                "offer_error",
-                                err.message ?: err::class.simpleName,
-                                null,
-                            )
-                        },
-                    )
+                    try {
+                        val r = entry.manager.checkoutUrl()
+                        r.fold(
+                            onSuccess = { url -> result.success(url) },
+                            onFailure = { err -> result.sendError(err) },
+                        )
+                    } catch (e: Throwable) {
+                        result.sendError(e)
+                    }
                 }
             }
             "preloadCheckout" -> {
@@ -149,7 +148,7 @@ class OfferManagerHandleBridge(
                         entry.manager.onWebCheckoutSucceeded(transactionId)
                         result.success(null)
                     } catch (e: Throwable) {
-                        result.error("offer_error", e.message ?: e::class.simpleName, null)
+                        result.sendError(e)
                     }
                 }
             }

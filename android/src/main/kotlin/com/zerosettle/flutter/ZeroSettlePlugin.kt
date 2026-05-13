@@ -91,11 +91,11 @@ import kotlinx.coroutines.launch
  *     match iOS — both APIs were removed from ZeroSettleKit; the last
  *     four are the iOS-only Save-the-Sale headless surface)
  *   - **F13** modal launches (landed — see [ModalsHandler]):
- *     `presentCancelFlow`, `presentUpgradeOffer` return `not_implemented`
- *     pending Task F6 (Compose Mode dispatch in
- *     [ZeroSettleHostActivity] — distinct from the F12 save-the-sale
- *     `iOS-only forever` stubs); `fetchUpgradeOfferConfig` forwards to
- *     the SDK
+ *     `presentCancelFlow` returns `not_implemented` (save-the-sale modal
+ *     is iOS-only forever); `presentUpgradeOffer` returns `not_implemented`
+ *     and points adopters at the Unified Offer System (OfferManager +
+ *     MigrationTipView) — the imperative API is being deprecated
+ *     platform-wide; `fetchUpgradeOfferConfig` forwards to the SDK
  *   - **F15** iOS Apple-Pay stubs (landed — see [ApplePayStubsHandler]):
  *     `recommendedAppAccountToken` and `presentApplePaySetup` return
  *     `not_implemented` (no Android analogue); `getIsApplePayOnly` returns
@@ -258,10 +258,12 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     /**
      * F13 modal-presentation handler. Owns three methods on the main
-     * channel — `presentCancelFlow` and `presentUpgradeOffer` return
-     * `not_implemented` pending Task F6 (Compose Mode dispatch in
-     * [ZeroSettleHostActivity]); `fetchUpgradeOfferConfig` forwards to the
-     * SDK. Same allocation pattern as F8/F9/F10/F11/F12.
+     * channel — `presentCancelFlow` returns `not_implemented` (save-the-sale
+     * modal is iOS-only forever); `presentUpgradeOffer` returns
+     * `not_implemented` and directs adopters at the Unified Offer System
+     * (OfferManager + MigrationTipView) — the imperative API is being
+     * deprecated; `fetchUpgradeOfferConfig` forwards to the SDK. Same
+     * allocation pattern as F8/F9/F10/F11/F12.
      */
     private lateinit var modalsHandler: ModalsHandler
 

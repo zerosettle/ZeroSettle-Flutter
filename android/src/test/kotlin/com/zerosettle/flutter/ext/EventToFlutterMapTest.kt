@@ -1,10 +1,8 @@
 package com.zerosettle.flutter.ext
 
 import com.google.common.truth.Truth.assertThat
-import com.zerosettle.sdk.core.ZeroSettleEvent
 import com.zerosettle.sdk.models.CheckoutTransaction
 import com.zerosettle.sdk.models.EntitlementSource
-import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
@@ -95,61 +93,5 @@ class EventToFlutterMapTest {
         )
 
         assertThat(map["error"] as String).isNotEmpty()
-    }
-
-    // -- toOfferEventMap() ------------------------------------------------------
-
-    @Test
-    fun `OfferShown encodes with type=offer_shown`() {
-        val map = ZeroSettleEvent.OfferShown("p1").toOfferEventMap()
-
-        assertThat(map["type"]).isEqualTo("offer_shown")
-        assertThat(map["productId"]).isEqualTo("p1")
-        assertThat(map).hasSize(2)
-    }
-
-    @Test
-    fun `OfferAccepted encodes with type=offer_accepted`() {
-        val map = ZeroSettleEvent.OfferAccepted("p1").toOfferEventMap()
-
-        assertThat(map["type"]).isEqualTo("offer_accepted")
-        assertThat(map["productId"]).isEqualTo("p1")
-        assertThat(map).hasSize(2)
-    }
-
-    @Test
-    fun `OfferDismissed encodes with type=offer_dismissed`() {
-        val map = ZeroSettleEvent.OfferDismissed("p1").toOfferEventMap()
-
-        assertThat(map["type"]).isEqualTo("offer_dismissed")
-        assertThat(map["productId"]).isEqualTo("p1")
-        assertThat(map).hasSize(2)
-    }
-
-    @Test
-    fun `OfferEvaluationFailed encodes with type=offer_evaluation_failed and reason`() {
-        val map = ZeroSettleEvent.OfferEvaluationFailed("server 500").toOfferEventMap()
-
-        assertThat(map["type"]).isEqualTo("offer_evaluation_failed")
-        assertThat(map["reason"]).isEqualTo("server 500")
-        assertThat(map).hasSize(2)
-    }
-
-    @Test
-    fun `toOfferEventMap throws on checkout-event variant`() {
-        val event: ZeroSettleEvent = ZeroSettleEvent.PurchaseSucceeded("p", "t")
-
-        assertThrows(IllegalArgumentException::class.java) {
-            event.toOfferEventMap()
-        }
-    }
-
-    @Test
-    fun `toOfferEventMap throws on non-offer SDK event`() {
-        val event: ZeroSettleEvent = ZeroSettleEvent.EntitlementsRefreshed(count = 3)
-
-        assertThrows(IllegalArgumentException::class.java) {
-            event.toOfferEventMap()
-        }
     }
 }

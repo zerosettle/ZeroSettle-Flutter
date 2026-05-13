@@ -105,7 +105,9 @@ class OfferManagerStaticHandlerTest {
     }
 
     @Test
-    fun `isPermanentlyDismissed maps SDK throw to sdk_error`() = runTest {
+    fun `isPermanentlyDismissed maps non-typed SDK throw to sdk_error`() = runTest {
+        // Non-ZeroSettleError throwables fall through to the `sdk_error`
+        // fallback in `MethodChannel.Result.sendError`.
         coEvery { ZeroSettle.isOfferPermanentlyDismissed(any()) } throws
             RuntimeException("not configured")
         val result = mockk<MethodChannel.Result>(relaxed = true)
@@ -116,6 +118,24 @@ class OfferManagerStaticHandlerTest {
         )
 
         verify { result.error("sdk_error", "not configured", null) }
+    }
+
+    @Test
+    fun `isPermanentlyDismissed maps typed ZeroSettleError to its wire code`() = runTest {
+        // End-to-end proof that the static handler routes typed errors through
+        // the shared `sendError` extension — adopters can pattern-match
+        // `ZSNotConfiguredException` (et al.) the same way they can on every
+        // other Dart API.
+        coEvery { ZeroSettle.isOfferPermanentlyDismissed(any()) } throws
+            com.zerosettle.sdk.models.ZeroSettleError.NotConfigured
+        val result = mockk<MethodChannel.Result>(relaxed = true)
+
+        handler.onMethodCall(
+            MethodCall("isPermanentlyDismissed", mapOf("userId" to "alice")),
+            result,
+        )
+
+        verify { result.error("not_configured", any(), null) }
     }
 
     // --- setDismissed -----------------------------------------------------

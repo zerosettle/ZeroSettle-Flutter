@@ -1,5 +1,6 @@
 package com.zerosettle.flutter.handlers
 
+import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.flutter.ext.toFlutterMap
 import com.zerosettle.sdk.ZeroSettle
 import io.flutter.plugin.common.MethodCall

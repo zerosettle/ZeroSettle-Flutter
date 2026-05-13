@@ -1,6 +1,7 @@
 package com.zerosettle.flutter.handlers
 
 import android.util.Log
+import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.sdk.models.UserOffer
 import io.flutter.plugin.common.MethodCall

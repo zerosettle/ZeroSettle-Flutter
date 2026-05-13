@@ -50,17 +50,15 @@ class OfferManagerHandleRegistryTest {
         val a = registry.allocate(stripeCustomerId = null)
         val b = registry.allocate(stripeCustomerId = "cus_123")
         val c = registry.allocate(stripeCustomerId = null)
-        assertThat(a).isNotNull()
-        assertThat(a!!.id).isEqualTo(1)
-        assertThat(b!!.id).isEqualTo(2)
-        assertThat(c!!.id).isEqualTo(3)
+        assertThat(a.id).isEqualTo(1)
+        assertThat(b.id).isEqualTo(2)
+        assertThat(c.id).isEqualTo(3)
     }
 
     @Test
     fun `allocate stores a non-null OfferManager on the entry`() = runTest {
         val entry = registry.allocate(stripeCustomerId = "cus_xyz")
-        assertThat(entry).isNotNull()
-        assertThat(entry!!.manager).isNotNull()
+        assertThat(entry.manager).isNotNull()
     }
 
     @Test
@@ -68,12 +66,12 @@ class OfferManagerHandleRegistryTest {
         val stubbed = mockk<OfferManager>(relaxed = true)
         every { ZeroSettle.offerManager("cus_forwarded") } returns stubbed
         val entry = registry.allocate(stripeCustomerId = "cus_forwarded")
-        assertThat(entry!!.manager).isSameInstanceAs(stubbed)
+        assertThat(entry.manager).isSameInstanceAs(stubbed)
     }
 
     @Test
     fun `allocate creates method and state channels with the expected names`() = runTest {
-        val entry = registry.allocate(stripeCustomerId = null)!!
+        val entry = registry.allocate(stripeCustomerId = null)
         // MethodChannel/EventChannel don't expose `name` publicly; the name is
         // baked into the channel at construction time and forwarded to the
         // BinaryMessenger. We assert by id so that channel-name divergence
@@ -86,7 +84,7 @@ class OfferManagerHandleRegistryTest {
 
     @Test
     fun `get returns the entry for an allocated id`() = runTest {
-        val entry = registry.allocate(stripeCustomerId = null)!!
+        val entry = registry.allocate(stripeCustomerId = null)
         assertThat(registry.get(entry.id)).isSameInstanceAs(entry)
     }
 
@@ -97,7 +95,7 @@ class OfferManagerHandleRegistryTest {
 
     @Test
     fun `dispose removes the entry and is idempotent`() = runTest {
-        val entry = registry.allocate(stripeCustomerId = null)!!
+        val entry = registry.allocate(stripeCustomerId = null)
         val id = entry.id
 
         registry.dispose(id)
@@ -110,7 +108,7 @@ class OfferManagerHandleRegistryTest {
 
     @Test
     fun `dispose cancels the entry's coroutine scope`() = runTest {
-        val entry = registry.allocate(stripeCustomerId = null)!!
+        val entry = registry.allocate(stripeCustomerId = null)
         val job = entry.scope.coroutineContext[Job]!!
         assertThat(job.isActive).isTrue()
         registry.dispose(entry.id)
@@ -119,9 +117,9 @@ class OfferManagerHandleRegistryTest {
 
     @Test
     fun `disposeAll clears every allocated entry and cancels their scopes`() = runTest {
-        val a = registry.allocate(stripeCustomerId = null)!!
-        val b = registry.allocate(stripeCustomerId = "cus_b")!!
-        val c = registry.allocate(stripeCustomerId = "cus_c")!!
+        val a = registry.allocate(stripeCustomerId = null)
+        val b = registry.allocate(stripeCustomerId = "cus_b")
+        val c = registry.allocate(stripeCustomerId = "cus_c")
         val jobs = listOf(
             a.scope.coroutineContext[Job]!!,
             b.scope.coroutineContext[Job]!!,

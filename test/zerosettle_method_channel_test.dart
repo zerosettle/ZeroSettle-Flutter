@@ -502,7 +502,7 @@ void main() {
     expect(args.containsKey('userId'), isFalse);
   });
 
-  // ==== 1.5.0 D1: purchaseViaPlayBilling Android peer ====
+  // ==== D1: purchaseViaPlayBilling Android peer ====
 
   test('purchaseViaPlayBilling channel call carries productId only', () async {
     final result =
@@ -522,7 +522,7 @@ void main() {
     expect(args.containsKey('presentation'), isFalse);
   });
 
-  // ==== 1.5.0 D2: transferPlayOwnershipToCurrentUser Android peer ====
+  // ==== D2: transferPlayOwnershipToCurrentUser Android peer ====
 
   test(
       'transferPlayOwnershipToCurrentUser channel call carries productId + originalTransactionId',
