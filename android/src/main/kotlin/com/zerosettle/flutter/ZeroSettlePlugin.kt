@@ -164,6 +164,17 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var applePayStateEventChannel: EventChannel
 
     /**
+     * Reactive state channels (Gap 5). Each one mirrors a public SDK
+     * [StateFlow] onto Dart so callers don't have to poll. All four carry
+     * *current state* (not discrete events), so they use replay-on-onListen
+     * to deliver the latest cached value to late subscribers.
+     */
+    private lateinit var productsEventChannel: EventChannel
+    private lateinit var currentUserIdEventChannel: EventChannel
+    private lateinit var pendingCheckoutEventChannel: EventChannel
+    private lateinit var isBootstrappedEventChannel: EventChannel
+
+    /**
      * Buffered EventChannel sinks. F25 publishes into these from SDK Flow
      * collectors; the buffered-sink pattern lets the plugin emit without
      * juggling onListen/onCancel lifecycle from each emit site.
@@ -186,6 +197,17 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     internal val checkoutStreamHandler = BufferedStreamHandler(replayLatest = false)
     internal val pendingClaimsStreamHandler = BufferedStreamHandler(replayLatest = true)
     internal val applePayStateStreamHandler = BufferedStreamHandler(replayLatest = true)
+
+    /**
+     * Reactive state channels (Gap 5). All four mirror SDK StateFlows
+     * (`products`, `currentUserId`, `pendingCheckout`, `isBootstrapped`)
+     * onto Dart. Late subscribers get the most recent value via
+     * `replayLatest = true` — same pattern as `entitlement_updates`.
+     */
+    internal val productsStreamHandler = BufferedStreamHandler(replayLatest = true)
+    internal val currentUserIdStreamHandler = BufferedStreamHandler(replayLatest = true)
+    internal val pendingCheckoutStreamHandler = BufferedStreamHandler(replayLatest = true)
+    internal val isBootstrappedStreamHandler = BufferedStreamHandler(replayLatest = true)
 
     /** Per-handle OfferManager registry (F18). Allocated on engine attach. */
     internal lateinit var offerManagerRegistry: OfferManagerHandleRegistry
@@ -213,6 +235,15 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
      */
     @Volatile private var entitlementPumpJob: Job? = null
     @Volatile private var pendingClaimsPumpJob: Job? = null
+
+    /**
+     * Gap 5 — reactive-state pumps for the four new channels. Cancelled
+     * on engine detach alongside the F25 pumps.
+     */
+    @Volatile private var productsPumpJob: Job? = null
+    @Volatile private var currentUserIdPumpJob: Job? = null
+    @Volatile private var pendingCheckoutPumpJob: Job? = null
+    @Volatile private var isBootstrappedPumpJob: Job? = null
 
     /**
      * F8 identity/lifecycle handler. Owns the 9 lifecycle methods Dart
@@ -346,6 +377,19 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         applePayStateEventChannel = EventChannel(messenger, "zerosettle/apple_pay_state_updates").apply {
             setStreamHandler(applePayStateStreamHandler)
         }
+        // Gap 5 — reactive state channels.
+        productsEventChannel = EventChannel(messenger, "zerosettle/products_updates").apply {
+            setStreamHandler(productsStreamHandler)
+        }
+        currentUserIdEventChannel = EventChannel(messenger, "zerosettle/current_user_id_updates").apply {
+            setStreamHandler(currentUserIdStreamHandler)
+        }
+        pendingCheckoutEventChannel = EventChannel(messenger, "zerosettle/pending_checkout_updates").apply {
+            setStreamHandler(pendingCheckoutStreamHandler)
+        }
+        isBootstrappedEventChannel = EventChannel(messenger, "zerosettle/is_bootstrapped_updates").apply {
+            setStreamHandler(isBootstrappedStreamHandler)
+        }
 
         // F8 identity/lifecycle handler. Build the shared HandlerDependencies
         // bundle here so F9-F17 can adopt the same plumbing without each
@@ -413,6 +457,36 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             ZeroSettle.pendingClaims,
             pendingClaimsStreamHandler,
         ) { list -> list.map { it.toFlutterMap() } }
+        // Gap 5 pumps.
+        //   products_updates       : List<Map> (Product.toFlutterMap)
+        //   current_user_id_updates: String? — emits null on logout to mirror
+        //                            the SDK's StateFlow<String?> semantics.
+        //                            BufferedStreamHandler.emit on Kotlin
+        //                            forbids null, so we route through
+        //                            pumpNullableStateFlow which converts
+        //                            null → the sentinel below.
+        //   pending_checkout_updates : Boolean
+        //   is_bootstrapped_updates  : Boolean
+        productsPumpJob = pumpStateFlow(
+            pluginScope,
+            ZeroSettle.products,
+            productsStreamHandler,
+        ) { list -> list.map { it.toFlutterMap() } }
+        currentUserIdPumpJob = pumpNullableStateFlow(
+            pluginScope,
+            ZeroSettle.currentUserId,
+            currentUserIdStreamHandler,
+        )
+        pendingCheckoutPumpJob = pumpStateFlow(
+            pluginScope,
+            ZeroSettle.pendingCheckout,
+            pendingCheckoutStreamHandler,
+        ) { it }
+        isBootstrappedPumpJob = pumpStateFlow(
+            pluginScope,
+            ZeroSettle.isBootstrapped,
+            isBootstrappedStreamHandler,
+        ) { it }
 
         Log.i(
             "ZeroSettle",
@@ -431,12 +505,26 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         checkoutEventChannel.setStreamHandler(null)
         pendingClaimsEventChannel.setStreamHandler(null)
         applePayStateEventChannel.setStreamHandler(null)
-        // F25 pump jobs — `pluginScope.cancel()` below would tear them down
-        // anyway, but explicit cancellation makes ownership obvious.
+        // Gap 5 channels.
+        productsEventChannel.setStreamHandler(null)
+        currentUserIdEventChannel.setStreamHandler(null)
+        pendingCheckoutEventChannel.setStreamHandler(null)
+        isBootstrappedEventChannel.setStreamHandler(null)
+        // F25 + Gap 5 pump jobs — `pluginScope.cancel()` below would tear
+        // them down anyway, but explicit cancellation makes ownership
+        // obvious.
         entitlementPumpJob?.cancel()
         pendingClaimsPumpJob?.cancel()
+        productsPumpJob?.cancel()
+        currentUserIdPumpJob?.cancel()
+        pendingCheckoutPumpJob?.cancel()
+        isBootstrappedPumpJob?.cancel()
         entitlementPumpJob = null
         pendingClaimsPumpJob = null
+        productsPumpJob = null
+        currentUserIdPumpJob = null
+        pendingCheckoutPumpJob = null
+        isBootstrappedPumpJob = null
         offerManagerRegistry.disposeAll()
         pluginScope.cancel()
         applicationContext = null
@@ -521,6 +609,23 @@ internal fun <T> pumpStateFlow(
 }
 
 /**
+ * Gap 5 — variant of [pumpStateFlow] that emits the underlying value (or
+ * null) directly to the sink. Used for `current_user_id_updates`
+ * specifically: the Android SDK's [ZeroSettle.currentUserId] is
+ * `StateFlow<String?>`, and Dart wants to see `null` on logout so it can
+ * route to the signed-out UI. The standard [pumpStateFlow] requires the
+ * encode lambda to return `Any` (non-null), so we factor out the nullable
+ * case rather than weakening that contract for every channel.
+ */
+internal fun pumpNullableStateFlow(
+    scope: CoroutineScope,
+    source: StateFlow<String?>,
+    sink: BufferedStreamHandler,
+): Job = scope.launch {
+    source.collect { value -> sink.emit(value) }
+}
+
+/**
  * Generic [EventChannel.StreamHandler] that buffers the active sink and,
  * for [replayLatest] = `true` channels, the most recent emission too.
  *
@@ -561,20 +666,26 @@ internal class BufferedStreamHandler(
         private set
 
     /**
-     * Last value pushed via [emit]. When [replayLatest] is `true`, replayed
-     * to fresh sinks on [onListen] so late Dart subscribers don't have to
-     * wait for the next mutation. `null` means "no value cached yet" —
-     * replay is skipped in that case.
+     * Last value pushed via [emit]. May legitimately be `null` (e.g.
+     * `current_user_id_updates` after logout) — [hasEmitted] is the source
+     * of truth for "has the pump produced anything yet?". Both fields are
+     * written together inside [emit].
      */
     @Volatile
     private var lastEmit: Any? = null
 
+    @Volatile
+    private var hasEmitted: Boolean = false
+
     /**
      * Push [value] to the current sink (if attached) and remember it for
      * possible replay on the next [onListen]. Safe to call from any thread.
+     * Null is a legal value — channels with non-null wire shapes simply
+     * never call this with `null`.
      */
     fun emit(value: Any?) {
         lastEmit = value
+        hasEmitted = true
         sink?.success(value)
     }
 
@@ -583,8 +694,11 @@ internal class BufferedStreamHandler(
         // Replay the most recent emission only for state-snapshot channels.
         // Discrete event channels (replayLatest=false) match iOS's no-replay
         // behaviour to avoid duplicate post-purchase processing on Dart.
-        if (replayLatest) {
-            lastEmit?.let { events?.success(it) }
+        // Using `hasEmitted` (not `lastEmit != null`) so a cached `null`
+        // — e.g. `currentUserId` after logout — replays through to late
+        // subscribers.
+        if (replayLatest && hasEmitted) {
+            events?.success(lastEmit)
         }
     }
 

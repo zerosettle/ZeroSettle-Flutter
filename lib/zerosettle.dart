@@ -388,6 +388,38 @@ class ZeroSettle {
     );
   }
 
+  /// Stream of product catalog updates from the native SDK. Mirrors the
+  /// native SDK's reactive `products` observable — emits the current catalog
+  /// on listen and every subsequent change. Use this instead of polling
+  /// [getProducts] when you want to react to catalog mutations
+  /// (e.g. server-driven price changes or A/B-tested product visibility).
+  Stream<List<Product>> get productsUpdates {
+    return _platform.productsUpdates.map(
+      (list) => list.map((e) => Product.fromMap(e)).toList(),
+    );
+  }
+
+  /// Stream of the currently-identified user id, or `null` when no user is
+  /// identified (initial state and after [logout]). Emits the current value
+  /// on listen and every subsequent change. Convenience for binding
+  /// signed-in/out UI to a single stream rather than polling
+  /// [getCurrentUserId] after each [identify] / [logout] call.
+  Stream<String?> get currentUserIdUpdates => _platform.currentUserIdUpdates;
+
+  /// Stream of the "is a web checkout in-flight?" flag. Emits the current
+  /// value on listen, then `true` when [purchase] enters the web flow and
+  /// `false` when it returns (success, cancel, or failure). Useful for
+  /// driving a loading overlay without juggling Future state in your widget.
+  Stream<bool> get pendingCheckoutUpdates =>
+      _platform.pendingCheckoutUpdates;
+
+  /// Stream of the "has [identify] completed successfully?" flag. Emits the
+  /// current value on listen, then `true` on first successful identify and
+  /// `false` on [logout]. Use this to gate post-identify UI (catalog,
+  /// entitlements, etc.).
+  Stream<bool> get isBootstrappedUpdates =>
+      _platform.isBootstrappedUpdates;
+
   // -- Transaction History --
 
   /// Fetch the full transaction history for the currently identified user.

@@ -62,6 +62,11 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private var checkoutEventChannel: FlutterEventChannel?
     private var pendingClaimsEventChannel: FlutterEventChannel?
     private var applePayStateEventChannel: FlutterEventChannel?
+    // Gap 5 — reactive state channels mirroring SDK observable properties.
+    private var productsEventChannel: FlutterEventChannel?
+    private var currentUserIdEventChannel: FlutterEventChannel?
+    private var pendingCheckoutEventChannel: FlutterEventChannel?
+    private var isBootstrappedEventChannel: FlutterEventChannel?
 
     /// Captured at `register(with:)` time so per-handle channels (built on
     /// demand inside `installMigrationHandle`) can attach without re-routing
@@ -80,6 +85,32 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private let checkoutStreamHandler = CheckoutStreamHandler()
     private let pendingClaimsStreamHandler = PendingClaimsStreamHandler()
     private let applePayStateStreamHandler = ApplePayStateStreamHandler()
+    // Gap 5 — reactive state stream handlers. All four cache the latest
+    // emission so late Dart subscribers see the current value on attach.
+    private let productsStreamHandler = ReactiveStateStreamHandler()
+    private let currentUserIdStreamHandler = ReactiveStateStreamHandler()
+    private let pendingCheckoutStreamHandler = ReactiveStateStreamHandler()
+    private let isBootstrappedStreamHandler = ReactiveStateStreamHandler()
+
+    /// Combine subscription that fires on `ZeroSettle.shared.objectWillChange`
+    /// to mirror the three Observable-backed state properties (`products`,
+    /// `pendingCheckout`, `isBootstrapped`) onto Dart. We dedupe each
+    /// channel's value separately to avoid spamming Dart when an unrelated
+    /// observable property changes (objectWillChange fires for ANY mutation
+    /// on the shared singleton).
+    private var observableStateCancellable: AnyCancellable?
+    private var lastProductsSnapshot: [[String: Any]] = []
+    private var lastPendingCheckout: Bool?
+    private var lastIsBootstrapped: Bool?
+
+    /// Gap 5 — emit the current `cachedCurrentUserId` on the
+    /// `current_user_id_updates` channel. Called from every site that
+    /// mutates `cachedCurrentUserId` (identify success, logout, bootstrap
+    /// success). `nil` is sent as `NSNull()` so Dart sees an explicit
+    /// logged-out event.
+    fileprivate func pushCurrentUserIdUpdate() {
+        currentUserIdStreamHandler.send(cachedCurrentUserId ?? NSNull())
+    }
 
     /// Combine subscription that mirrors
     /// `ZeroSettle.shared.applePayAvailability.statePublisher` onto the
@@ -125,6 +156,105 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         let applePayStateEC = FlutterEventChannel(name: "zerosettle/apple_pay_state_updates", binaryMessenger: registrar.messenger())
         applePayStateEC.setStreamHandler(instance.applePayStateStreamHandler)
         instance.applePayStateEventChannel = applePayStateEC
+
+        // Gap 5 — reactive state event channels. Each carries the latest
+        // value of an SDK Observable / shadowed property.
+        let productsEC = FlutterEventChannel(name: "zerosettle/products_updates", binaryMessenger: registrar.messenger())
+        productsEC.setStreamHandler(instance.productsStreamHandler)
+        instance.productsEventChannel = productsEC
+
+        let currentUserIdEC = FlutterEventChannel(name: "zerosettle/current_user_id_updates", binaryMessenger: registrar.messenger())
+        currentUserIdEC.setStreamHandler(instance.currentUserIdStreamHandler)
+        instance.currentUserIdEventChannel = currentUserIdEC
+
+        let pendingCheckoutEC = FlutterEventChannel(name: "zerosettle/pending_checkout_updates", binaryMessenger: registrar.messenger())
+        pendingCheckoutEC.setStreamHandler(instance.pendingCheckoutStreamHandler)
+        instance.pendingCheckoutEventChannel = pendingCheckoutEC
+
+        let isBootstrappedEC = FlutterEventChannel(name: "zerosettle/is_bootstrapped_updates", binaryMessenger: registrar.messenger())
+        isBootstrappedEC.setStreamHandler(instance.isBootstrappedStreamHandler)
+        instance.isBootstrappedEventChannel = isBootstrappedEC
+
+        // Gap 5 — push initial state to late subscribers via onListenStarted,
+        // matching the pendingClaims pattern. `products` / `pendingCheckout` /
+        // `isBootstrapped` are public @Observable properties on
+        // ZeroSettle.shared; we read them directly. `currentUserId` is
+        // `internal private(set)` on the Kit — we shadow it as
+        // `cachedCurrentUserId` and emit that value.
+        instance.productsStreamHandler.onListenStarted = { [weak instance] in
+            DispatchQueue.main.async {
+                guard let instance else { return }
+                MainActor.assumeIsolated {
+                    let current = ZeroSettle.shared.products.map { $0.toFlutterMap() }
+                    instance.lastProductsSnapshot = current
+                    instance.productsStreamHandler.send(current)
+                }
+            }
+        }
+        instance.currentUserIdStreamHandler.onListenStarted = { [weak instance] in
+            DispatchQueue.main.async {
+                guard let instance else { return }
+                // cachedCurrentUserId may be nil — send NSNull so the Dart
+                // wire sees an explicit `null` event for the logged-out state.
+                instance.currentUserIdStreamHandler.send(instance.cachedCurrentUserId ?? NSNull())
+            }
+        }
+        instance.pendingCheckoutStreamHandler.onListenStarted = { [weak instance] in
+            DispatchQueue.main.async {
+                guard let instance else { return }
+                MainActor.assumeIsolated {
+                    let value = ZeroSettle.shared.pendingCheckout
+                    instance.lastPendingCheckout = value
+                    instance.pendingCheckoutStreamHandler.send(value)
+                }
+            }
+        }
+        instance.isBootstrappedStreamHandler.onListenStarted = { [weak instance] in
+            DispatchQueue.main.async {
+                guard let instance else { return }
+                MainActor.assumeIsolated {
+                    let value = ZeroSettle.shared.isBootstrapped
+                    instance.lastIsBootstrapped = value
+                    instance.isBootstrappedStreamHandler.send(value)
+                }
+            }
+        }
+
+        // Gap 5 — subscribe once to ZeroSettle.shared.objectWillChange and
+        // re-read the three Observable properties on the next runloop tick
+        // (post-mutation). Per-channel dedupe avoids spamming Dart when an
+        // unrelated property changes — `objectWillChange` is a singleton-wide
+        // signal. `currentUserId` is NOT driven from here; it's pushed from
+        // the identify/logout method sites where `cachedCurrentUserId`
+        // already mutates (see pushCurrentUserIdUpdate(_:)).
+        Task { @MainActor in
+            instance.observableStateCancellable = ZeroSettle.shared.objectWillChange
+                .sink { [weak instance] _ in
+                    DispatchQueue.main.async {
+                        guard let instance else { return }
+                        MainActor.assumeIsolated {
+                            // products
+                            let nextProducts = ZeroSettle.shared.products.map { $0.toFlutterMap() }
+                            if !productsSnapshotsEqual(instance.lastProductsSnapshot, nextProducts) {
+                                instance.lastProductsSnapshot = nextProducts
+                                instance.productsStreamHandler.send(nextProducts)
+                            }
+                            // pendingCheckout
+                            let nextPendingCheckout = ZeroSettle.shared.pendingCheckout
+                            if instance.lastPendingCheckout != nextPendingCheckout {
+                                instance.lastPendingCheckout = nextPendingCheckout
+                                instance.pendingCheckoutStreamHandler.send(nextPendingCheckout)
+                            }
+                            // isBootstrapped
+                            let nextIsBootstrapped = ZeroSettle.shared.isBootstrapped
+                            if instance.lastIsBootstrapped != nextIsBootstrapped {
+                                instance.lastIsBootstrapped = nextIsBootstrapped
+                                instance.isBootstrappedStreamHandler.send(nextIsBootstrapped)
+                            }
+                        }
+                    }
+                }
+        }
 
         // Bridge ZeroSettle.shared.applePayAvailability.$state (Combine
         // @Published) onto the applePayStateStreamHandler. Push the current
@@ -361,6 +491,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 do {
                     let catalog = try await ZeroSettle.shared.bootstrap(userId: userId)
                     self.cachedCurrentUserId = userId
+                    self.pushCurrentUserIdUpdate()
                     result(catalog.toFlutterMap())
                 } catch {
                     result(error.toFlutterError())
@@ -399,6 +530,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                     case .anonymous, .deferred:
                         self.cachedCurrentUserId = nil
                     }
+                    self.pushCurrentUserIdUpdate()
                     result(catalog?.toFlutterMap())
                 } catch {
                     result(error.toFlutterError())
@@ -409,6 +541,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             Task { @MainActor in
                 ZeroSettle.shared.logout()
                 self.cachedCurrentUserId = nil
+                self.pushCurrentUserIdUpdate()
                 result(nil)
             }
 
@@ -1406,6 +1539,33 @@ private class PendingClaimsStreamHandler: NSObject, FlutterStreamHandler {
     }
 }
 
+/// Gap 5 — generic stream handler used by the four reactive state
+/// channels (`products`, `currentUserId`, `pendingCheckout`,
+/// `isBootstrapped`). All four share the same shape: cache the latest
+/// emission, replay it to late subscribers via `onListenStarted`. Sending
+/// `NSNull()` is supported so `currentUserId` can publish a logout event.
+private class ReactiveStateStreamHandler: NSObject, FlutterStreamHandler {
+    private var eventSink: FlutterEventSink?
+    var onListenStarted: (() -> Void)?
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        eventSink = events
+        onListenStarted?()
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        eventSink = nil
+        return nil
+    }
+
+    func send(_ data: Any) {
+        DispatchQueue.main.async { [weak self] in
+            self?.eventSink?(data)
+        }
+    }
+}
+
 private class ApplePayStateStreamHandler: NSObject, FlutterStreamHandler {
     private var eventSink: FlutterEventSink?
     /// Optional callback fired when Dart starts listening — used by the
@@ -1440,6 +1600,19 @@ private func pendingClaimsSnapshotsEqual(_ a: [[String: Any]], _ b: [[String: An
     for (lhs, rhs) in zip(a, b) {
         if (lhs["productId"] as? String) != (rhs["productId"] as? String) { return false }
         if (lhs["originalTransactionId"] as? String) != (rhs["originalTransactionId"] as? String) { return false }
+    }
+    return true
+}
+
+/// Gap 5 — cheap structural dedupe for product snapshots. Compares same
+/// count + same `id` per index. Catalog mutations always change the id
+/// list when meaningful (add/remove/reorder); pure price updates aren't
+/// frequent enough to merit deep-equality. Same idea as
+/// `pendingClaimsSnapshotsEqual`.
+private func productsSnapshotsEqual(_ a: [[String: Any]], _ b: [[String: Any]]) -> Bool {
+    guard a.count == b.count else { return false }
+    for (lhs, rhs) in zip(a, b) {
+        if (lhs["id"] as? String) != (rhs["id"] as? String) { return false }
     }
     return true
 }

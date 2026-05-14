@@ -662,4 +662,99 @@ void main() {
     await sub.cancel();
     expect(emissions, ['ready', 'setupRequired']);
   });
+
+  // ==== Gap 5: reactive state streams ====
+
+  test('productsUpdates EventChannel decodes a list of product maps', () async {
+    const channelName = 'zerosettle/products_updates';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final emissions = <List<Map<String, dynamic>>>[];
+    final sub = platform.productsUpdates.listen(emissions.add);
+
+    await Future<void>.delayed(Duration.zero);
+    final codec = const StandardMethodCodec();
+    final payload = <Map<String, Object?>>[
+      {'id': 'pro_monthly', 'displayName': 'Pro', 'type': 'auto_renewable_subscription'},
+    ];
+    final data = codec.encodeSuccessEnvelope(payload);
+    await messenger.handlePlatformMessage(channelName, data, (_) {});
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+
+    expect(emissions.length, 1);
+    expect(emissions.first.first['id'], 'pro_monthly');
+  });
+
+  test('currentUserIdUpdates EventChannel forwards null on logout', () async {
+    const channelName = 'zerosettle/current_user_id_updates';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final emissions = <String?>[];
+    final sub = platform.currentUserIdUpdates.listen(emissions.add);
+
+    await Future<void>.delayed(Duration.zero);
+    final codec = const StandardMethodCodec();
+    // Logged in.
+    await messenger.handlePlatformMessage(
+      channelName,
+      codec.encodeSuccessEnvelope('u_alice'),
+      (_) {},
+    );
+    // Logged out → null event must flow through, not be filtered.
+    await messenger.handlePlatformMessage(
+      channelName,
+      codec.encodeSuccessEnvelope(null),
+      (_) {},
+    );
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+
+    expect(emissions, ['u_alice', null]);
+  });
+
+  test('pendingCheckoutUpdates EventChannel forwards bool events', () async {
+    const channelName = 'zerosettle/pending_checkout_updates';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final emissions = <bool>[];
+    final sub = platform.pendingCheckoutUpdates.listen(emissions.add);
+
+    await Future<void>.delayed(Duration.zero);
+    final codec = const StandardMethodCodec();
+    for (final raw in [true, false]) {
+      await messenger.handlePlatformMessage(
+        channelName,
+        codec.encodeSuccessEnvelope(raw),
+        (_) {},
+      );
+    }
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+    expect(emissions, [true, false]);
+  });
+
+  test('isBootstrappedUpdates EventChannel forwards bool events', () async {
+    const channelName = 'zerosettle/is_bootstrapped_updates';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final emissions = <bool>[];
+    final sub = platform.isBootstrappedUpdates.listen(emissions.add);
+
+    await Future<void>.delayed(Duration.zero);
+    final codec = const StandardMethodCodec();
+    await messenger.handlePlatformMessage(
+      channelName,
+      codec.encodeSuccessEnvelope(false),
+      (_) {},
+    );
+    await messenger.handlePlatformMessage(
+      channelName,
+      codec.encodeSuccessEnvelope(true),
+      (_) {},
+    );
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+    expect(emissions, [false, true]);
+  });
 }

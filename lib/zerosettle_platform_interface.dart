@@ -370,6 +370,40 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     );
   }
 
+  // -- Gap 5: reactive state streams --
+
+  /// Stream of product catalog snapshots. Mirrors the native SDK's
+  /// `products` state observable. Emits the current catalog on listen,
+  /// then every subsequent change.
+  Stream<List<Map<String, dynamic>>> get productsUpdates {
+    throw UnimplementedError('productsUpdates has not been implemented.');
+  }
+
+  /// Stream of the currently-identified user id. Emits `null` on logout /
+  /// before identify. Mirrors Android SDK's `StateFlow<String?>` and the
+  /// iOS plugin's shadowed cache (Kit `currentUserId` is internal).
+  Stream<String?> get currentUserIdUpdates {
+    throw UnimplementedError(
+      'currentUserIdUpdates has not been implemented.',
+    );
+  }
+
+  /// Stream of the "is a web checkout in-flight?" flag. Mirrors the SDK's
+  /// `pendingCheckout` state observable on both platforms.
+  Stream<bool> get pendingCheckoutUpdates {
+    throw UnimplementedError(
+      'pendingCheckoutUpdates has not been implemented.',
+    );
+  }
+
+  /// Stream of the "has identify(...) completed successfully?" flag.
+  /// Mirrors the SDK's `isBootstrapped` state observable.
+  Stream<bool> get isBootstrappedUpdates {
+    throw UnimplementedError(
+      'isBootstrappedUpdates has not been implemented.',
+    );
+  }
+
   // -- Migration Manager (Headless) --
 
   /// Returns the iOS-side handle ID for the migration manager scoped to the

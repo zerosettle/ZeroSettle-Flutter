@@ -22,6 +22,22 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   final applePayStateEventChannel =
       const EventChannel('zerosettle/apple_pay_state_updates');
 
+  // Gap 5 — reactive state event channels.
+  @visibleForTesting
+  final productsEventChannel = const EventChannel('zerosettle/products_updates');
+
+  @visibleForTesting
+  final currentUserIdEventChannel =
+      const EventChannel('zerosettle/current_user_id_updates');
+
+  @visibleForTesting
+  final pendingCheckoutEventChannel =
+      const EventChannel('zerosettle/pending_checkout_updates');
+
+  @visibleForTesting
+  final isBootstrappedEventChannel =
+      const EventChannel('zerosettle/is_bootstrapped_updates');
+
   // -- Configuration --
 
   @override
@@ -556,6 +572,53 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList());
     return _pendingClaimsUpdatesStream!;
+  }
+
+  // -- Gap 5: reactive state streams --
+
+  Stream<List<Map<String, dynamic>>>? _productsUpdatesStream;
+
+  @override
+  Stream<List<Map<String, dynamic>>> get productsUpdates {
+    _productsUpdatesStream ??= productsEventChannel
+        .receiveBroadcastStream()
+        .map((event) => (event as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList());
+    return _productsUpdatesStream!;
+  }
+
+  Stream<String?>? _currentUserIdUpdatesStream;
+
+  @override
+  Stream<String?> get currentUserIdUpdates {
+    // The wire emits `null` on logout (Android: StateFlow<String?>; iOS:
+    // shadowed cache pushed at identify/logout sites). Use a broadcast
+    // stream as-is — Dart sees the `null` value verbatim.
+    _currentUserIdUpdatesStream ??= currentUserIdEventChannel
+        .receiveBroadcastStream()
+        .map((event) => event as String?);
+    return _currentUserIdUpdatesStream!;
+  }
+
+  Stream<bool>? _pendingCheckoutUpdatesStream;
+
+  @override
+  Stream<bool> get pendingCheckoutUpdates {
+    _pendingCheckoutUpdatesStream ??= pendingCheckoutEventChannel
+        .receiveBroadcastStream()
+        .map((event) => event as bool);
+    return _pendingCheckoutUpdatesStream!;
+  }
+
+  Stream<bool>? _isBootstrappedUpdatesStream;
+
+  @override
+  Stream<bool> get isBootstrappedUpdates {
+    _isBootstrappedUpdatesStream ??= isBootstrappedEventChannel
+        .receiveBroadcastStream()
+        .map((event) => event as bool);
+    return _isBootstrappedUpdatesStream!;
   }
 
   // -- Migration Manager (Headless) --

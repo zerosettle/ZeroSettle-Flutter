@@ -271,6 +271,68 @@ class EventPumpsTest {
         verify(exactly = 0) { sink.success("v1-after-cancel") }
     }
 
+    // ─── Gap 5: nullable replay + pumpNullableStateFlow ────────────────
+
+    @Test
+    fun `BufferedStreamHandler replays a cached null on onListen`() {
+        // Gap 5 — `current_user_id_updates` legitimately emits `null` on
+        // logout. The handler must replay that null to fresh sinks rather
+        // than dropping it (the pre-Gap-5 behaviour skipped null replays
+        // via `lastEmit?.let`). Late subscribers need to know they're
+        // logged out.
+        val handler = BufferedStreamHandler()
+        handler.emit(null)
+
+        val sink = mockk<EventChannel.EventSink>(relaxed = true)
+        handler.onListen(null, sink)
+        verify { sink.success(null) }
+    }
+
+    @Test
+    fun `BufferedStreamHandler does not replay when nothing emitted yet`() {
+        // The flip side — if no value has ever been emitted, onListen must
+        // not push a phantom null. `hasEmitted` is the source of truth.
+        val handler = BufferedStreamHandler()
+        val sink = mockk<EventChannel.EventSink>(relaxed = true)
+        handler.onListen(null, sink)
+        verify(exactly = 0) { sink.success(any()) }
+        verify(exactly = 0) { sink.success(null) }
+    }
+
+    @Test
+    fun `pumpNullableStateFlow forwards null on logout`() {
+        // Mirrors the SDK's StateFlow<String?> — initial null (pre-identify),
+        // then a userId (post-identify), then null again (post-logout).
+        val source = MutableStateFlow<String?>(null)
+        val handler = BufferedStreamHandler()
+        val sink = mockk<EventChannel.EventSink>(relaxed = true)
+        handler.onListen(null, sink)
+
+        pumpNullableStateFlow(scope, source, handler)
+        verify { sink.success(null) }
+
+        source.value = "u_alice"
+        verify { sink.success("u_alice") }
+
+        source.value = null
+        verify(atLeast = 2) { sink.success(null) }
+    }
+
+    @Test
+    fun `pumpNullableStateFlow replays null on reattach when logged out`() {
+        // Pre-Gap-5 the replay path was `lastEmit?.let`, which would have
+        // silently dropped this case — leaving late Dart subscribers stuck
+        // waiting for the first login. Gap 5 fixes the handler's
+        // `hasEmitted` flag, this test pins the behaviour.
+        val source = MutableStateFlow<String?>(null)
+        val handler = BufferedStreamHandler()
+        pumpNullableStateFlow(scope, source, handler)
+
+        val sink = mockk<EventChannel.EventSink>(relaxed = true)
+        handler.onListen(null, sink)
+        verify { sink.success(null) }
+    }
+
     @Test
     fun `pumpStateFlow encoder is called per emission, not per attach`() {
         // The encoder is the wire-shape transform; it should run exactly
