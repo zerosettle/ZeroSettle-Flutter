@@ -3,12 +3,18 @@ package com.zerosettle.flutter.handlers
 import android.app.Activity
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.zerosettle.sdk.ZeroSettle
+import com.zerosettle.sdk.models.ZeroSettleError
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.mockk.CapturingSlot
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
 import io.mockk.verify
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -28,9 +34,11 @@ import org.robolectric.RobolectricTestRunner
  * pass them in matching the F8-F13 pattern for consistency.
  *
  * Wire-shape claims under test:
- *   - `recommendedAppAccountToken` returns `not_implemented` error (deviates
- *     from a `success(null)` reading of the iOS Kit; Dart force-unwraps the
- *     result so `null` would NPE — see handler KDoc rationale).
+ *   - `recommendedAppAccountToken` forwards to
+ *     `ZeroSettle.recommendedAppAccountToken().toString()`. The Android SDK
+ *     derives the same `(userId, packageName)` UUID iOS Kit returns, so
+ *     this is in-contract for the Dart `Future<String>` wire. Failures
+ *     (UserNotIdentified / NotConfigured) surface as `PlatformException`.
  *   - `presentApplePaySetup` returns `not_implemented` error (iOS Wallet
  *     only; no Android analogue).
  *   - `getIsApplePayOnly` returns `success(false)` (Android is never
@@ -55,6 +63,7 @@ class ApplePayStubsHandlerTest {
 
     @Before
     fun setUp() {
+        mockkObject(ZeroSettle)
         val deps = HandlerDependencies(
             scope = scope,
             activityProvider = { activity },
@@ -65,6 +74,7 @@ class ApplePayStubsHandlerTest {
 
     @After
     fun tearDown() {
+        unmockkObject(ZeroSettle)
         scope.cancel()
     }
 
@@ -84,6 +94,10 @@ class ApplePayStubsHandlerTest {
 
     @Test
     fun `handle returns true for each owned method`() {
+        // Stub the SDK boundary so the recommendedAppAccountToken case
+        // doesn't blow up on an unmocked static call.
+        every { ZeroSettle.recommendedAppAccountToken() } returns UUID.randomUUID()
+
         listOf(
             "recommendedAppAccountToken",
             "presentApplePaySetup",
@@ -95,34 +109,35 @@ class ApplePayStubsHandlerTest {
         }
     }
 
-    // ─── recommendedAppAccountToken — deviation from the plan ──────────
+    // ─── recommendedAppAccountToken — typed UUID pass-through ──────────
 
     @Test
-    fun `recommendedAppAccountToken returns not_implemented error`() {
-        // The Dart wire (lib/zerosettle_method_channel.dart) is:
-        //   final result = await methodChannel.invokeMethod<String>(
-        //     'recommendedAppAccountToken',
-        //   );
-        //   return result!;
-        // The force-unwrap (`result!`) on a non-nullable `Future<String>`
-        // return type means `null` from Android would throw a Dart
-        // null-check `_TypeError` on every caller. A `PlatformException`
-        // (from `result.error(...)`) is in-contract because iOS dispatches
-        // failures the same way (`result(error.toFlutterError())`).
-        val result = newResult()
-        val codeSlot: CapturingSlot<String> = slot()
-        val messageSlot: CapturingSlot<String> = slot()
+    fun `recommendedAppAccountToken returns stringified UUID from SDK`() {
+        val token = UUID.fromString("01234567-89ab-cdef-0123-456789abcdef")
+        every { ZeroSettle.recommendedAppAccountToken() } returns token
 
+        val result = newResult()
         val consumed = handler.handle(call("recommendedAppAccountToken"), result)
 
         assertThat(consumed).isTrue()
-        verify { result.error(capture(codeSlot), capture(messageSlot), null) }
+        verify { result.success("01234567-89ab-cdef-0123-456789abcdef") }
+        verify(exactly = 0) { result.error(any(), any(), any()) }
+    }
+
+    @Test
+    fun `recommendedAppAccountToken surfaces SDK errors via sendError`() {
+        // The SDK throws ZeroSettleError.UserNotIdentified when called
+        // before identify(); make sure that maps to the typed wire code
+        // so Dart can pattern-match it.
+        every { ZeroSettle.recommendedAppAccountToken() } throws
+            ZeroSettleError.UserNotIdentified
+
+        val result = newResult()
+        val consumed = handler.handle(call("recommendedAppAccountToken"), result)
+
+        assertThat(consumed).isTrue()
+        verify { result.error(eq("user_not_identified"), any(), any()) }
         verify(exactly = 0) { result.success(any()) }
-        assertThat(codeSlot.captured).isEqualTo("not_implemented")
-        assertThat(messageSlot.captured).contains("recommendedAppAccountToken")
-        // The message must hint at the platform gate so developers fix the
-        // call site rather than try to catch the exception generically.
-        assertThat(messageSlot.captured).contains("Platform.isIOS")
     }
 
     // ─── presentApplePaySetup ────────────────────────────────────────────

@@ -1,5 +1,7 @@
 package com.zerosettle.flutter.handlers
 
+import com.zerosettle.flutter.ext.sendError
+import com.zerosettle.sdk.ZeroSettle
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -11,38 +13,31 @@ import io.flutter.plugin.common.MethodChannel
  * returns the closest "feature not present" answer the Dart wire contract
  * tolerates without crashing the caller.
  *
- * | Dart method                  | Android return                       | Wire shape   |
- * | ---------------------------- | ------------------------------------ | ------------ |
- * | `recommendedAppAccountToken` | `error("not_implemented", ...)`      | error        |
- * | `presentApplePaySetup`       | `error("not_implemented", ...)`      | error        |
- * | `getIsApplePayOnly`          | `success(false)`                     | `Boolean`    |
- * | `getApplePayState`           | `success("unavailable")`             | `String`     |
+ * | Dart method                  | Android return                                    | Wire shape   |
+ * | ---------------------------- | ------------------------------------------------- | ------------ |
+ * | `recommendedAppAccountToken` | `ZeroSettle.recommendedAppAccountToken().toString()` | `String`     |
+ * | `presentApplePaySetup`       | `error("not_implemented", ...)`                   | error        |
+ * | `getIsApplePayOnly`          | `success(false)`                                  | `Boolean`    |
+ * | `getApplePayState`           | `success("unavailable")`                          | `String`     |
  *
  * Wire shapes were cross-checked against `lib/zerosettle_method_channel.dart`
  * and `ios/zerosettle/Sources/zerosettle/ZeroSettlePlugin.swift`.
  *
- * ## Why `recommendedAppAccountToken` returns `not_implemented` (deviation)
+ * ## `recommendedAppAccountToken` — typed UUID pass-through
  *
- * The original F15 plan called for `success(null)` here on the rationale
- * that the iOS Kit returns a `String` (the UUID `appAccountToken`) and the
- * Android stub should signal "no value". That doesn't survive the Dart
- * wire:
+ * The Android SDK exposes `ZeroSettle.recommendedAppAccountToken(): UUID`
+ * (see `core/src/main/kotlin/com/zerosettle/sdk/ZeroSettle.kt`) which
+ * derives a deterministic UUID from `(userId, packageName)`. iOS Kit's
+ * equivalent returns the same value as a String for the StoreKit
+ * `appAccountToken` API; on Android there's no Apple Pay flow, but the
+ * UUID is still useful for cross-platform analytics correlation and as a
+ * stable per-(user, app) token. The Dart facade docstring already says
+ * "on Android, derives the same UUID from (userId, packageName) — useful
+ * for analytics correlation", so this is exactly in-contract.
  *
- * ```dart
- * Future<String> recommendedAppAccountToken() async {
- *   final result = await methodChannel.invokeMethod<String>('recommendedAppAccountToken');
- *   return result!;   // force-unwrap; null → Dart null-check NPE
- * }
- * ```
- *
- * Dart force-unwraps the result — returning `null` would throw a
- * `_TypeError` (`Null check operator used on a null value`) on every Android
- * call site. The platform-interface return type is also `Future<String>`
- * (non-nullable), and the iOS dispatch error path (`result(error.toFlutterError())`
- * in `ZeroSettlePlugin.swift`) already surfaces this method as a
- * `PlatformException` in failure scenarios, so a `not_implemented` error is
- * an in-contract response. Callers must gate Apple-only StoreKit
- * features with `Platform.isIOS` either way.
+ * Throws `UserNotIdentified` / `NotConfigured` when called before
+ * `identify(...)` / `configure(...)`; the `runCatching` + `sendError`
+ * pattern surfaces those as typed `PlatformException`s on the Dart side.
  *
  * The other three methods are null-tolerant on the Dart side
  * (`result ?? 'unavailable'` for `getApplePayState`, `result ?? false` for
@@ -84,12 +79,11 @@ internal class ApplePayStubsHandler(@Suppress("unused") private val deps: Handle
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
             "recommendedAppAccountToken" ->
-                result.error(
-                    "not_implemented",
-                    "recommendedAppAccountToken is iOS-only (StoreKit appAccountToken " +
-                        "derivation); no Android analogue. Gate the call with Platform.isIOS.",
-                    null,
-                )
+                runCatching { ZeroSettle.recommendedAppAccountToken().toString() }
+                    .fold(
+                        onSuccess = { result.success(it) },
+                        onFailure = { result.sendError(it) },
+                    )
             "presentApplePaySetup" ->
                 result.error(
                     "not_implemented",
