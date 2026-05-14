@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for Google Play Billing. Without this declaration in the
+         merged manifest, Play Console won't enable IAP product creation
+         for this app. The Billing library v7 also injects this via its
+         own manifest merge — explicit declaration here makes the
+         requirement visible. -->
+    <uses-permission android:name="com.android.vending.BILLING" />
     <application
         android:label="zerosettle_example"
         android:name="${applicationName}"

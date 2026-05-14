@@ -41,3 +41,13 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Google Play Billing — needed so manifest merging picks up the
+    // com.android.vending.BILLING permission required for Play Console
+    // to enable IAP product configuration. The Flutter plugin's
+    // :zerosettle module also pulls this in transitively via the
+    // io.zerosettle:zerosettle-android SDK; the explicit declaration
+    // here documents intent and keeps the example app self-describing.
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
+}
