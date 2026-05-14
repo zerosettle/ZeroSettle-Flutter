@@ -74,6 +74,11 @@ fun EntitlementSource.toWireString(): String = when (this) {
     EntitlementSource.STORE_KIT -> "store_kit"
     EntitlementSource.WEB_CHECKOUT -> "web_checkout"
     EntitlementSource.PLAY_STORE -> "play_store"
+    // SDK-side `UNKNOWN` fallback exists so unfamiliar backend values
+    // don't crash decode. On the Flutter wire we surface it as the
+    // literal "unknown" string — Dart `EntitlementSource.fromRawValue`
+    // returns null for unknown raws, which is the desired soft-fail.
+    EntitlementSource.UNKNOWN -> "unknown"
 }
 
 fun ProductType.toWireString(): String = when (this) {
@@ -95,6 +100,14 @@ fun CheckoutTransaction.Status.toWireString(): String = when (this) {
     CheckoutTransaction.Status.PROCESSING -> "processing"
     CheckoutTransaction.Status.FAILED -> "failed"
     CheckoutTransaction.Status.REFUNDED -> "refunded"
+    // Backend emits `"superseded"` (Web→Web upgrade old-sub cancellation).
+    // SDK added the variant + custom serializer so decode doesn't crash;
+    // surface it on the Flutter wire byte-for-byte.
+    CheckoutTransaction.Status.SUPERSEDED -> "superseded"
+    // Soft-fail catch-all for future backend statuses the Dart parser
+    // doesn't know — Dart's `Status.fromRawValue` returns null on
+    // unrecognized strings (intentional).
+    CheckoutTransaction.Status.UNKNOWN -> "unknown"
 }
 
 fun Entitlement.toFlutterMap(): Map<String, Any?> {
