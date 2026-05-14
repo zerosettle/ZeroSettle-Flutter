@@ -2,6 +2,7 @@ package com.zerosettle.flutter.handlers
 
 import android.util.Log
 import com.zerosettle.flutter.ext.sendError
+import com.zerosettle.flutter.ext.toFlutterMap
 import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.sdk.models.UserOffer
 import io.flutter.plugin.common.MethodCall
@@ -43,7 +44,7 @@ import kotlinx.coroutines.launch
  * | `trackEvent`               | `success(null)` (no SDK API; Dart swallows)  | n/a             |
  * | `trackMigrationConversion` | `ZeroSettle.trackMigrationConversion(...)`   | n/a             |
  * | `resetMigrateTipState`     | `success(null)` (no SDK API)                 | n/a             |
- * | `fetchTransactionHistory`  | `not_implemented` (SDK returns raw JSON)     | **yes**         |
+ * | `fetchTransactionHistory`  | `ZeroSettle.fetchTransactionHistory()`        | no (typed list) |
  *
  * ## `handleUniversalLink` — false instead of true on Android
  *
@@ -115,22 +116,18 @@ import kotlinx.coroutines.launch
  * reset migration-tip state. No-op is honest. When the Android SDK adds
  * a migration-tip dismissal store, this handler swaps in.
  *
- * ## `fetchTransactionHistory` — `not_implemented` (force-unwrap blocker)
+ * ## `fetchTransactionHistory` — typed list pass-through
  *
  * The Dart wire is `Future<List<Map<String, dynamic>>>` with a
  * `result!.map(...)` force-unwrap. iOS returns
- * `[CheckoutTransaction].map { $0.toFlutterMap() }` — typed and parsed.
- * The Android SDK currently returns `Result<String>` (raw JSON, see
- * `ZeroSettle.fetchTransactionHistory()` at
- * `ZeroSettle-Android/core/src/main/kotlin/com/zerosettle/sdk/ZeroSettle.kt:342-346`,
- * docstring: "The typed model lands in a later phase").
- *
- * Returning `success(null)` would throw an uncatchable Dart `_TypeError`;
- * returning the raw JSON string as a Map would fail the cast in
- * `Map<String, dynamic>.from(e as Map)`. The honest answer is
- * `not_implemented` until the SDK lands the typed `CheckoutTransaction`
- * model and this handler can parse + encode it. Tracked as a deviation
- * from the F16 plan; commit message points at the SDK file:line.
+ * `[CheckoutTransaction].map { $0.toFlutterMap() }`. The Android SDK
+ * now returns `Result<List<CheckoutTransaction>>` (see
+ * `ZeroSettle.fetchTransactionHistory()` in
+ * `ZeroSettle-Android/core/src/main/kotlin/com/zerosettle/sdk/ZeroSettle.kt`),
+ * so we just map each entry via [CheckoutTransaction.toFlutterMap] —
+ * same shape as iOS. Failures (UserNotIdentified / NotConfigured /
+ * BackendError) flow through `sendError` like every other suspend
+ * handler in this file.
  */
 internal class MiscHandler(private val deps: HandlerDependencies) {
 
@@ -218,24 +215,25 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
         }
     }
 
-    // ── fetchTransactionHistory (force-unwrap blocker — not_implemented) ─
+    // ── fetchTransactionHistory (typed list pass-through) ──────────────
 
     private fun fetchTransactionHistory(result: MethodChannel.Result) {
-        // SDK returns Result<String> (raw JSON) — Dart expects
-        // Future<List<Map<String, dynamic>>> with a force-unwrap on the
-        // result. success(null) would NPE; returning the raw JSON String
-        // would fail Dart's `Map<String, dynamic>.from(e as Map)` cast.
-        // Tracked as a deviation from the F16 plan until the SDK lands the
-        // typed CheckoutTransaction model (see ZeroSettle-Android
-        // core/src/main/kotlin/com/zerosettle/sdk/ZeroSettle.kt:342-346,
-        // docstring: "The typed model lands in a later phase").
-        result.error(
-            "not_implemented",
-            "fetchTransactionHistory is pending the SDK's typed " +
-                "CheckoutTransaction model. The current SDK surface returns " +
-                "raw JSON (Result<String>) which the Dart wire " +
-                "(Future<List<Map<String, dynamic>>>) cannot decode.",
-            null,
-        )
+        // SDK returns Result<List<CheckoutTransaction>>; encode each entry
+        // via the existing toFlutterMap so the wire shape matches iOS.
+        // UserNotIdentified / NotConfigured / BackendError → sendError.
+        deps.scope.launch {
+            val sdkResult = runCatching { ZeroSettle.fetchTransactionHistory() }
+            sdkResult.fold(
+                onSuccess = { res ->
+                    res.fold(
+                        onSuccess = { txns ->
+                            result.success(txns.map { it.toFlutterMap() })
+                        },
+                        onFailure = { result.sendError(it) },
+                    )
+                },
+                onFailure = { result.sendError(it) },
+            )
+        }
     }
 }

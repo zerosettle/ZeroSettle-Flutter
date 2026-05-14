@@ -179,8 +179,7 @@ fun CheckoutTransaction.toFlutterMap(): Map<String, Any?> {
     productName?.let { map["productName"] = it }
     amountCents?.let { map["amountCents"] = it }
     currency?.let { map["currency"] = it }
-    // Intentionally omitted: storekitStatus (iOS-only field; Android SDK
-    // doesn't carry it).
+    storekitStatus?.let { map["storekitStatus"] = it }
     return map
 }
 

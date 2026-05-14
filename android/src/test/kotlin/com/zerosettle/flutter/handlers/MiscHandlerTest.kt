@@ -58,9 +58,10 @@ import org.robolectric.RobolectricTestRunner
  *     and returns `success(null)`. SDK failure → `sendError`.
  *   - `resetMigrateTipState` returns `success(null)` (no SDK API; would
  *     conflate with `resetOfferDismissedState` if wired through).
- *   - `fetchTransactionHistory` returns `not_implemented` per the
- *     force-unwrap rule (SDK currently returns raw JSON, Dart wire expects
- *     typed List<Map>).
+ *   - `fetchTransactionHistory` forwards to
+ *     `ZeroSettle.fetchTransactionHistory()` and returns
+ *     `success(List<Map<String, Any?>>)` matching the iOS wire shape.
+ *     SDK failure → `sendError`.
  *   - Unknown method → `handle` returns `false` so the plugin can fall
  *     through to the next handler / WIP error.
  */
@@ -111,6 +112,7 @@ class MiscHandlerTest {
         coEvery { ZeroSettle.trackMigrationConversion(any()) } returns Result.failure(
             ZeroSettleError.UserNotIdentified,
         )
+        coEvery { ZeroSettle.fetchTransactionHistory() } returns Result.success(emptyList())
 
         listOf(
             "handleUniversalLink" to mapOf("url" to "https://example.com/checkout-success"),
@@ -361,35 +363,58 @@ class MiscHandlerTest {
         verify(exactly = 0) { result.error(any(), any(), any()) }
     }
 
-    // ─── fetchTransactionHistory — force-unwrap blocker → not_implemented ─
+    // ─── fetchTransactionHistory — typed list pass-through ─────────────
 
     @Test
-    fun `fetchTransactionHistory returns not_implemented with explanatory message`() {
-        // Per the F15 force-unwrap rule: Dart's
-        // Future<List<Map<String, dynamic>>> with `result!.map(...)` would
-        // throw an uncatchable Dart `_TypeError` on `success(null)`.
-        // SDK's Result<String> (raw JSON) can't be re-shaped into
-        // List<Map> without a typed model — blocked on a follow-up SDK task.
+    fun `fetchTransactionHistory forwards to SDK and returns list of maps`() = runTest {
+        // SDK now returns Result<List<CheckoutTransaction>>; the handler
+        // encodes each entry via CheckoutTransaction.toFlutterMap() so the
+        // wire shape matches iOS. Cover the canonical fields (id/productId/
+        // status/source/purchasedAt) + a couple of optional ones to make
+        // sure the encoder fired.
+        val sample = com.zerosettle.sdk.models.CheckoutTransaction(
+            id = "txn_1",
+            productId = "pro_monthly",
+            status = com.zerosettle.sdk.models.CheckoutTransaction.Status.COMPLETED,
+            source = com.zerosettle.sdk.models.EntitlementSource.WEB_CHECKOUT,
+            purchasedAt = "2026-05-11T00:00:00Z",
+            expiresAt = "2026-06-11T00:00:00Z",
+            productName = "Pro Monthly",
+            amountCents = 599,
+            currency = "usd",
+            storekitStatus = null,
+        )
+        coEvery { ZeroSettle.fetchTransactionHistory() } returns Result.success(listOf(sample))
+
         val result = newResult()
-        val codeSlot: CapturingSlot<String> = slot()
-        val messageSlot: CapturingSlot<String> = slot()
-
+        val slotSuccess: CapturingSlot<Any> = slot()
         handler.handle(call("fetchTransactionHistory", mapOf("userId" to "u")), result)
+        verify { result.success(capture(slotSuccess)) }
+        verify(exactly = 0) { result.error(any(), any(), any()) }
 
-        verify { result.error(capture(codeSlot), capture(messageSlot), null) }
-        verify(exactly = 0) { result.success(any()) }
-        assertThat(codeSlot.captured).isEqualTo("not_implemented")
-        assertThat(messageSlot.captured).contains("fetchTransactionHistory")
-        // The message must hint at the typed-model gap so a future task
-        // implementer knows where to start.
-        assertThat(messageSlot.captured).contains("CheckoutTransaction")
+        @Suppress("UNCHECKED_CAST")
+        val list = slotSuccess.captured as List<Map<String, Any?>>
+        assertThat(list).hasSize(1)
+        val m = list[0]
+        assertThat(m["id"]).isEqualTo("txn_1")
+        assertThat(m["productId"]).isEqualTo("pro_monthly")
+        assertThat(m["status"]).isEqualTo("completed")
+        assertThat(m["source"]).isEqualTo("web_checkout")
+        assertThat(m["amountCents"]).isEqualTo(599)
+        assertThat(m["currency"]).isEqualTo("usd")
+        // null storekitStatus must be omitted, matching the encoder contract.
+        assertThat(m).doesNotContainKey("storekitStatus")
     }
 
     @Test
-    fun `fetchTransactionHistory returns not_implemented even without userId`() {
-        // Force-unwrap rule applies regardless of args.
+    fun `fetchTransactionHistory surfaces SDK failure via sendError`() = runTest {
+        coEvery { ZeroSettle.fetchTransactionHistory() } returns Result.failure(
+            ZeroSettleError.UserNotIdentified,
+        )
+
         val result = newResult()
         handler.handle(call("fetchTransactionHistory"), result)
-        verify { result.error(eq("not_implemented"), any(), null) }
+        verify { result.error(eq("user_not_identified"), any(), any()) }
+        verify(exactly = 0) { result.success(any()) }
     }
 }
