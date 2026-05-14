@@ -194,9 +194,16 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         instance.currentUserIdStreamHandler.onListenStarted = { [weak instance] in
             DispatchQueue.main.async {
                 guard let instance else { return }
-                // cachedCurrentUserId may be nil — send NSNull so the Dart
-                // wire sees an explicit `null` event for the logged-out state.
-                instance.currentUserIdStreamHandler.send(instance.cachedCurrentUserId ?? NSNull())
+                // cachedCurrentUserId is plugin-side state, written from
+                // `Task { @MainActor in ... }` blocks. We're on the main
+                // queue here so `MainActor.assumeIsolated` makes the access
+                // explicit (matches the surrounding pendingClaims / Apple
+                // Pay state blocks for consistency).
+                MainActor.assumeIsolated {
+                    // cachedCurrentUserId may be nil — send NSNull so the Dart
+                    // wire sees an explicit `null` event for the logged-out state.
+                    instance.currentUserIdStreamHandler.send(instance.cachedCurrentUserId ?? NSNull())
+                }
             }
         }
         instance.pendingCheckoutStreamHandler.onListenStarted = { [weak instance] in
