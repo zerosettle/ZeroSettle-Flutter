@@ -156,9 +156,39 @@ class IdentityHandlerTest {
         )
 
         // None of the iOS-only knobs land on ZeroSettleConfig — only
-        // publishableKey + preloadCheckout default.
+        // publishableKey + preloadCheckout default. Play knobs absent →
+        // SDK defaults (no licence key, sync on, lax ack).
         assertThat(configSlot.captured.publishableKey).isEqualTo("zs_pk_test_abc")
         assertThat(configSlot.captured.preloadCheckout).isFalse()
+        assertThat(configSlot.captured.playLicenseKey).isNull()
+        assertThat(configSlot.captured.syncPlayPurchases).isTrue()
+        assertThat(configSlot.captured.strictAck).isFalse()
+    }
+
+    @Test
+    fun `configure forwards Play knobs into ZeroSettleConfig`() {
+        // The Android-only knobs Dart's configure() carries — playLicenseKey,
+        // syncPlayPurchases, strictAck — must land on ZeroSettleConfig so
+        // the Play Billing listener picks up the developer's overrides.
+        val configSlot = slot<ZeroSettleConfig>()
+        every { ZeroSettle.configure(eq(appContext), capture(configSlot)) } answers { }
+
+        handler.handle(
+            call(
+                "configure",
+                mapOf(
+                    "publishableKey" to "zs_pk_test_abc",
+                    "playLicenseKey" to "MIIB-fake-rsa-public-key",
+                    "syncPlayPurchases" to false,
+                    "strictAck" to true,
+                ),
+            ),
+            newResult(),
+        )
+
+        assertThat(configSlot.captured.playLicenseKey).isEqualTo("MIIB-fake-rsa-public-key")
+        assertThat(configSlot.captured.syncPlayPurchases).isFalse()
+        assertThat(configSlot.captured.strictAck).isTrue()
     }
 
     @Test

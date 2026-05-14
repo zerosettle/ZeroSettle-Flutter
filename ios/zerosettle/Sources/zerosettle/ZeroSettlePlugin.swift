@@ -310,6 +310,14 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             let appleMerchantId = args?["appleMerchantId"] as? String
             let preloadCheckout = args?["preloadCheckout"] as? Bool ?? false
             let maxPreloadedWebViews = args?["maxPreloadedWebViews"] as? Int
+            // Android-only knobs Dart still sends — read them so they don't
+            // surface as "unknown argument" on stricter handlers, but drop
+            // them silently because iOS Kit has no Play Billing surface.
+            // Symmetric to the Android plugin's iOS-only args drop (see
+            // IdentityHandler.kt's `droppedArgs` block).
+            _ = args?["playLicenseKey"] as? String
+            _ = args?["syncPlayPurchases"] as? Bool
+            _ = args?["strictAck"] as? Bool
             // ApplePaySetupBehavior is `Sendable` without an explicit raw
             // value type, so we map strings via switch. When omitted, fall
             // through to the iOS Configuration init's default

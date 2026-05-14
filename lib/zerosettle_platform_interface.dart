@@ -25,6 +25,9 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     bool preloadCheckout = false,
     int? maxPreloadedWebViews,
     String? applePaySetupBehavior,
+    String? playLicenseKey,
+    bool syncPlayPurchases = true,
+    bool strictAck = false,
   }) {
     throw UnimplementedError('configure() has not been implemented.');
   }

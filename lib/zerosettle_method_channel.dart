@@ -39,6 +39,9 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     bool preloadCheckout = false,
     int? maxPreloadedWebViews,
     String? applePaySetupBehavior,
+    String? playLicenseKey,
+    bool syncPlayPurchases = true,
+    bool strictAck = false,
   }) async {
     await methodChannel.invokeMethod('configure', {
       'publishableKey': publishableKey,
@@ -47,6 +50,9 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
       'preloadCheckout': preloadCheckout,
       if (maxPreloadedWebViews != null) 'maxPreloadedWebViews': maxPreloadedWebViews,
       if (applePaySetupBehavior != null) 'applePaySetupBehavior': applePaySetupBehavior,
+      if (playLicenseKey != null) 'playLicenseKey': playLicenseKey,
+      'syncPlayPurchases': syncPlayPurchases,
+      'strictAck': strictAck,
     });
   }
 

@@ -472,6 +472,38 @@ void main() {
     expect(args['publishableKey'], 'zs_pk_test_123');
   });
 
+  test('configure channel call carries Android-only Play knobs through to the wire', () async {
+    // The Play knobs (playLicenseKey / syncPlayPurchases / strictAck) are
+    // Android-only — iOS reads them and drops them. The Dart wire must
+    // still serialize them through the channel so the Android plugin can
+    // forward them into ZeroSettleConfig.
+    // ignore: avoid_dynamic_calls
+    await (platform as dynamic).configure(
+      publishableKey: 'zs_pk_test_123',
+      playLicenseKey: 'MIIB-fake-rsa-public-key',
+      syncPlayPurchases: false,
+      strictAck: true,
+    );
+    final call = channelCalls.firstWhere((c) => c.method == 'configure');
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args['playLicenseKey'], 'MIIB-fake-rsa-public-key');
+    expect(args['syncPlayPurchases'], isFalse);
+    expect(args['strictAck'], isTrue);
+  });
+
+  test('configure channel call defaults Play knobs to SDK defaults when omitted', () async {
+    // playLicenseKey omitted (Dart side guards `if (... != null)` so the
+    // key is absent), syncPlayPurchases defaults to true, strictAck
+    // defaults to false. These defaults are part of the Dart contract —
+    // mirror the SDK's ZeroSettleConfig defaults.
+    await platform.configure(publishableKey: 'zs_pk_test_123');
+    final call = channelCalls.firstWhere((c) => c.method == 'configure');
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    expect(args.containsKey('playLicenseKey'), isFalse);
+    expect(args['syncPlayPurchases'], isTrue);
+    expect(args['strictAck'], isFalse);
+  });
+
   // ==== 1.3.0 new primitives ====
 
   test('purchase channel call carries productId only (no presentation)', () async {

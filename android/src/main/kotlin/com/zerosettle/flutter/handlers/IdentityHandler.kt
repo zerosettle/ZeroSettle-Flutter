@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
  * types, arg names, and error codes match exactly so the Dart parser
  * sees one contract regardless of platform.
  *
- * ## iOS-only configure args
+ * ## Platform-specific configure args
  *
  * Dart's `configure({...})` carries several iOS-only knobs:
  * `syncStoreKitTransactions`, `appleMerchantId`, `maxPreloadedWebViews`,
@@ -32,6 +32,12 @@ import kotlinx.coroutines.launch
  * sheet, StoreKit sync flag, iOS WebView preloading). The plan's spec
  * (`docs/superpowers/plans/2026-05-12-...md:1988-1991`) is the source for
  * this behaviour.
+ *
+ * Symmetrically, Dart also carries three Android-only knobs that map to
+ * [ZeroSettleConfig]: `playLicenseKey` (Play Billing signature
+ * verification), `syncPlayPurchases` (Play Billing purchase listener
+ * toggle), `strictAck` (block ack until backend sync confirms). These
+ * are dropped on iOS with a comment; on Android they forward through.
  *
  * `preloadCheckout` maps directly to [ZeroSettleConfig.preloadCheckout].
  *
@@ -130,6 +136,13 @@ internal class IdentityHandler(private val deps: HandlerDependencies) {
             )
         }
         val preloadCheckout = call.argument<Boolean>("preloadCheckout") ?: false
+        // Android-specific Play knobs (mirrored on the Dart side; iOS drops
+        // them). All three have sensible defaults baked into
+        // [ZeroSettleConfig] so missing args fall through to the SDK
+        // defaults rather than overwriting with `null`/`false`.
+        val playLicenseKey = call.argument<String>("playLicenseKey")
+        val syncPlayPurchases = call.argument<Boolean>("syncPlayPurchases") ?: true
+        val strictAck = call.argument<Boolean>("strictAck") ?: false
         // Pick up the pending baseUrlOverride that the Dart side staged via
         // setBaseUrlOverride(...) before this configure call. Required for
         // staging / ngrok dev wiring — Android's ZeroSettleConfig is
@@ -145,6 +158,9 @@ internal class IdentityHandler(private val deps: HandlerDependencies) {
                     publishableKey = publishableKey,
                     preloadCheckout = preloadCheckout,
                     baseUrlOverride = baseUrlOverride,
+                    playLicenseKey = playLicenseKey,
+                    syncPlayPurchases = syncPlayPurchases,
+                    strictAck = strictAck,
                 ),
             )
             result.success(null)

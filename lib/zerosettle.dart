@@ -85,6 +85,20 @@ class ZeroSettle {
   ///   Apple-Pay-only and the device's Wallet has no supported card. iOS
   ///   only — silently ignored on Android. When omitted the SDK uses its
   ///   default ([ApplePaySetupBehavior.presentBuiltInUI]).
+  /// - [playLicenseKey]: PEM-encoded RSA public key from the Play Console
+  ///   used to verify Play Billing purchase signatures locally before
+  ///   syncing to the backend. Android-only — silently ignored on iOS.
+  ///   When `null` (default), signature verification is delegated to the
+  ///   backend.
+  /// - [syncPlayPurchases]: When `true` (default), the Android SDK
+  ///   installs a Play Billing purchase listener and forwards purchases
+  ///   to the backend. Set to `false` if your app drives Play Billing
+  ///   directly (e.g. via a different library). Android-only — silently
+  ///   ignored on iOS.
+  /// - [strictAck]: When `true`, the Android SDK never acknowledges a
+  ///   Play purchase until the backend confirms the sync (no
+  ///   fire-and-forget). Defaults to `false` (acknowledge on receipt).
+  ///   Android-only — silently ignored on iOS.
   Future<void> configure({
     required String publishableKey,
     bool syncStoreKitTransactions = true,
@@ -92,6 +106,9 @@ class ZeroSettle {
     bool preloadCheckout = false,
     int? maxPreloadedWebViews,
     ApplePaySetupBehavior? applePaySetupBehavior,
+    String? playLicenseKey,
+    bool syncPlayPurchases = true,
+    bool strictAck = false,
   }) {
     return _wrap(() => _platform.configure(
           publishableKey: publishableKey,
@@ -100,6 +117,9 @@ class ZeroSettle {
           preloadCheckout: preloadCheckout,
           maxPreloadedWebViews: maxPreloadedWebViews,
           applePaySetupBehavior: applePaySetupBehavior?.rawValue,
+          playLicenseKey: playLicenseKey,
+          syncPlayPurchases: syncPlayPurchases,
+          strictAck: strictAck,
         ));
   }
 
