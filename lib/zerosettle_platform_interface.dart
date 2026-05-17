@@ -94,6 +94,7 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Future<Map<String, dynamic>> purchase({
     required String productId,
     String? presentation,
+    String? userId,
   }) {
     throw UnimplementedError('purchase() has not been implemented.');
   }
@@ -101,6 +102,7 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   /// Force a StoreKit (App Store IAP) purchase, bypassing web checkout.
   Future<Map<String, dynamic>> purchaseViaStoreKit({
     required String productId,
+    String? userId,
   }) {
     throw UnimplementedError('purchaseViaStoreKit() has not been implemented.');
   }

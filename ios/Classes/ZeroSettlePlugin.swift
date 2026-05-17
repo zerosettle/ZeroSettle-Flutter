@@ -511,6 +511,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
+            let userId = args?["userId"] as? String
             let presentationRaw = args?["presentation"] as? String
             let presentation: CheckoutType?
             if let presentationRaw {
@@ -526,6 +527,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 do {
                     let transaction = try await ZeroSettle.shared.purchase(
                         productId: productId,
+                        userId: userId,
                         presentation: presentation
                     )
                     result(transaction.toFlutterMap())
@@ -539,9 +541,13 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "productId is required", details: nil))
                 return
             }
+            let userId = args?["userId"] as? String
             Task { @MainActor in
                 do {
-                    let skTransaction = try await ZeroSettle.shared.purchaseViaStoreKit(productId: productId)
+                    let skTransaction = try await ZeroSettle.shared.purchaseViaStoreKit(
+                        productId: productId,
+                        userId: userId
+                    )
                     result(skTransaction.toZeroSettleFlutterMap(productId: productId))
                 } catch {
                     result(error.toFlutterError())

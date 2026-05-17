@@ -247,14 +247,22 @@ class ZeroSettle {
   /// - [presentation]: Optional override for the checkout sheet style (e.g.
   ///   `CheckoutType.nativePay` to force Apple Pay). When omitted the SDK
   ///   uses the global default from remote config.
+  ///
+  /// [userId] is an optional explicit override. When omitted, the iOS SDK
+  /// reads `userId` from session state bound by a prior [identify] call.
+  /// Pass an explicit value if you need to recover from session loss (cold
+  /// start, process eviction) without forcing a round-trip through
+  /// [identify] first.
   Future<CheckoutTransaction> purchase({
     required String productId,
     CheckoutType? presentation,
+    String? userId,
   }) {
     return _wrap(() async {
       final map = await _platform.purchase(
         productId: productId,
         presentation: presentation?.rawValue,
+        userId: userId,
       );
       return CheckoutTransaction.fromMap(map);
     });
@@ -269,14 +277,20 @@ class ZeroSettle {
   /// because Apple's `StoreKit.Transaction` doesn't carry localized price
   /// information directly — read it from the `Product` catalog if needed.
   ///
-  /// Identity comes from the prior [identify] call; this method does not take
-  /// a `userId` parameter.
+  /// Identity comes from the prior [identify] call by default. Pass [userId]
+  /// explicitly to override the session-bound value when state is unavailable.
   ///
   /// Throws a [ZeroSettleException] on cancellation, verification failure, or
   /// when no StoreKit product is available for [productId].
-  Future<CheckoutTransaction> purchaseViaStoreKit({required String productId}) {
+  Future<CheckoutTransaction> purchaseViaStoreKit({
+    required String productId,
+    String? userId,
+  }) {
     return _wrap(() async {
-      final map = await _platform.purchaseViaStoreKit(productId: productId);
+      final map = await _platform.purchaseViaStoreKit(
+        productId: productId,
+        userId: userId,
+      );
       return CheckoutTransaction.fromMap(map);
     });
   }
