@@ -150,10 +150,12 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   Future<Map<String, dynamic>> purchase({
     required String productId,
     String? presentation,
+    String? userId,
   }) async {
     final result = await methodChannel.invokeMethod<Map>('purchase', {
       'productId': productId,
       if (presentation != null) 'presentation': presentation,
+      if (userId != null) 'userId': userId,
     });
     return Map<String, dynamic>.from(result!);
   }
@@ -161,9 +163,11 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   @override
   Future<Map<String, dynamic>> purchaseViaStoreKit({
     required String productId,
+    String? userId,
   }) async {
     final result = await methodChannel.invokeMethod<Map>('purchaseViaStoreKit', {
       'productId': productId,
+      if (userId != null) 'userId': userId,
     });
     return Map<String, dynamic>.from(result!);
   }
