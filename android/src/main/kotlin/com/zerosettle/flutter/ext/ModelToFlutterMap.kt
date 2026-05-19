@@ -56,13 +56,12 @@ import com.zerosettle.sdk.offers.OfferManager
  * (the wire string preserved by the SDK), not the enum — mirrors iOS's
  * `map["status"] = status.rawString`. Unknown backend statuses round-trip.
  *
- * **`PendingAction`** has no Dart parser or iOS emitter yet — Android is
- * the first consumer (per the Kotlin SDK doc comment on `PendingAction`).
- * The shape defined here therefore *is* the contract for future adopters.
- * The map carries a `"type"` discriminator (`"migration_completed_info"`
- * or `"manual_play_cancel"`) matching the backend's action-type strings,
- * with the remaining keys in camelCase to stay consistent with the rest of
- * the wire.
+ * **`PendingAction`** has a Dart parser in `lib/models/pending_action.dart`
+ * (Task 4). The map carries a `"type"` discriminator
+ * (`"migrationCompletedInfo"` or `"manualPlayCancel"`) matching the Dart
+ * `PendingAction.fromMap` switch cases, with all remaining keys in camelCase
+ * (no `Iso` suffix on date fields — Dart reads `playAccessEndsAt` /
+ * `expiresAt`, not `playAccessEndsAtIso` / `expiresAtIso`).
  */
 
 fun Price.toFlutterMap(): Map<String, Any?> = mapOf(
@@ -211,11 +210,11 @@ fun PendingAction.toFlutterMap(): Map<String, Any?> = when (this) {
 
 fun PendingAction.MigrationCompletedInfo.toFlutterMap(): Map<String, Any?> {
     val map = mutableMapOf<String, Any?>(
-        "type" to "migration_completed_info",
+        "type" to "migrationCompletedInfo",
         "transactionId" to transactionId,
         "userMessage" to userMessage,
     )
-    playAccessEndsAtIso?.let { map["playAccessEndsAtIso"] = it }
+    playAccessEndsAtIso?.let { map["playAccessEndsAt"] = it }
     newSubscriptionPriceCents?.let { map["newSubscriptionPriceCents"] = it }
     newSubscriptionCurrency?.let { map["newSubscriptionCurrency"] = it }
     newSubscriptionInterval?.let { map["newSubscriptionInterval"] = it }
@@ -224,13 +223,13 @@ fun PendingAction.MigrationCompletedInfo.toFlutterMap(): Map<String, Any?> {
 
 fun PendingAction.ManualPlayCancel.toFlutterMap(): Map<String, Any?> {
     val map = mutableMapOf<String, Any?>(
-        "type" to "manual_play_cancel",
+        "type" to "manualPlayCancel",
         "transactionId" to transactionId,
         "userMessage" to userMessage,
         "originalPlayPurchaseToken" to originalPlayPurchaseToken,
         "deepLink" to deepLink,
     )
-    expiresAtIso?.let { map["expiresAtIso"] = it }
+    expiresAtIso?.let { map["expiresAt"] = it }
     return map
 }
 

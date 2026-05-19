@@ -11,6 +11,7 @@ import com.zerosettle.flutter.handlers.HandlerDependencies
 import com.zerosettle.flutter.handlers.IdentityHandler
 import com.zerosettle.flutter.handlers.MiscHandler
 import com.zerosettle.flutter.handlers.ModalsHandler
+import com.zerosettle.flutter.handlers.PendingActionsHandler
 import com.zerosettle.flutter.handlers.PendingClaimsHandler
 import com.zerosettle.flutter.handlers.PurchaseHandler
 import com.zerosettle.flutter.handlers.SubscriptionMgmtHandler
@@ -163,6 +164,8 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var pendingClaimsEventChannel: EventChannel
     private lateinit var applePayStateEventChannel: EventChannel
     private lateinit var isUcbEnabledEventChannel: EventChannel
+    // Task 5 — pending-actions EventChannel (Android-only; iOS emits [] once).
+    private lateinit var pendingActionsEventChannel: EventChannel
 
     /**
      * Reactive state channels (Gap 5). Each one mirrors a public SDK
@@ -199,6 +202,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     internal val pendingClaimsStreamHandler = BufferedStreamHandler(replayLatest = true)
     internal val applePayStateStreamHandler = BufferedStreamHandler(replayLatest = true)
     internal val isUcbEnabledStreamHandler = BufferedStreamHandler(replayLatest = true)
+    // Task 5 — pending-actions state channel (replayLatest so late subscribers
+    // see the current list immediately, matching the entitlements pattern).
+    internal val pendingActionsStreamHandler = BufferedStreamHandler(replayLatest = true)
 
     /**
      * Reactive state channels (Gap 5). All four mirror SDK StateFlows
@@ -250,6 +256,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     /** UCB — pump for `is_ucb_enabled_updates`. */
     @Volatile private var isUcbEnabledPumpJob: Job? = null
 
+    /** Task 5 — pump for `pending_actions_updates`. */
+    @Volatile private var pendingActionsPumpJob: Job? = null
+
     /**
      * F8 identity/lifecycle handler. Owns the 9 lifecycle methods Dart
      * calls on the main channel. Allocated on engine attach so it sees
@@ -280,6 +289,14 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
      * Same allocation pattern as F8/F9/F10.
      */
     private lateinit var pendingClaimsHandler: PendingClaimsHandler
+
+    /**
+     * Task 5 pending-actions handler. Owns `getPendingActions` (synchronous
+     * StateFlow snapshot) and `dismissPendingAction` (suspending SDK call
+     * via the String-overload at ZeroSettle.kt:1250). Same allocation
+     * pattern as F8/F9/F10/F11.
+     */
+    private lateinit var pendingActionsHandler: PendingActionsHandler
 
     /**
      * F12 subscription-management handler. Owns nine methods on the main
@@ -398,6 +415,10 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         isUcbEnabledEventChannel = EventChannel(messenger, "zerosettle/is_ucb_enabled_updates").apply {
             setStreamHandler(isUcbEnabledStreamHandler)
         }
+        // Task 5 — pending-actions EventChannel.
+        pendingActionsEventChannel = EventChannel(messenger, "zerosettle/pending_actions_updates").apply {
+            setStreamHandler(pendingActionsStreamHandler)
+        }
 
         // F8 identity/lifecycle handler. Build the shared HandlerDependencies
         // bundle here so F9-F17 can adopt the same plumbing without each
@@ -418,6 +439,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         catalogHandler = CatalogHandler(handlerDeps)
         purchaseHandler = PurchaseHandler(handlerDeps)
         pendingClaimsHandler = PendingClaimsHandler(handlerDeps)
+        pendingActionsHandler = PendingActionsHandler(handlerDeps)
         subscriptionMgmtHandler = SubscriptionMgmtHandler(handlerDeps)
         modalsHandler = ModalsHandler(handlerDeps)
         applePayStubsHandler = ApplePayStubsHandler(handlerDeps)
@@ -501,6 +523,12 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             ZeroSettle.isUcbEnabled,
             isUcbEnabledStreamHandler,
         ) { it }
+        // Task 5 — pump `ZeroSettle.pendingActions` onto Dart.
+        pendingActionsPumpJob = pumpStateFlow(
+            pluginScope,
+            ZeroSettle.pendingActions,
+            pendingActionsStreamHandler,
+        ) { list -> list.map { it.toFlutterMap() } }
 
         Log.i(
             "ZeroSettle",
@@ -525,6 +553,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         pendingCheckoutEventChannel.setStreamHandler(null)
         isBootstrappedEventChannel.setStreamHandler(null)
         isUcbEnabledEventChannel.setStreamHandler(null)
+        pendingActionsEventChannel.setStreamHandler(null)
         // F25 + Gap 5 pump jobs — `pluginScope.cancel()` below would tear
         // them down anyway, but explicit cancellation makes ownership
         // obvious.
@@ -535,6 +564,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         pendingCheckoutPumpJob?.cancel()
         isBootstrappedPumpJob?.cancel()
         isUcbEnabledPumpJob?.cancel()
+        pendingActionsPumpJob?.cancel()
         entitlementPumpJob = null
         pendingClaimsPumpJob = null
         productsPumpJob = null
@@ -542,6 +572,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         pendingCheckoutPumpJob = null
         isBootstrappedPumpJob = null
         isUcbEnabledPumpJob = null
+        pendingActionsPumpJob = null
         offerManagerRegistry.disposeAll()
         pluginScope.cancel()
         applicationContext = null
@@ -589,6 +620,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         if (catalogHandler.handle(call, result)) return
         if (purchaseHandler.handle(call, result)) return
         if (pendingClaimsHandler.handle(call, result)) return
+        if (pendingActionsHandler.handle(call, result)) return
         if (subscriptionMgmtHandler.handle(call, result)) return
         if (modalsHandler.handle(call, result)) return
         if (applePayStubsHandler.handle(call, result)) return

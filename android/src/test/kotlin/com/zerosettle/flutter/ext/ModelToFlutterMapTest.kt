@@ -258,11 +258,11 @@ class ModelToFlutterMapTest {
 
         val map = action.toFlutterMap()
 
-        assertThat(map["type"]).isEqualTo("migration_completed_info")
+        assertThat(map["type"]).isEqualTo("migrationCompletedInfo")
         assertThat(map["transactionId"]).isEqualTo("txn_migrate_1")
         assertThat(map["userMessage"])
             .isEqualTo("Your old Play subscription stays active until June 1.")
-        assertThat(map["playAccessEndsAtIso"]).isEqualTo("2026-06-01T10:00:00Z")
+        assertThat(map["playAccessEndsAt"]).isEqualTo("2026-06-01T10:00:00Z")
         assertThat(map["newSubscriptionPriceCents"]).isEqualTo(499)
         assertThat(map["newSubscriptionCurrency"]).isEqualTo("USD")
         assertThat(map["newSubscriptionInterval"]).isEqualTo("month")
@@ -281,10 +281,10 @@ class ModelToFlutterMapTest {
 
         val map = action.toFlutterMap()
 
-        assertThat(map["type"]).isEqualTo("migration_completed_info")
+        assertThat(map["type"]).isEqualTo("migrationCompletedInfo")
         assertThat(map["transactionId"]).isEqualTo("txn_migrate_2")
         assertThat(map["userMessage"]).isEqualTo("Migration complete.")
-        assertThat(map).doesNotContainKey("playAccessEndsAtIso")
+        assertThat(map).doesNotContainKey("playAccessEndsAt")
         assertThat(map).doesNotContainKey("newSubscriptionPriceCents")
         assertThat(map).doesNotContainKey("newSubscriptionCurrency")
         assertThat(map).doesNotContainKey("newSubscriptionInterval")
@@ -302,12 +302,12 @@ class ModelToFlutterMapTest {
 
         val map = action.toFlutterMap()
 
-        assertThat(map["type"]).isEqualTo("manual_play_cancel")
+        assertThat(map["type"]).isEqualTo("manualPlayCancel")
         assertThat(map["transactionId"]).isEqualTo("txn_cancel_1")
         assertThat(map["userMessage"])
             .isEqualTo("Cancel your old Play subscription to finish switching.")
         assertThat(map["originalPlayPurchaseToken"]).isEqualTo("play-token-xyz")
-        assertThat(map["expiresAtIso"]).isEqualTo("2026-06-01T10:00:00Z")
+        assertThat(map["expiresAt"]).isEqualTo("2026-06-01T10:00:00Z")
         assertThat(map["deepLink"])
             .isEqualTo("https://play.google.com/store/account/subscriptions")
     }
@@ -326,9 +326,9 @@ class ModelToFlutterMapTest {
 
         val map = asBase.toFlutterMap()
 
-        assertThat(map["type"]).isEqualTo("manual_play_cancel")
+        assertThat(map["type"]).isEqualTo("manualPlayCancel")
         assertThat(map["transactionId"]).isEqualTo("txn_cancel_via_base")
-        assertThat(map).doesNotContainKey("expiresAtIso")
+        assertThat(map).doesNotContainKey("expiresAt")
     }
 
     // ---------------------------------------------------------------------

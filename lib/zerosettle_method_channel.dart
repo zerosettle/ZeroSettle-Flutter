@@ -42,6 +42,10 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   final isUcbEnabledEventChannel =
       const EventChannel('zerosettle/is_ucb_enabled_updates');
 
+  @visibleForTesting
+  final pendingActionsEventChannel =
+      const EventChannel('zerosettle/pending_actions_updates');
+
   // -- Configuration --
 
   @override
@@ -709,5 +713,33 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   @override
   Future<void> releasePendingCheckout() async {
     await methodChannel.invokeMethod<void>('releasePendingCheckout');
+  }
+
+  // -- Task 5: Pending Actions (Android only) --
+
+  @override
+  Future<List<Map<String, dynamic>>> getPendingActions() async {
+    final result = await methodChannel.invokeMethod<List>('getPendingActions');
+    if (result == null) return const [];
+    return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Stream<List<Map<String, dynamic>>>? _pendingActionsUpdatesStream;
+
+  @override
+  Stream<List<Map<String, dynamic>>> get pendingActionsUpdates {
+    _pendingActionsUpdatesStream ??= pendingActionsEventChannel
+        .receiveBroadcastStream()
+        .map((event) => (event as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList());
+    return _pendingActionsUpdatesStream!;
+  }
+
+  @override
+  Future<void> dismissPendingAction({required String transactionId}) async {
+    await methodChannel.invokeMethod<void>('dismissPendingAction', {
+      'transactionId': transactionId,
+    });
   }
 }

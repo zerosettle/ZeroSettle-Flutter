@@ -550,6 +550,23 @@ class MockZeroSettlePlatform
   Future<void> releasePendingCheckout() async {
     _record('releasePendingCheckout');
   }
+
+  // ---- Task 5: Pending Actions ----
+
+  @override
+  Future<List<Map<String, dynamic>>> getPendingActions() async {
+    _record('getPendingActions');
+    return [{'type': 'migrationCompletedInfo', 'transactionId': 'txn_1', 'userMessage': 'msg'}];
+  }
+
+  @override
+  Stream<List<Map<String, dynamic>>> get pendingActionsUpdates =>
+      Stream.value([{'type': 'migrationCompletedInfo', 'transactionId': 'txn_1', 'userMessage': 'msg'}]);
+
+  @override
+  Future<void> dismissPendingAction({required String transactionId}) async {
+    _record('dismissPendingAction', {'transactionId': transactionId});
+  }
 }
 
 // -- Sample Data Helpers --
@@ -1196,6 +1213,24 @@ void main() {
     test('releasePendingCheckout delegates to the platform', () async {
       await ZeroSettle.instance.releasePendingCheckout();
       expect(mockPlatform.calls.last['method'], 'releasePendingCheckout');
+    });
+
+    // ==== Task 5: Pending Actions ====
+
+    test('getPendingActions decodes PendingAction list', () async {
+      final list = await ZeroSettle.instance.getPendingActions();
+      expect(list.single, isA<PendingActionMigrationCompletedInfo>());
+    });
+
+    test('pendingActionsUpdates decodes the stream', () async {
+      final first = await ZeroSettle.instance.pendingActionsUpdates.first;
+      expect(first.single.transactionId, 'txn_1');
+    });
+
+    test('dismissPendingAction passes the transactionId', () async {
+      await ZeroSettle.instance.dismissPendingAction(transactionId: 'txn_1');
+      expect(mockPlatform.calls.last['method'], 'dismissPendingAction');
+      expect(mockPlatform.calls.last['transactionId'], 'txn_1');
     });
   });
 }

@@ -183,6 +183,17 @@ void main() {
           // Task 3
           case 'releasePendingCheckout':
             return null;
+          // Task 5
+          case 'getPendingActions':
+            return [
+              {
+                'type': 'migrationCompletedInfo',
+                'transactionId': 'txn_1',
+                'userMessage': 'msg',
+              },
+            ];
+          case 'dismissPendingAction':
+            return null;
           default:
             return null;
         }
@@ -805,5 +816,48 @@ void main() {
     await platform.releasePendingCheckout();
     final call = channelCalls.firstWhere((c) => c.method == 'releasePendingCheckout');
     expect(call.arguments, isNull);
+  });
+
+  // ==== Task 5: Pending Actions ====
+
+  test('getPendingActions invokes the channel and returns map list', () async {
+    final result = await platform.getPendingActions();
+    expect(result, hasLength(1));
+    expect(result.first['type'], 'migrationCompletedInfo');
+    expect(result.first['transactionId'], 'txn_1');
+    final call = channelCalls.firstWhere((c) => c.method == 'getPendingActions');
+    expect(call.arguments, isNull);
+  });
+
+  test('dismissPendingAction channel call carries transactionId', () async {
+    await platform.dismissPendingAction(transactionId: 'txn_1');
+    final call = channelCalls.firstWhere((c) => c.method == 'dismissPendingAction');
+    expect((call.arguments as Map)['transactionId'], 'txn_1');
+  });
+
+  test('pendingActionsUpdates EventChannel decodes list of action maps', () async {
+    const channelName = 'zerosettle/pending_actions_updates';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final emissions = <List<Map<String, dynamic>>>[];
+    final sub = platform.pendingActionsUpdates.listen(emissions.add);
+
+    await Future<void>.delayed(Duration.zero);
+    final codec = const StandardMethodCodec();
+    final payload = <Map<String, Object?>>[
+      {
+        'type': 'migrationCompletedInfo',
+        'transactionId': 'txn_1',
+        'userMessage': 'msg',
+      },
+    ];
+    final data = codec.encodeSuccessEnvelope(payload);
+    await messenger.handlePlatformMessage(channelName, data, (_) {});
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+
+    expect(emissions.length, 1);
+    expect(emissions.first.first['type'], 'migrationCompletedInfo');
+    expect(emissions.first.first['transactionId'], 'txn_1');
   });
 }

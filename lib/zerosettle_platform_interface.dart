@@ -485,4 +485,23 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Future<void> releasePendingCheckout() {
     throw UnimplementedError('releasePendingCheckout() has not been implemented.');
   }
+
+  // -- Task 5: Pending Actions (Android only) --
+
+  /// Returns the current list of pending actions as raw maps. Android only;
+  /// iOS always returns an empty list.
+  Future<List<Map<String, dynamic>>> getPendingActions() {
+    throw UnimplementedError('getPendingActions() has not been implemented.');
+  }
+
+  /// Stream of pending-action list snapshots. Emits whenever the SDK's
+  /// `pendingActions` StateFlow mutates. iOS always emits an empty list once.
+  Stream<List<Map<String, dynamic>>> get pendingActionsUpdates {
+    throw UnimplementedError('pendingActionsUpdates has not been implemented.');
+  }
+
+  /// Dismiss a pending action identified by [transactionId]. No-op on iOS.
+  Future<void> dismissPendingAction({required String transactionId}) {
+    throw UnimplementedError('dismissPendingAction() has not been implemented.');
+  }
 }

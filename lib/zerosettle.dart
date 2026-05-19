@@ -13,6 +13,7 @@ import 'models/cancel_flow.dart';
 import 'models/upgrade_offer.dart';
 import 'models/identity.dart';
 import 'models/pending_claim.dart';
+import 'models/pending_action.dart';
 import 'managers/migration_manager.dart';
 import 'managers/offer_manager.dart';
 
@@ -621,6 +622,30 @@ class ZeroSettle {
   /// Cancels an in-flight web checkout. No-op on iOS.
   Future<void> releasePendingCheckout() =>
       _wrap(() => _platform.releasePendingCheckout());
+
+  // -- Pending Actions (Android only) --
+
+  /// Returns the current list of backend-driven pending actions. Android only;
+  /// iOS always returns an empty list.
+  Future<List<PendingAction>> getPendingActions() {
+    return _wrap(() async {
+      final maps = await _platform.getPendingActions();
+      return maps.map(PendingAction.fromMap).toList();
+    });
+  }
+
+  /// Reactive stream of pending-action list snapshots. Emits whenever the
+  /// SDK's `pendingActions` StateFlow mutates on Android. iOS emits `[]`
+  /// once on subscribe and never again.
+  Stream<List<PendingAction>> get pendingActionsUpdates {
+    return _platform.pendingActionsUpdates.map(
+      (maps) => maps.map(PendingAction.fromMap).toList(),
+    );
+  }
+
+  /// Dismiss a pending action by [transactionId]. No-op on iOS.
+  Future<void> dismissPendingAction({required String transactionId}) =>
+      _wrap(() => _platform.dismissPendingAction(transactionId: transactionId));
 
   // -- Cancel Flow --
 

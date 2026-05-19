@@ -69,6 +69,8 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private var isBootstrappedEventChannel: FlutterEventChannel?
     // UCB — always-false stub channel (UCB is Android/Play only).
     private var isUcbEnabledEventChannel: FlutterEventChannel?
+    // Pending Actions — Android/Play only; iOS emits [] once on subscribe.
+    private var pendingActionsEventChannel: FlutterEventChannel?
 
     /// Captured at `register(with:)` time so per-handle channels (built on
     /// demand inside `installMigrationHandle`) can attach without re-routing
@@ -95,6 +97,8 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private let isBootstrappedStreamHandler = ReactiveStateStreamHandler()
     // UCB — one-shot false stub (UCB is Android/Play only; iOS emits false on subscribe).
     private let isUcbEnabledStreamHandler = OneShotBoolStreamHandler(value: false)
+    // Pending Actions — one-shot empty-list stub (Android/Play only; iOS emits [] on subscribe).
+    private let pendingActionsStreamHandler = OneShotEmptyListStreamHandler()
 
     /// Combine subscription that fires on `ZeroSettle.shared.objectWillChange`
     /// to mirror the three Observable-backed state properties (`products`,
@@ -183,6 +187,11 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         let isUcbEnabledEC = FlutterEventChannel(name: "zerosettle/is_ucb_enabled_updates", binaryMessenger: registrar.messenger())
         isUcbEnabledEC.setStreamHandler(instance.isUcbEnabledStreamHandler)
         instance.isUcbEnabledEventChannel = isUcbEnabledEC
+
+        // Pending Actions — one-shot empty-list stub (Android/Play only).
+        let pendingActionsEC = FlutterEventChannel(name: "zerosettle/pending_actions_updates", binaryMessenger: registrar.messenger())
+        pendingActionsEC.setStreamHandler(instance.pendingActionsStreamHandler)
+        instance.pendingActionsEventChannel = pendingActionsEC
 
         // Gap 5 — push initial state to late subscribers via onListenStarted,
         // matching the pendingClaims pattern. `products` / `pendingCheckout` /
@@ -1110,6 +1119,17 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             // iOS has no equivalent — no-op that returns success.
             result(nil)
 
+        // -- Pending Actions (Android only) --
+        // Pending actions are a Play/Android concept. iOS always returns an
+        // empty list and no-ops dismiss so Dart callers don't need to gate
+        // on Platform.isAndroid at the call site.
+
+        case "getPendingActions":
+            result([String]())
+
+        case "dismissPendingAction":
+            result(nil)
+
         // -- Migration Manager (Headless) --
 
         case "resolveMigrationManagerHandle":
@@ -1633,6 +1653,22 @@ private class OneShotBoolStreamHandler: NSObject, FlutterStreamHandler {
 
     func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
         events(value)
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        return nil
+    }
+}
+
+/// One-shot [FlutterStreamHandler] that emits an empty array when Dart
+/// subscribes, then does nothing further. Used to stub Android-only
+/// `pendingActionsUpdates` on iOS — callers get a deterministic `[]`
+/// instead of a stream that never emits, which would leave Dart in an
+/// indefinitely pending state. Analogous to [OneShotBoolStreamHandler].
+private class OneShotEmptyListStreamHandler: NSObject, FlutterStreamHandler {
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        events([[String: Any]]())
         return nil
     }
 
