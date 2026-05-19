@@ -1901,7 +1901,7 @@ private extension UserOffer.OfferData {
     }
 }
 
-extension UserOffer.Response {
+private extension UserOffer.Response {
     /// Encodes the response for the `fetchUserOffer` Flutter wire. Keys match
     /// Dart's `UserOfferResponse.fromMap` in `lib/models/user_offer.dart`.
     func toFlutterUserOfferMap() -> [String: Any] {
