@@ -141,6 +141,10 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
         when (call.method) {
             "getSdkVersion" -> result.success(ZeroSettle.sdkVersion)
             "getIsUcbEnabled" -> result.success(ZeroSettle.isUcbEnabled.value)
+            "releasePendingCheckout" -> {
+                ZeroSettle.releasePendingCheckout()
+                result.success(null)
+            }
             "handleUniversalLink" -> handleUniversalLink(result)
             "getRemoteConfig" -> result.success(null)
             "getDetectedJurisdiction" -> result.success(null)

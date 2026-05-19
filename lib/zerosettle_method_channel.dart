@@ -703,4 +703,11 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
         .map((event) => event as bool);
     return _isUcbEnabledUpdatesStream!;
   }
+
+  // -- Task 3: releasePendingCheckout --
+
+  @override
+  Future<void> releasePendingCheckout() async {
+    await methodChannel.invokeMethod<void>('releasePendingCheckout');
+  }
 }

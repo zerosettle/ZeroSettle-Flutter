@@ -1106,6 +1106,10 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         case "getIsUcbEnabled":
             result(false)
 
+        case "releasePendingCheckout":
+            // iOS has no equivalent — no-op that returns success.
+            result(nil)
+
         // -- Migration Manager (Headless) --
 
         case "resolveMigrationManagerHandle":

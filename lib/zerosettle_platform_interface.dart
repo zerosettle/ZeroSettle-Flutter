@@ -478,4 +478,11 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
       'applePayStateUpdates has not been implemented.',
     );
   }
+
+  // -- Task 3: releasePendingCheckout --
+
+  /// Cancels an in-flight web checkout. No-op on iOS.
+  Future<void> releasePendingCheckout() {
+    throw UnimplementedError('releasePendingCheckout() has not been implemented.');
+  }
 }

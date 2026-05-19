@@ -543,6 +543,13 @@ class MockZeroSettlePlatform
     });
     return offerManagerHandleReturn;
   }
+
+  // ---- Task 3: releasePendingCheckout ----
+
+  @override
+  Future<void> releasePendingCheckout() async {
+    _record('releasePendingCheckout');
+  }
 }
 
 // -- Sample Data Helpers --
@@ -1182,6 +1189,13 @@ void main() {
 
     test('isUcbEnabledUpdates forwards platform emissions', () async {
       expect(await ZeroSettle.instance.isUcbEnabledUpdates.toList(), [false, true]);
+    });
+
+    // ==== Task 3: releasePendingCheckout ====
+
+    test('releasePendingCheckout delegates to the platform', () async {
+      await ZeroSettle.instance.releasePendingCheckout();
+      expect(mockPlatform.calls.last['method'], 'releasePendingCheckout');
     });
   });
 }

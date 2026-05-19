@@ -180,6 +180,9 @@ void main() {
           // UCB
           case 'getIsUcbEnabled':
             return true;
+          // Task 3
+          case 'releasePendingCheckout':
+            return null;
           default:
             return null;
         }
@@ -794,5 +797,13 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     await sub.cancel();
     expect(emissions, [true, false]);
+  });
+
+  // ==== Task 3: releasePendingCheckout ====
+
+  test('releasePendingCheckout invokes the channel with no arguments', () async {
+    await platform.releasePendingCheckout();
+    final call = channelCalls.firstWhere((c) => c.method == 'releasePendingCheckout');
+    expect(call.arguments, isNull);
   });
 }
