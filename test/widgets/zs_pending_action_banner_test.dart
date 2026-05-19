@@ -6,12 +6,8 @@ import 'package:zerosettle/zerosettle.dart';
 void main() {
   testWidgets('renders SizedBox.shrink on unsupported platforms', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-    await tester.pumpWidget(MaterialApp(
-      home: ZeroSettlePendingActionBanner(
-        action: const PendingActionManualPlayCancel(
-          transactionId: 't', userMessage: 'm',
-          originalPlayPurchaseToken: 'tok', deepLink: 'https://x'),
-      ),
+    await tester.pumpWidget(const MaterialApp(
+      home: ZeroSettlePendingActionBanner(),
     ));
     expect(find.byType(SizedBox), findsWidgets);
     debugDefaultTargetPlatformOverride = null;

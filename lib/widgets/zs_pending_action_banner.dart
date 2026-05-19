@@ -2,51 +2,38 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models/pending_action.dart';
-
-/// Embeds the native `ZeroSettlePendingActionBanner` Composable inside a
-/// Flutter widget tree via `AndroidView(viewType:
-/// "com.zerosettle/pending_action_banner")`.
+/// A zero-config mount point for the native ZeroSettle pending-action banner.
 ///
-/// **Android-only.** The native view subscribes to
-/// `ZeroSettle.pendingActions` (a Kotlin StateFlow) internally — it renders
-/// the first pending action automatically and collapses when the list is
-/// empty. No Dart-side state polling is needed; drop this widget into the
-/// tree and it reacts to backend-driven action updates on its own.
+/// **Android-only.** Embeds the native `ZeroSettlePendingActionBanner`
+/// Composable via `AndroidView(viewType:
+/// "com.zerosettle/pending_action_banner")`. The native view subscribes to
+/// the SDK's `ZeroSettle.pendingActions` stream (a Kotlin StateFlow)
+/// internally: it renders the current top pending action automatically and
+/// self-manages visibility — collapsing to nothing when there are no
+/// pending actions. No Dart-side state, parameters, or polling are needed;
+/// the widget takes no arguments because the native side is the single
+/// source of truth.
 ///
-/// The [action] parameter is accepted for forward-compatibility and API
-/// symmetry with other ZeroSettle widgets, but the Android factory does not
-/// read `creationParams` — it resolves the action from the SDK's shared
-/// `pendingActions` StateFlow. This is intentional: driving the view from a
-/// Dart-side snapshot would force callers to keep the two sides in sync,
-/// which is exactly what the unified-flow architecture avoids.
+/// Mount it once near the app root (e.g. wrapped around your home scaffold's
+/// body). It stays invisible until the backend surfaces a pending action,
+/// then appears in place; when the action is dismissed or resolved it
+/// collapses again.
 ///
-/// iOS renders `SizedBox.shrink()`. The pending-actions feature is
-/// Android-only; no iOS PlatformView factory exists.
+/// iOS (and every other non-Android platform) renders `SizedBox.shrink()` —
+/// the pending-actions feature is Android-only and no iOS PlatformView
+/// factory exists.
 ///
 /// Example:
 /// ```dart
-/// // In your widget tree, after ZeroSettle.instance.identify() completes:
-/// StreamBuilder<List<PendingAction>>(
-///   stream: ZeroSettle.instance.pendingActionsUpdates,
-///   builder: (context, snapshot) {
-///     final actions = snapshot.data ?? [];
-///     if (actions.isEmpty) return const SizedBox.shrink();
-///     return ZeroSettlePendingActionBanner(action: actions.first);
-///   },
+/// Column(
+///   children: [
+///     const ZeroSettlePendingActionBanner(),
+///     Expanded(child: MyAppContent()),
+///   ],
 /// )
 /// ```
 class ZeroSettlePendingActionBanner extends StatefulWidget {
-  /// The pending action to display. The Android factory resolves the action
-  /// from the SDK's shared `pendingActions` StateFlow, so this field is
-  /// accepted for API completeness only and is not encoded into
-  /// `creationParams`.
-  final PendingAction action;
-
-  const ZeroSettlePendingActionBanner({
-    super.key,
-    required this.action,
-  });
+  const ZeroSettlePendingActionBanner({super.key});
 
   @override
   State<ZeroSettlePendingActionBanner> createState() =>
