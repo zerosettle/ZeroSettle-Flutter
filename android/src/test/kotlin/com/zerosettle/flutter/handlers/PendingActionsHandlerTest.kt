@@ -37,7 +37,7 @@ import org.robolectric.RobolectricTestRunner
  *     `playAccessEndsAt`, `manualPlayCancel`, `expiresAt`).
  *   - `dismissPendingAction` happy path → `success(null)` via the String overload.
  *   - `dismissPendingAction` SDK failure → `error("sdk_error", ...)`.
- *   - `dismissPendingAction` missing transactionId arg → `error("invalid_args", ...)`.
+ *   - `dismissPendingAction` missing transactionId arg → `error("INVALID_ARGUMENTS", ...)`.
  *   - Unknown method → `handle` returns false (fall-through to next handler).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -195,23 +195,23 @@ class PendingActionsHandlerTest {
     }
 
     @Test
-    fun `dismissPendingAction missing transactionId returns invalid_args`() {
+    fun `dismissPendingAction missing transactionId returns INVALID_ARGUMENTS`() {
         val result = newResult()
 
         // No transactionId in args map.
         handler.handle(call("dismissPendingAction", emptyMap<String, Any?>()), result)
 
-        verify { result.error(eq("invalid_args"), any(), null) }
+        verify { result.error(eq("INVALID_ARGUMENTS"), any(), null) }
         verify(exactly = 0) { result.success(any()) }
     }
 
     @Test
-    fun `dismissPendingAction null args returns invalid_args`() {
+    fun `dismissPendingAction null args returns INVALID_ARGUMENTS`() {
         val result = newResult()
 
         handler.handle(call("dismissPendingAction", null), result)
 
-        verify { result.error(eq("invalid_args"), any(), null) }
+        verify { result.error(eq("INVALID_ARGUMENTS"), any(), null) }
         verify(exactly = 0) { result.success(any()) }
     }
 }

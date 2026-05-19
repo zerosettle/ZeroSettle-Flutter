@@ -61,7 +61,7 @@ internal class PendingActionsHandler(private val deps: HandlerDependencies) {
     private fun dismissPendingAction(call: MethodCall, result: MethodChannel.Result) {
         val transactionId = call.argument<String>("transactionId")
         if (transactionId == null) {
-            result.error("invalid_args", "dismissPendingAction requires a transactionId", null)
+            result.error("INVALID_ARGUMENTS", "dismissPendingAction requires a transactionId", null)
             return
         }
         deps.scope.launch {
