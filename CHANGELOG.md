@@ -1,3 +1,55 @@
+## 1.5.0
+
+### `ZeroSettle.instance.events` — SDK analytics/lifecycle stream
+
+A new `Stream<ZeroSettleEvent>` is available at `ZeroSettle.instance.events`. Subscribe to receive discrete analytics and lifecycle events from the SDK without polling entitlements or wiring delegate callbacks.
+
+```dart
+ZeroSettle.instance.events.listen((event) {
+  switch (event) {
+    case ZSEventPurchaseSucceeded(:final productId, :final transactionId):
+      analytics.track('purchase', {
+        'product': productId,
+        'transaction': transactionId,
+      });
+    case ZSEventEntitlementsRefreshed(:final count):
+      print('$count active entitlements');
+    case ZSEventSyncFailed(:final terminal):
+      if (terminal) notifyUser('Sync failed — please restore purchases.');
+    default:
+      break;
+  }
+});
+```
+
+**Event variants**
+
+| Type | Fields | Platforms |
+|---|---|---|
+| `ZSEventPurchaseSucceeded` | `productId`, `transactionId` | Android + iOS |
+| `ZSEventPurchaseFailed` | `productId`, `reason` | Android + iOS |
+| `ZSEventEntitlementsRefreshed` | `count` (active-only) | Android + iOS |
+| `ZSEventSyncFailed` | `purchaseToken`, `attempts`, `terminal` | Android (full); iOS (degraded: `purchaseToken=""`, `attempts=1`) |
+| `ZSEventOfferShown` | `productId` | Android only |
+| `ZSEventOfferAccepted` | `productId` | Android only |
+| `ZSEventOfferDismissed` | `productId` | Android only |
+| `ZSEventOfferEvaluationFailed` | `reason` | Android only |
+| `ZSEventMigrationCompleted` | `productId` | Android only |
+| `ZSEventPendingActionShown` | `actionType` | Android only |
+| `ZSEventUnknown` | `type` (raw string) | Both (forward-compat fallback) |
+
+Unknown event types decode to `ZSEventUnknown` rather than throwing, so apps built against an older SDK version remain compatible when new variants are introduced.
+
+**Android:** backs directly off `ZeroSettle.events` (`SharedFlow<ZeroSettleEvent>`). All 10 variants are emitted natively.
+
+**iOS:** backs off the `ZeroSettleDelegate` callbacks available in ZeroSettleKit. Events that have no delegate equivalent (`offerShown`, `offerAccepted`, `offerDismissed`, `offerEvaluationFailed`, `migrationCompleted`, `pendingActionShown`) are absent on iOS — they have no callback surface in the iOS SDK. iOS apps should observe offer-lifecycle events via `OfferManager.stateUpdates` instead.
+
+### Android: `ZeroSettleMigrationManagerStatics` no longer throws `NotImplementedError`
+
+The `zerosettle/migration_manager_static` MethodChannel is now wired on Android. Dart's deprecated `ZeroSettleMigrationManagerStatics.isPermanentlyDismissed` and `setDismissed` now resolve against the same `OfferDismissalStore` as `ZeroSettleOfferManagerStatics`. `resetDismissedState` is a deliberate no-op on Android (calling it would conflate the two iOS-distinct stores).
+
+This is an internal fix — the `MigrationManager` Dart class is deprecated in favour of `OfferManager`. Existing apps using `ZeroSettleMigrationManagerStatics` calls will no longer crash on Android.
+
 ## 1.4.0
 
 Tracks ZeroSettleKit 1.3.6. Two headline changes plus a Kit-level bug fix:
