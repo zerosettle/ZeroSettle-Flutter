@@ -1,4 +1,4 @@
-## 1.5.0
+## Unreleased
 
 ### `ZeroSettle.instance.events` — SDK analytics/lifecycle stream
 
