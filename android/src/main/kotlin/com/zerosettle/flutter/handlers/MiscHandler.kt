@@ -140,6 +140,10 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
             "getSdkVersion" -> result.success(ZeroSettle.sdkVersion)
+            // UCB: `ZeroSettle.isUcbEnabled` is not yet in the published SDK
+            // (1.0.0). Return false until the SDK exposes the property.
+            // TODO: replace with `ZeroSettle.isUcbEnabled.value` once SDK >= 1.1.0.
+            "getIsUcbEnabled" -> result.success(false)
             "handleUniversalLink" -> handleUniversalLink(result)
             "getRemoteConfig" -> result.success(null)
             "getDetectedJurisdiction" -> result.success(null)

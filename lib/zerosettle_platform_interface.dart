@@ -430,6 +430,20 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     );
   }
 
+  // -- UCB (User Choice Billing) --
+
+  /// Whether User Choice Billing is currently active for this tenant/market.
+  /// Always `false` on iOS (UCB is an Android/Play concept).
+  Future<bool> getIsUcbEnabled() {
+    throw UnimplementedError('getIsUcbEnabled() has not been implemented.');
+  }
+
+  /// Reactive [getIsUcbEnabled]. Emits `false` once on iOS (UCB is
+  /// Android/Play only).
+  Stream<bool> get isUcbEnabledUpdates {
+    throw UnimplementedError('isUcbEnabledUpdates has not been implemented.');
+  }
+
   // -- Apple Pay (1.3.2) --
 
   /// Launches the system Wallet setup flow so the user can add a card for

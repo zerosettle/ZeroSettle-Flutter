@@ -124,6 +124,7 @@ class MiscHandlerTest {
             "trackMigrationConversion" to mapOf("userId" to "u"),
             "resetMigrateTipState" to null,
             "fetchTransactionHistory" to mapOf("userId" to "u"),
+            "getIsUcbEnabled" to null,
         ).forEach { (method, args) ->
             val consumed = handler.handle(call(method, args), newResult())
             assertThat(consumed).isTrue()
@@ -416,5 +417,18 @@ class MiscHandlerTest {
         handler.handle(call("fetchTransactionHistory"), result)
         verify { result.error(eq("user_not_identified"), any(), any()) }
         verify(exactly = 0) { result.success(any()) }
+    }
+
+    // ─── getIsUcbEnabled — UCB stub → success(false) ────────────────────
+
+    @Test
+    fun `getIsUcbEnabled returns success(false) — UCB not yet in SDK 1_0_0`() {
+        // UCB (User Choice Billing) is Android/Play-specific. The published
+        // SDK 1.0.0 does not yet expose `ZeroSettle.isUcbEnabled`; the
+        // handler stubs `false` until the SDK jar ships the property.
+        val result = newResult()
+        val consumed = handler.handle(call("getIsUcbEnabled"), result)
+        assertThat(consumed).isTrue()
+        verify { result.success(false) }
     }
 }

@@ -504,6 +504,18 @@ class MockZeroSettlePlatform
   Stream<String> get applePayStateUpdates =>
       Stream.fromIterable(applePayStateUpdatesValues);
 
+  // ---- UCB (User Choice Billing) ----
+
+  @override
+  Future<bool> getIsUcbEnabled() async {
+    _record('getIsUcbEnabled');
+    return true;
+  }
+
+  @override
+  Stream<bool> get isUcbEnabledUpdates =>
+      Stream.fromIterable([false, true]);
+
   // ---- Headless Migration Manager ----
 
   String migrationManagerHandleReturn = 'handle_test_42';
@@ -1160,6 +1172,16 @@ void main() {
         ApplePayAvailabilityState.setupRequired,
         ApplePayAvailabilityState.unavailable,
       ]);
+    });
+
+    // ==== Task 2: isUcbEnabled ====
+
+    test('getIsUcbEnabled returns the platform value', () async {
+      expect(await ZeroSettle.instance.getIsUcbEnabled(), true);
+    });
+
+    test('isUcbEnabledUpdates forwards platform emissions', () async {
+      expect(await ZeroSettle.instance.isUcbEnabledUpdates.toList(), [false, true]);
     });
   });
 }

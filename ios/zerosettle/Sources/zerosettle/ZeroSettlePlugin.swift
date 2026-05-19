@@ -67,6 +67,8 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private var currentUserIdEventChannel: FlutterEventChannel?
     private var pendingCheckoutEventChannel: FlutterEventChannel?
     private var isBootstrappedEventChannel: FlutterEventChannel?
+    // UCB — always-false stub channel (UCB is Android/Play only).
+    private var isUcbEnabledEventChannel: FlutterEventChannel?
 
     /// Captured at `register(with:)` time so per-handle channels (built on
     /// demand inside `installMigrationHandle`) can attach without re-routing
@@ -91,6 +93,8 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private let currentUserIdStreamHandler = ReactiveStateStreamHandler()
     private let pendingCheckoutStreamHandler = ReactiveStateStreamHandler()
     private let isBootstrappedStreamHandler = ReactiveStateStreamHandler()
+    // UCB — one-shot false stub (UCB is Android/Play only; iOS emits false on subscribe).
+    private let isUcbEnabledStreamHandler = OneShotBoolStreamHandler(value: false)
 
     /// Combine subscription that fires on `ZeroSettle.shared.objectWillChange`
     /// to mirror the three Observable-backed state properties (`products`,
@@ -174,6 +178,11 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         let isBootstrappedEC = FlutterEventChannel(name: "zerosettle/is_bootstrapped_updates", binaryMessenger: registrar.messenger())
         isBootstrappedEC.setStreamHandler(instance.isBootstrappedStreamHandler)
         instance.isBootstrappedEventChannel = isBootstrappedEC
+
+        // UCB — one-shot false stub (UCB is Android/Play only).
+        let isUcbEnabledEC = FlutterEventChannel(name: "zerosettle/is_ucb_enabled_updates", binaryMessenger: registrar.messenger())
+        isUcbEnabledEC.setStreamHandler(instance.isUcbEnabledStreamHandler)
+        instance.isUcbEnabledEventChannel = isUcbEnabledEC
 
         // Gap 5 — push initial state to late subscribers via onListenStarted,
         // matching the pendingClaims pattern. `products` / `pendingCheckout` /
@@ -1091,6 +1100,12 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         case "getApplePayState":
             result(ZeroSettle.shared.applePayAvailability.state.rawString)
 
+        // -- UCB (User Choice Billing) --
+        // UCB is an Android/Play concept; always false on iOS.
+
+        case "getIsUcbEnabled":
+            result(false)
+
         // -- Migration Manager (Headless) --
 
         case "resolveMigrationManagerHandle":
@@ -1598,6 +1613,27 @@ private class ApplePayStateStreamHandler: NSObject, FlutterStreamHandler {
         DispatchQueue.main.async { [weak self] in
             self?.eventSink?(data)
         }
+    }
+}
+
+/// One-shot [FlutterStreamHandler] that emits a single Bool value when Dart
+/// subscribes, then does nothing further. Used to stub Android-only channels
+/// on iOS — callers get a deterministic `false` instead of a stream that
+/// never emits, which would leave Dart in an indefinitely pending state.
+private class OneShotBoolStreamHandler: NSObject, FlutterStreamHandler {
+    private let value: Bool
+
+    init(value: Bool) {
+        self.value = value
+    }
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        events(value)
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        return nil
     }
 }
 

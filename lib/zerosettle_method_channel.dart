@@ -38,6 +38,10 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   final isBootstrappedEventChannel =
       const EventChannel('zerosettle/is_bootstrapped_updates');
 
+  @visibleForTesting
+  final isUcbEnabledEventChannel =
+      const EventChannel('zerosettle/is_ucb_enabled_updates');
+
   // -- Configuration --
 
   @override
@@ -680,5 +684,23 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     _applePayStateUpdatesStream ??=
         applePayStateEventChannel.receiveBroadcastStream().map((e) => e as String);
     return _applePayStateUpdatesStream!;
+  }
+
+  // -- UCB (User Choice Billing) --
+
+  @override
+  Future<bool> getIsUcbEnabled() async {
+    final v = await methodChannel.invokeMethod<bool>('getIsUcbEnabled');
+    return v ?? false;
+  }
+
+  Stream<bool>? _isUcbEnabledUpdatesStream;
+
+  @override
+  Stream<bool> get isUcbEnabledUpdates {
+    _isUcbEnabledUpdatesStream ??= isUcbEnabledEventChannel
+        .receiveBroadcastStream()
+        .map((event) => event as bool);
+    return _isUcbEnabledUpdatesStream!;
   }
 }

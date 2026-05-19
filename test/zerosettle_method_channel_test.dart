@@ -177,6 +177,9 @@ void main() {
             return true;
           case 'getApplePayState':
             return 'setupRequired';
+          // UCB
+          case 'getIsUcbEnabled':
+            return true;
           default:
             return null;
         }
@@ -763,5 +766,33 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     await sub.cancel();
     expect(emissions, [false, true]);
+  });
+
+  // ==== Task 2: isUcbEnabled ====
+
+  test('getIsUcbEnabled invokes the channel and returns the stubbed value', () async {
+    final result = await platform.getIsUcbEnabled();
+    expect(result, isTrue);
+    final call = channelCalls.firstWhere((c) => c.method == 'getIsUcbEnabled');
+    expect(call.arguments, isNull);
+  });
+
+  test('isUcbEnabledUpdates EventChannel forwards bool events', () async {
+    const channelName = 'zerosettle/is_ucb_enabled_updates';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final emissions = <bool>[];
+    final sub = platform.isUcbEnabledUpdates.listen(emissions.add);
+
+    // Allow listener to register, then emit two values via the EventChannel.
+    await Future<void>.delayed(Duration.zero);
+    final codec = const StandardMethodCodec();
+    for (final raw in [true, false]) {
+      final data = codec.encodeSuccessEnvelope(raw);
+      await messenger.handlePlatformMessage(channelName, data, (_) {});
+    }
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+    expect(emissions, [true, false]);
   });
 }

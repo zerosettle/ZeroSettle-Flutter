@@ -162,6 +162,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var checkoutEventChannel: EventChannel
     private lateinit var pendingClaimsEventChannel: EventChannel
     private lateinit var applePayStateEventChannel: EventChannel
+    private lateinit var isUcbEnabledEventChannel: EventChannel
 
     /**
      * Reactive state channels (Gap 5). Each one mirrors a public SDK
@@ -197,6 +198,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     internal val checkoutStreamHandler = BufferedStreamHandler(replayLatest = false)
     internal val pendingClaimsStreamHandler = BufferedStreamHandler(replayLatest = true)
     internal val applePayStateStreamHandler = BufferedStreamHandler(replayLatest = true)
+    internal val isUcbEnabledStreamHandler = BufferedStreamHandler(replayLatest = true)
 
     /**
      * Reactive state channels (Gap 5). All four mirror SDK StateFlows
@@ -244,6 +246,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     @Volatile private var currentUserIdPumpJob: Job? = null
     @Volatile private var pendingCheckoutPumpJob: Job? = null
     @Volatile private var isBootstrappedPumpJob: Job? = null
+
+    /** UCB — pump for `is_ucb_enabled_updates`. */
+    @Volatile private var isUcbEnabledPumpJob: Job? = null
 
     /**
      * F8 identity/lifecycle handler. Owns the 9 lifecycle methods Dart
@@ -390,6 +395,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         isBootstrappedEventChannel = EventChannel(messenger, "zerosettle/is_bootstrapped_updates").apply {
             setStreamHandler(isBootstrappedStreamHandler)
         }
+        isUcbEnabledEventChannel = EventChannel(messenger, "zerosettle/is_ucb_enabled_updates").apply {
+            setStreamHandler(isUcbEnabledStreamHandler)
+        }
 
         // F8 identity/lifecycle handler. Build the shared HandlerDependencies
         // bundle here so F9-F17 can adopt the same plumbing without each
@@ -487,6 +495,13 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             ZeroSettle.isBootstrapped,
             isBootstrappedStreamHandler,
         ) { it }
+        // UCB — `ZeroSettle.isUcbEnabled` is not yet in the published SDK
+        // (1.0.0). The stream handler is registered above so Dart's
+        // EventChannel.receiveBroadcastStream() doesn't throw a
+        // MissingPluginException. The handler emits nothing until the SDK
+        // exposes the StateFlow; the method path (getIsUcbEnabled) reads
+        // the value synchronously via MiscHandler.
+        // TODO: wire isUcbEnabledPumpJob once SDK >= 1.1.0 publishes isUcbEnabled.
 
         Log.i(
             "ZeroSettle",
@@ -510,6 +525,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         currentUserIdEventChannel.setStreamHandler(null)
         pendingCheckoutEventChannel.setStreamHandler(null)
         isBootstrappedEventChannel.setStreamHandler(null)
+        isUcbEnabledEventChannel.setStreamHandler(null)
         // F25 + Gap 5 pump jobs — `pluginScope.cancel()` below would tear
         // them down anyway, but explicit cancellation makes ownership
         // obvious.
@@ -519,12 +535,14 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         currentUserIdPumpJob?.cancel()
         pendingCheckoutPumpJob?.cancel()
         isBootstrappedPumpJob?.cancel()
+        isUcbEnabledPumpJob?.cancel()
         entitlementPumpJob = null
         pendingClaimsPumpJob = null
         productsPumpJob = null
         currentUserIdPumpJob = null
         pendingCheckoutPumpJob = null
         isBootstrappedPumpJob = null
+        isUcbEnabledPumpJob = null
         offerManagerRegistry.disposeAll()
         pluginScope.cancel()
         applicationContext = null

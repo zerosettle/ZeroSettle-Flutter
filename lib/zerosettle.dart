@@ -606,6 +606,15 @@ class ZeroSettle {
         .map(ApplePayAvailabilityState.fromRawValue);
   }
 
+  // -- UCB (User Choice Billing) --
+
+  /// Whether User Choice Billing is active for this tenant/market.
+  /// Always `false` on iOS (UCB is an Android/Play concept).
+  Future<bool> getIsUcbEnabled() => _wrap(() => _platform.getIsUcbEnabled());
+
+  /// Reactive [getIsUcbEnabled]. Emits `false` once on iOS.
+  Stream<bool> get isUcbEnabledUpdates => _platform.isUcbEnabledUpdates;
+
   // -- Cancel Flow --
 
   /// Present the cancel flow questionnaire for a subscription cancellation.
