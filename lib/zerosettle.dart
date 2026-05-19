@@ -34,6 +34,7 @@ export 'models/pending_claim.dart';
 export 'models/migration_offer.dart';
 export 'models/offer.dart';
 export 'models/checkout_failure.dart';
+export 'models/pending_action.dart';
 export 'managers/migration_manager.dart' show MigrationManager;
 export 'managers/offer_manager.dart' show OfferManager;
 
