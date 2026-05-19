@@ -183,7 +183,7 @@ class UserOfferAppleSubscription {
 ///
 /// Mirrors `UserOffer.Subscription` on Android.
 class UserOfferSubscription {
-  /// Subscription type descriptor (e.g. `"activeWeb"`, `"activeStoreKit"`, `"none"`).
+  /// Subscription type descriptor (e.g. `"activeWeb"`, `"activeStorekit"`, `"none"`).
   final String type;
 
   /// The ZeroSettle product reference ID of the active subscription.
