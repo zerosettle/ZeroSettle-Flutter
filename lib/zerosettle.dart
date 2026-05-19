@@ -28,6 +28,7 @@ export 'models/remote_config.dart';
 export 'errors/zs_exception.dart';
 export 'widgets/zs_migrate_tip_view.dart';
 export 'widgets/zs_pending_action_banner.dart';
+export 'widgets/zs_offer_tip.dart';
 export 'models/cancel_flow.dart';
 export 'models/upgrade_offer.dart';
 export 'models/funnel_event.dart';
