@@ -567,6 +567,30 @@ class MockZeroSettlePlatform
   Future<void> dismissPendingAction({required String transactionId}) async {
     _record('dismissPendingAction', {'transactionId': transactionId});
   }
+
+  // ---- Task 9: fetchUserOffer ----
+
+  @override
+  Future<Map<String, dynamic>> fetchUserOffer() async {
+    _record('fetchUserOffer');
+    return {
+      'userId': 'u1',
+      'appId': 'a1',
+      'isSandbox': true,
+      'serverTime': '2026-05-19T00:00:00Z',
+      'subscription': {'type': 'activeWeb', 'productId': 'p.month'},
+      'offer': {
+        'actionType': 'migrateStorekitToWeb',
+        'isEligible': true,
+        'checkoutProductId': 'p.month',
+        'savingsPercent': 20,
+        'freeTrialDays': 7,
+        'minSubscriptionDays': 0,
+        'rolloutPercent': 100,
+        'requiresAppleCancel': false,
+      },
+    };
+  }
 }
 
 // -- Sample Data Helpers --
@@ -1231,6 +1255,18 @@ void main() {
       await ZeroSettle.instance.dismissPendingAction(transactionId: 'txn_1');
       expect(mockPlatform.calls.last['method'], 'dismissPendingAction');
       expect(mockPlatform.calls.last['transactionId'], 'txn_1');
+    });
+
+    // ==== Task 9: fetchUserOffer ====
+
+    test('fetchUserOffer decodes the response into UserOfferResponse', () async {
+      final r = await ZeroSettle.instance.fetchUserOffer();
+      expect(r, isA<UserOfferResponse>());
+      expect(r.userId, 'u1');
+      expect(r.isEligible, isTrue);
+      expect(r.offer.actionType, UserOfferActionType.migrateStorekitToWeb);
+      expect(r.subscription.type, 'activeWeb');
+      expect(mockPlatform.calls.last['method'], 'fetchUserOffer');
     });
   });
 }

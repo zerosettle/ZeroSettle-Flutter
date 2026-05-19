@@ -3,6 +3,7 @@ package com.zerosettle.flutter.handlers
 import android.util.Log
 import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.flutter.ext.toFlutterMap
+import com.zerosettle.flutter.ext.toFlutterUserOfferMap
 import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.sdk.models.UserOffer
 import io.flutter.plugin.common.MethodCall
@@ -154,6 +155,7 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
             "trackMigrationConversion" -> trackMigrationConversion(result)
             "resetMigrateTipState" -> result.success(null)
             "fetchTransactionHistory" -> fetchTransactionHistory(result)
+            "fetchUserOffer" -> fetchUserOffer(result)
             else -> return false
         }
         return true
@@ -213,6 +215,28 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
                 onSuccess = { res ->
                     res.fold(
                         onSuccess = { result.success(null) },
+                        onFailure = { result.sendError(it) },
+                    )
+                },
+                onFailure = { result.sendError(it) },
+            )
+        }
+    }
+
+    // ── fetchUserOffer (Task 9) ────────────────────────────────────────
+
+    private fun fetchUserOffer(result: MethodChannel.Result) {
+        // SDK returns Result<UserOffer.Response>; encode via toFlutterUserOfferMap()
+        // so the wire shape matches Dart's UserOfferResponse.fromMap.
+        // UserNotIdentified / NotConfigured / BackendError → sendError.
+        deps.scope.launch {
+            val sdkResult = runCatching { ZeroSettle.fetchUserOffer() }
+            sdkResult.fold(
+                onSuccess = { res ->
+                    res.fold(
+                        onSuccess = { response ->
+                            result.success(response.toFlutterUserOfferMap())
+                        },
                         onFailure = { result.sendError(it) },
                     )
                 },

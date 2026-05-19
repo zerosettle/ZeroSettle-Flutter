@@ -194,6 +194,24 @@ void main() {
             ];
           case 'dismissPendingAction':
             return null;
+          case 'fetchUserOffer':
+            return {
+              'userId': 'u1',
+              'appId': 'a1',
+              'isSandbox': false,
+              'serverTime': '2026-05-19T00:00:00Z',
+              'subscription': {'type': 'activeWeb', 'productId': 'p.month'},
+              'offer': {
+                'actionType': 'migrateStorekitToWeb',
+                'isEligible': true,
+                'checkoutProductId': 'p.month',
+                'savingsPercent': 20,
+                'freeTrialDays': 7,
+                'minSubscriptionDays': 0,
+                'rolloutPercent': 100,
+                'requiresAppleCancel': false,
+              },
+            };
           default:
             return null;
         }
@@ -859,5 +877,20 @@ void main() {
     expect(emissions.length, 1);
     expect(emissions.first.first['type'], 'migrationCompletedInfo');
     expect(emissions.first.first['transactionId'], 'txn_1');
+  });
+
+  // -- Task 9: fetchUserOffer --
+
+  test('fetchUserOffer invokes the channel and returns the decoded map', () async {
+    final result = await platform.fetchUserOffer();
+    final call = channelCalls.firstWhere((c) => c.method == 'fetchUserOffer');
+    expect(call.method, 'fetchUserOffer');
+    // No arguments sent on the wire — uses identified user server-side.
+    expect(call.arguments, isNull);
+    // Top-level fields round-trip through Map<String, dynamic>.from(...)
+    expect(result['userId'], 'u1');
+    expect(result['isSandbox'], false);
+    expect(result['offer']['actionType'], 'migrateStorekitToWeb');
+    expect(result['subscription']['type'], 'activeWeb');
   });
 }

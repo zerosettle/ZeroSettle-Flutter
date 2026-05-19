@@ -14,6 +14,7 @@ import 'models/upgrade_offer.dart';
 import 'models/identity.dart';
 import 'models/pending_claim.dart';
 import 'models/pending_action.dart';
+import 'models/user_offer.dart';
 import 'managers/migration_manager.dart';
 import 'managers/offer_manager.dart';
 
@@ -649,6 +650,23 @@ class ZeroSettle {
   /// Dismiss a pending action by [transactionId]. No-op on iOS.
   Future<void> dismissPendingAction({required String transactionId}) =>
       _wrap(() => _platform.dismissPendingAction(transactionId: transactionId));
+
+  // -- User Offer (Task 9) --
+
+  /// Fetches the server-resolved offer for the currently-identified user.
+  ///
+  /// Calls `GET /v1/iap/user-offer/` and returns a fully-decoded
+  /// [UserOfferResponse]. The server resolves eligibility, rollout gating,
+  /// A/B experiments, and display copy — the SDK does not re-bucket.
+  ///
+  /// Call [identify] before calling this method. Throws [ZSException] with
+  /// code `user_not_identified` if no user is identified.
+  Future<UserOfferResponse> fetchUserOffer() {
+    return _wrap(() async {
+      final map = await _platform.fetchUserOffer();
+      return UserOfferResponse.fromMap(map);
+    });
+  }
 
   // -- Cancel Flow --
 

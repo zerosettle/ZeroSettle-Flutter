@@ -504,4 +504,13 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Future<void> dismissPendingAction({required String transactionId}) {
     throw UnimplementedError('dismissPendingAction() has not been implemented.');
   }
+
+  // -- Task 9: fetchUserOffer --
+
+  /// Fetches the server-resolved offer for the currently-identified user.
+  /// Returns the raw `UserOfferResponse` wire map. The facade converts this
+  /// to [UserOfferResponse].
+  Future<Map<String, dynamic>> fetchUserOffer() {
+    throw UnimplementedError('fetchUserOffer() has not been implemented.');
+  }
 }

@@ -1203,6 +1203,18 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 }
             }
 
+        // -- User Offer (Task 9) --
+
+        case "fetchUserOffer":
+            Task { @MainActor in
+                do {
+                    let response = try await ZeroSettle.shared.fetchUserOffer()
+                    result(response.toFlutterUserOfferMap())
+                } catch {
+                    result(error.toFlutterError())
+                }
+            }
+
         // -- Save the Sale --
 
         case "presentSaveTheSaleSheet":
@@ -1732,6 +1744,176 @@ extension Promotion {
             map["expiresAt"] = iso8601Formatter.string(from: expiresAt)
         }
         return map
+    }
+}
+
+// MARK: - UserOffer Flutter Wire Encoders (Task 9: fetchUserOffer)
+//
+// Encodes `UserOffer.Response` into the wire shape consumed by Dart's
+// `UserOfferResponse.fromMap` in `lib/models/user_offer.dart`.
+//
+// Type coercions:
+//   Response.appId            : Int  → String  (Dart reads String?)
+//   Response.serverTime       : Date → ISO8601 String
+//   OfferData.experimentVariantId: Int? → String?
+//   Proration.nextBillingDate : Date? → ISO8601 String?
+//   AppleSubscription.expiresAt: Date? → ISO8601 String?
+//   ActionType raw value is snake_case; emit camelCase wire string.
+//   SourceStorefront raw value is snake_case; emit camelCase wire string.
+//   Subscription is a tagged-union enum; flatten to {type, productId?}.
+//
+// Null-omission rule: optional fields absent from the map rather than
+// emitted as nil (matches Android encoder and Dart parser expectations).
+
+private extension UserOffer.ActionType {
+    var userOfferWireString: String {
+        switch self {
+        case .noAction:             return "noAction"
+        case .migrateStorekitToWeb: return "migrateStorekitToWeb"
+        case .upgradeStorekitToWeb: return "upgradeStorekitToWeb"
+        case .upgradeWebToWeb:      return "upgradeWebToWeb"
+        }
+    }
+}
+
+private extension UserOffer.SourceStorefront {
+    var userOfferWireString: String {
+        switch self {
+        case .storeKit:  return "storeKit"
+        case .playStore: return "playStore"
+        }
+    }
+}
+
+private extension UserOffer.CheckoutPresentation {
+    var userOfferWireString: String {
+        switch self {
+        case .webview:   return "webview"
+        case .nativePay: return "nativePay"
+        case .safariVc:  return "safariVc"
+        case .safari:    return "safari"
+        }
+    }
+}
+
+private extension UserOffer.Subscription {
+    /// Flattens the tagged-union enum to the `{type, productId?}` shape
+    /// that Dart's `UserOfferSubscription.fromMap` expects.
+    func toFlutterMap() -> [String: Any] {
+        switch self {
+        case .none:
+            return ["type": "none"]
+        case .activeWeb(let s):
+            return ["type": "activeWeb", "productId": s.productId]
+        case .activeStorekit(let s):
+            return ["type": "activeStorekit", "productId": s.productId]
+        case .migrationTrial(let s):
+            return ["type": "migrationTrial", "productId": s.productId]
+        case .cancelledActive(let s):
+            return ["type": "cancelledActive", "productId": s.productId]
+        case .unknown(let raw):
+            return ["type": raw]
+        }
+    }
+}
+
+private extension UserOffer.Display {
+    func toFlutterMap() -> [String: Any] {
+        return [
+            "title": title,
+            "body": body,
+            "ctaText": ctaText,
+            "dismissText": dismissText,
+            "acceptedTitle": acceptedTitle,
+            "acceptedBody": acceptedBody,
+            "completedTitle": completedTitle,
+            "completedBody": completedBody,
+            "appleCancelInstructions": appleCancelInstructions,
+        ]
+    }
+}
+
+private extension UserOffer.Proration {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "amountCents": amountCents,
+            "currency": currency,
+        ]
+        if let nextBillingDate {
+            map["nextBillingDate"] = iso8601Formatter.string(from: nextBillingDate)
+        }
+        return map
+    }
+}
+
+private extension UserOffer.AppleSubscription {
+    func toFlutterMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "isActive": isActive,
+            "statusCode": statusCode,
+            "autoRenewEnabled": autoRenewEnabled,
+        ]
+        if let expiresAt {
+            map["expiresAt"] = iso8601Formatter.string(from: expiresAt)
+        }
+        return map
+    }
+}
+
+private extension UserOffer.OfferData {
+    func toFlutterUserOfferMap() -> [String: Any] {
+        var map: [String: Any] = [
+            "actionType": actionType.userOfferWireString,
+            "isEligible": isEligible,
+            "checkoutProductId": checkoutProductId,
+            "savingsPercent": savingsPercent,
+            "freeTrialDays": freeTrialDays,
+            "minSubscriptionDays": minSubscriptionDays,
+            "rolloutPercent": rolloutPercent,
+            "requiresAppleCancel": requiresAppleCancel,
+        ]
+        if let fromProductId {
+            map["fromProductId"] = fromProductId
+        }
+        if let maxSubscriptionDays {
+            map["maxSubscriptionDays"] = maxSubscriptionDays
+        }
+        if let display {
+            map["display"] = display.toFlutterMap()
+        }
+        if let proration {
+            map["proration"] = proration.toFlutterMap()
+        }
+        if let appleSubscription {
+            map["appleSubscription"] = appleSubscription.toFlutterMap()
+        }
+        if let checkoutPresentation {
+            map["checkoutPresentation"] = checkoutPresentation.userOfferWireString
+        }
+        // experimentVariantId: Int? → String? (Dart reads String?)
+        if let experimentVariantId {
+            map["experimentVariantId"] = String(experimentVariantId)
+        }
+        if let source {
+            map["source"] = source.userOfferWireString
+        }
+        return map
+    }
+}
+
+extension UserOffer.Response {
+    /// Encodes the response for the `fetchUserOffer` Flutter wire. Keys match
+    /// Dart's `UserOfferResponse.fromMap` in `lib/models/user_offer.dart`.
+    func toFlutterUserOfferMap() -> [String: Any] {
+        return [
+            "userId": userId,
+            // appId is Int in the Swift model; Dart expects String.
+            "appId": String(appId),
+            "isSandbox": isSandbox,
+            "serverTime": iso8601Formatter.string(from: serverTime),
+            "subscription": subscription.toFlutterMap(),
+            "offer": offer.toFlutterUserOfferMap(),
+        ]
     }
 }
 

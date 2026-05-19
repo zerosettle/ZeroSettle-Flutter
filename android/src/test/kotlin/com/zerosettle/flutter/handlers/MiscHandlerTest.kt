@@ -114,6 +114,9 @@ class MiscHandlerTest {
             ZeroSettleError.UserNotIdentified,
         )
         coEvery { ZeroSettle.fetchTransactionHistory() } returns Result.success(emptyList())
+        coEvery { ZeroSettle.fetchUserOffer() } returns Result.failure(
+            ZeroSettleError.UserNotIdentified,
+        )
 
         listOf(
             "handleUniversalLink" to mapOf("url" to "https://example.com/checkout-success"),
@@ -126,6 +129,7 @@ class MiscHandlerTest {
             "resetMigrateTipState" to null,
             "fetchTransactionHistory" to mapOf("userId" to "u"),
             "getIsUcbEnabled" to null,
+            "fetchUserOffer" to null,
         ).forEach { (method, args) ->
             val consumed = handler.handle(call(method, args), newResult())
             assertThat(consumed).isTrue()
@@ -416,6 +420,149 @@ class MiscHandlerTest {
 
         val result = newResult()
         handler.handle(call("fetchTransactionHistory"), result)
+        verify { result.error(eq("user_not_identified"), any(), any()) }
+        verify(exactly = 0) { result.success(any()) }
+    }
+
+    // ─── fetchUserOffer — typed response pass-through (Task 9) ──────────
+
+    @Test
+    fun `fetchUserOffer happy path encodes response as UserOfferResponse wire map`() = runTest {
+        val sampleResponse = UserOffer.Response(
+            userId = "u1",
+            appId = 42,
+            isSandbox = false,
+            subscription = UserOffer.Subscription(type = "active_web", productId = "p.month"),
+            offer = UserOffer.OfferData(
+                actionType = UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB,
+                isEligible = true,
+                checkoutProductId = "p.month",
+                savingsPercent = 20,
+                freeTrialDays = 7,
+                minSubscriptionDays = 0,
+                rolloutPercent = 100,
+                requiresAppleCancel = false,
+            ),
+            serverTime = "2026-05-19T00:00:00Z",
+        )
+        coEvery { ZeroSettle.fetchUserOffer() } returns Result.success(sampleResponse)
+
+        val result = newResult()
+        val slotSuccess: CapturingSlot<Any> = slot()
+        handler.handle(call("fetchUserOffer"), result)
+        verify { result.success(capture(slotSuccess)) }
+        verify(exactly = 0) { result.error(any(), any(), any()) }
+
+        @Suppress("UNCHECKED_CAST")
+        val m = slotSuccess.captured as Map<String, Any?>
+        assertThat(m["userId"]).isEqualTo("u1")
+        // appId Int → String coercion
+        assertThat(m["appId"]).isEqualTo("42")
+        assertThat(m["isSandbox"]).isEqualTo(false)
+        // serverTime passes through as-is on Android (already a String in the model)
+        assertThat(m["serverTime"]).isEqualTo("2026-05-19T00:00:00Z")
+
+        @Suppress("UNCHECKED_CAST")
+        val sub = m["subscription"] as Map<String, Any?>
+        // subscription.type: snake_case → camelCase
+        assertThat(sub["type"]).isEqualTo("activeWeb")
+        assertThat(sub["productId"]).isEqualTo("p.month")
+
+        @Suppress("UNCHECKED_CAST")
+        val offer = m["offer"] as Map<String, Any?>
+        assertThat(offer["actionType"]).isEqualTo("migrateStorekitToWeb")
+        assertThat(offer["isEligible"]).isEqualTo(true)
+        assertThat(offer["checkoutProductId"]).isEqualTo("p.month")
+        assertThat(offer["savingsPercent"]).isEqualTo(20)
+        assertThat(offer["freeTrialDays"]).isEqualTo(7)
+        assertThat(offer["requiresAppleCancel"]).isEqualTo(false)
+    }
+
+    @Test
+    fun `fetchUserOffer encodes experimentVariantId Int as String`() = runTest {
+        val response = UserOffer.Response(
+            userId = "u2",
+            appId = 1,
+            isSandbox = false,
+            subscription = UserOffer.Subscription(type = "none"),
+            offer = UserOffer.OfferData(
+                actionType = UserOffer.ActionType.NO_ACTION,
+                isEligible = false,
+                checkoutProductId = "",
+                savingsPercent = 0,
+                freeTrialDays = 0,
+                minSubscriptionDays = 0,
+                rolloutPercent = 100,
+                requiresAppleCancel = false,
+                experimentVariantId = 7,
+            ),
+            serverTime = "2026-05-19T00:00:00Z",
+        )
+        coEvery { ZeroSettle.fetchUserOffer() } returns Result.success(response)
+
+        val result = newResult()
+        val slotSuccess: CapturingSlot<Any> = slot()
+        handler.handle(call("fetchUserOffer"), result)
+        verify { result.success(capture(slotSuccess)) }
+
+        @Suppress("UNCHECKED_CAST")
+        val m = slotSuccess.captured as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val offer = m["offer"] as Map<String, Any?>
+        // Int experimentVariantId → String on wire
+        assertThat(offer["experimentVariantId"]).isEqualTo("7")
+    }
+
+    @Test
+    fun `fetchUserOffer maps subscription type snake_case to camelCase`() = runTest {
+        val types = listOf(
+            "active_web" to "activeWeb",
+            "active_storekit" to "activeStorekit",
+            "migration_trial" to "migrationTrial",
+            "cancelled_active" to "cancelledActive",
+            "none" to "none",
+            "future_unknown" to "future_unknown",
+        )
+        for ((raw, expected) in types) {
+            val response = UserOffer.Response(
+                userId = "u",
+                appId = 1,
+                isSandbox = false,
+                subscription = UserOffer.Subscription(type = raw),
+                offer = UserOffer.OfferData(
+                    actionType = UserOffer.ActionType.NO_ACTION,
+                    isEligible = false,
+                    checkoutProductId = "",
+                    savingsPercent = 0,
+                    freeTrialDays = 0,
+                    minSubscriptionDays = 0,
+                    rolloutPercent = 100,
+                    requiresAppleCancel = false,
+                ),
+                serverTime = "t",
+            )
+            coEvery { ZeroSettle.fetchUserOffer() } returns Result.success(response)
+            val result = newResult()
+            val slotSuccess: CapturingSlot<Any> = slot()
+            handler.handle(call("fetchUserOffer"), result)
+            verify { result.success(capture(slotSuccess)) }
+
+            @Suppress("UNCHECKED_CAST")
+            val m = slotSuccess.captured as Map<String, Any?>
+            @Suppress("UNCHECKED_CAST")
+            val sub = m["subscription"] as Map<String, Any?>
+            assertThat(sub["type"]).isEqualTo(expected)
+        }
+    }
+
+    @Test
+    fun `fetchUserOffer surfaces SDK failure via sendError`() = runTest {
+        coEvery { ZeroSettle.fetchUserOffer() } returns Result.failure(
+            ZeroSettleError.UserNotIdentified,
+        )
+
+        val result = newResult()
+        handler.handle(call("fetchUserOffer"), result)
         verify { result.error(eq("user_not_identified"), any(), any()) }
         verify(exactly = 0) { result.success(any()) }
     }

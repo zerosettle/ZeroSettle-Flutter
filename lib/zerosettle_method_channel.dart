@@ -742,4 +742,12 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
       'transactionId': transactionId,
     });
   }
+
+  // -- Task 9: fetchUserOffer --
+
+  @override
+  Future<Map<String, dynamic>> fetchUserOffer() async {
+    final result = await methodChannel.invokeMethod<Map>('fetchUserOffer');
+    return Map<String, dynamic>.from(result!);
+  }
 }

@@ -378,6 +378,172 @@ fun UserOffer.OfferData.toFlutterMap(): Map<String, Any?> {
     return map
 }
 
+// ---------------------------------------------------------------------------
+// UserOffer.Response → Flutter wire (Task 9: fetchUserOffer)
+// ---------------------------------------------------------------------------
+//
+// This is the NEW wire shape for `fetchUserOffer()` — distinct from the
+// iOS-legacy `Offer.OfferData.toFlutterMap()` above which targets the old
+// `/v1/iap/products/` config.offer wire. The Dart parser is
+// `UserOfferResponse.fromMap` in `lib/models/user_offer.dart`.
+//
+// Type coercions required (Kotlin → Dart):
+//   Response.appId           : Int  → String  (Dart model decodes as String?)
+//   OfferData.experimentVariantId: Int? → String? (Dart model decodes as String?)
+//   Subscription.type        : snake_case → camelCase  (Dart expects camelCase)
+//   ActionType               : explicit when → camelCase wire string
+//   SourceStorefront         : explicit when → camelCase wire string
+//   CheckoutPresentation     : explicit when → camelCase wire string
+//
+// Null-omission rule: optional fields that are null are OMITTED (not emitted
+// as null), matching the iOS encoder convention and the rest of this file.
+
+/**
+ * Encodes the Kotlin SDK's `UserOffer.ActionType` to the camelCase wire string
+ * that Dart's `UserOfferActionType.fromWire` accepts.
+ */
+private fun UserOffer.ActionType.toUserOfferWireString(): String = when (this) {
+    UserOffer.ActionType.NO_ACTION -> "noAction"
+    UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB -> "migrateStorekitToWeb"
+    UserOffer.ActionType.UPGRADE_STOREKIT_TO_WEB -> "upgradeStorekitToWeb"
+    UserOffer.ActionType.UPGRADE_WEB_TO_WEB -> "upgradeWebToWeb"
+}
+
+/**
+ * Encodes the Kotlin SDK's `UserOffer.SourceStorefront` to the camelCase wire
+ * string that Dart's `UserOfferSourceStorefront.fromWire` accepts.
+ */
+private fun UserOffer.SourceStorefront.toUserOfferWireString(): String = when (this) {
+    UserOffer.SourceStorefront.STORE_KIT -> "storeKit"
+    UserOffer.SourceStorefront.PLAY_STORE -> "playStore"
+}
+
+/**
+ * Encodes the Kotlin SDK's `UserOffer.CheckoutPresentation` to the camelCase
+ * wire string that Dart's `UserOfferData.checkoutPresentation` field expects.
+ */
+private fun UserOffer.CheckoutPresentation.toUserOfferWireString(): String = when (this) {
+    UserOffer.CheckoutPresentation.WEBVIEW -> "webview"
+    UserOffer.CheckoutPresentation.NATIVE_PAY -> "nativePay"
+    UserOffer.CheckoutPresentation.SAFARI_VC -> "safariVc"
+    UserOffer.CheckoutPresentation.SAFARI -> "safari"
+}
+
+/**
+ * Remaps the backend snake_case subscription type string to the camelCase wire
+ * string that Dart's `UserOfferSubscription.fromMap` expects.
+ *
+ * The Kotlin model stores the raw backend value verbatim (`"active_web"`,
+ * `"active_storekit"`, etc.); the Dart decoder was written against the iOS
+ * wire which emits camelCase. Unknown values pass through unchanged so forward
+ * compatibility is preserved.
+ */
+private fun subscriptionTypeToWireString(raw: String): String = when (raw) {
+    "none" -> "none"
+    "active_web" -> "activeWeb"
+    "active_storekit" -> "activeStorekit"
+    "migration_trial" -> "migrationTrial"
+    "cancelled_active" -> "cancelledActive"
+    else -> raw // forward-compat: unknown values pass through
+}
+
+/**
+ * Encodes `UserOffer.OfferDisplay` for the `fetchUserOffer()` wire — distinct
+ * from [UserOffer.OfferDisplay.toFlutterMap] which targets the old iOS-legacy
+ * Offer wire. Keys match `UserOfferDisplay.fromMap` in `user_offer.dart`.
+ */
+private fun UserOffer.OfferDisplay.toUserOfferWireMap(): Map<String, Any?> = mapOf(
+    "title" to title,
+    "body" to body,
+    "ctaText" to ctaText,
+    "dismissText" to dismissText,
+    "acceptedTitle" to acceptedTitle,
+    "acceptedBody" to acceptedBody,
+    "completedTitle" to completedTitle,
+    "completedBody" to completedBody,
+    "appleCancelInstructions" to appleCancelInstructions,
+)
+
+/**
+ * Encodes `UserOffer.OfferProration` for the `fetchUserOffer()` wire. Keys
+ * match `UserOfferProration.fromMap` in `user_offer.dart`.
+ */
+private fun UserOffer.OfferProration.toUserOfferWireMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "amountCents" to amountCents,
+        "currency" to currency,
+    )
+    nextBillingDate?.let { map["nextBillingDate"] = it }
+    return map
+}
+
+/**
+ * Encodes `UserOffer.AppleSubscriptionSummary` for the `fetchUserOffer()` wire.
+ * Keys match `UserOfferAppleSubscription.fromMap` in `user_offer.dart`.
+ */
+private fun UserOffer.AppleSubscriptionSummary.toUserOfferWireMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "isActive" to isActive,
+        "statusCode" to statusCode,
+        "autoRenewEnabled" to autoRenewEnabled,
+    )
+    expiresAt?.let { map["expiresAt"] = it }
+    return map
+}
+
+/**
+ * Encodes `UserOffer.OfferData` for the `fetchUserOffer()` wire shape that Dart's
+ * `UserOfferData.fromMap` consumes. This is NOT the iOS-legacy Offer wire —
+ * see the existing `UserOffer.OfferData.toFlutterMap()` for that path.
+ */
+private fun UserOffer.OfferData.toUserOfferWireMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "actionType" to actionType.toUserOfferWireString(),
+        "isEligible" to isEligible,
+        "checkoutProductId" to checkoutProductId,
+        "savingsPercent" to savingsPercent,
+        "freeTrialDays" to freeTrialDays,
+        "minSubscriptionDays" to minSubscriptionDays,
+        "rolloutPercent" to rolloutPercent,
+        "requiresAppleCancel" to requiresAppleCancel,
+    )
+    fromProductId?.let { map["fromProductId"] = it }
+    maxSubscriptionDays?.let { map["maxSubscriptionDays"] = it }
+    display?.let { map["display"] = it.toUserOfferWireMap() }
+    proration?.let { map["proration"] = it.toUserOfferWireMap() }
+    appleSubscription?.let { map["appleSubscription"] = it.toUserOfferWireMap() }
+    checkoutPresentation?.let { map["checkoutPresentation"] = it.toUserOfferWireString() }
+    // experimentVariantId: Int? → String? (Dart model decodes as String?)
+    experimentVariantId?.let { map["experimentVariantId"] = it.toString() }
+    source?.let { map["source"] = it.toUserOfferWireString() }
+    return map
+}
+
+/**
+ * Encodes the top-level `UserOffer.Response` for the `fetchUserOffer()` wire.
+ * Keys match `UserOfferResponse.fromMap` in `lib/models/user_offer.dart`.
+ *
+ * Type coercions:
+ *   - `appId: Int` → `String` (Dart `UserOfferResponse.fromMap` reads `String?`)
+ *   - Subscription `type` snake_case → camelCase
+ */
+fun UserOffer.Response.toFlutterUserOfferMap(): Map<String, Any?> {
+    val subMap = mutableMapOf<String, Any?>(
+        "type" to subscriptionTypeToWireString(subscription.type),
+    )
+    subscription.productId?.let { subMap["productId"] = it }
+
+    return mapOf(
+        "userId" to userId,
+        // appId is Int in the Kotlin model; Dart expects String.
+        "appId" to appId.toString(),
+        "isSandbox" to isSandbox,
+        "serverTime" to serverTime,
+        "subscription" to subMap,
+        "offer" to offer.toUserOfferWireMap(),
+    )
+}
+
 /**
  * Maps an Android [UserOffer.OfferDisplay] to the iOS-legacy `Offer.Display`
  * wire shape. Android-only fields (`dismissText`, `appleCancelInstructions`)
