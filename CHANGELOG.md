@@ -1,5 +1,26 @@
 ## Unreleased
 
+Android-parity sweep — closes the seven remaining bridge gaps so a Flutter app gets the same surfaces a native Android app gets. Everything is additive; no existing public API was renamed or removed.
+
+### Added
+
+- `ZeroSettle.instance.getSdkVersion()` — returns the native SDK version string.
+- `ZeroSettle.instance.getIsUcbEnabled()` + `isUcbEnabledUpdates` stream — User Choice Billing state. Android-only; iOS returns `false` and emits a single `false`.
+- `ZeroSettle.instance.releasePendingCheckout()` — cancels an in-flight web checkout. Android-only; iOS is a no-op.
+- `ZeroSettle.instance.getPendingActions()`, `pendingActionsUpdates` stream, and `dismissPendingAction({transactionId})` — backend-driven user prompts (post-migration info, manual Play cancel). Android-only; iOS returns empty lists / no-op.
+- `PendingAction` Dart sealed model with `PendingActionMigrationCompletedInfo` and `PendingActionManualPlayCancel` variants.
+- `ZeroSettlePendingActionBanner` widget — zero-config Flutter mount point for the native Android pending-action banner; the native side self-renders the current top pending action from the SDK stream. iOS renders nothing.
+- `ZeroSettleOfferTip` widget — drop-in offer-tip wrapping the native Android `com.zerosettle/offer_tip` view, with an optional `stripeCustomerId` parameter forwarded to the native `OfferManager`. iOS renders nothing — iOS apps use the headless `OfferManager` path.
+- `ZeroSettle.instance.fetchUserOffer()` returning a typed `UserOfferResponse` — the server-canonical offer decision (migration / upgrade eligibility). The recommended offer API on both platforms.
+- `UserOffer*` Dart model tree (`UserOfferResponse`, `UserOfferSubscription`, `UserOfferData`, `UserOfferDisplay`, `UserOfferProration`, `UserOfferAppleSubscription`) plus `UserOfferActionType` and `UserOfferSourceStorefront` enums.
+- `ZeroSettle.instance.events` — `Stream<ZeroSettleEvent>` of SDK analytics/lifecycle events (see the variant table below). New `ZeroSettleEvent` sealed model with 10 typed variants + `ZSEventUnknown` forward-compat fallback.
+
+### Fixed
+
+- **Android: `ZeroSettleMigrationManagerStatics` no longer throws `MissingPluginException`.** The `zerosettle/migration_manager_static` MethodChannel is now wired. `isPermanentlyDismissed`/`setDismissed` route to the unified `OfferDismissalStore`; `resetDismissedState` is a deliberate no-op (calling it would conflate the two iOS-distinct stores).
+
+---
+
 ### `ZeroSettle.instance.events` — SDK analytics/lifecycle stream
 
 A new `Stream<ZeroSettleEvent>` is available at `ZeroSettle.instance.events`. Subscribe to receive discrete analytics and lifecycle events from the SDK without polling entitlements or wiring delegate callbacks.

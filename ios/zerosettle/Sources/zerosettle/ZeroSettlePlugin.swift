@@ -1139,7 +1139,7 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         // on Platform.isAndroid at the call site.
 
         case "getPendingActions":
-            result([String]())
+            result([[String: Any]]())
 
         case "dismissPendingAction":
             result(nil)
