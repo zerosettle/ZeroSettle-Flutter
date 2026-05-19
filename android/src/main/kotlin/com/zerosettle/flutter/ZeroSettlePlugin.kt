@@ -495,13 +495,12 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             ZeroSettle.isBootstrapped,
             isBootstrappedStreamHandler,
         ) { it }
-        // UCB — `ZeroSettle.isUcbEnabled` is not yet in the published SDK
-        // (1.0.0). The stream handler is registered above so Dart's
-        // EventChannel.receiveBroadcastStream() doesn't throw a
-        // MissingPluginException. The handler emits nothing until the SDK
-        // exposes the StateFlow; the method path (getIsUcbEnabled) reads
-        // the value synchronously via MiscHandler.
-        // TODO: wire isUcbEnabledPumpJob once SDK >= 1.1.0 publishes isUcbEnabled.
+        // UCB — pump `ZeroSettle.isUcbEnabled` (StateFlow<Boolean>) onto Dart.
+        isUcbEnabledPumpJob = pumpStateFlow(
+            pluginScope,
+            ZeroSettle.isUcbEnabled,
+            isUcbEnabledStreamHandler,
+        ) { it }
 
         Log.i(
             "ZeroSettle",
