@@ -1,5 +1,6 @@
 package com.zerosettle.flutter.ext
 
+import com.zerosettle.sdk.core.ZeroSettleEvent
 import com.zerosettle.sdk.models.BillingInterval
 import com.zerosettle.sdk.models.CheckoutTransaction
 import com.zerosettle.sdk.models.Entitlement
@@ -742,3 +743,82 @@ fun UpgradeOffer.Display.toFlutterMap(): Map<String, Any?> = mapOf(
     "completedTitle" to completedTitle,
     "completedMessage" to completedMessage,
 )
+
+// ---------------------------------------------------------------------------
+// ZeroSettleEvent → Flutter wire (Task 11: events stream)
+// ---------------------------------------------------------------------------
+//
+// Each variant emits a `"type"` discriminator in camelCase matching the Dart
+// `ZeroSettleEvent.fromMap` switch cases (`lib/models/zerosettle_event.dart`).
+// All remaining field keys are camelCase to match the Dart `_fromMap` readers.
+//
+// Wire-key cross-check (Kotlin field → Dart `_fromMap` key):
+//   OfferShown.productId               → "productId"
+//   OfferAccepted.productId            → "productId"
+//   OfferDismissed.productId           → "productId"
+//   OfferEvaluationFailed.reason       → "reason"
+//   PurchaseSucceeded.productId        → "productId"
+//   PurchaseSucceeded.transactionId    → "transactionId"
+//   PurchaseFailed.productId           → "productId"
+//   PurchaseFailed.reason              → "reason"
+//   MigrationCompleted.productId       → "productId"
+//   SyncFailed.purchaseToken           → "purchaseToken"
+//   SyncFailed.attempts                → "attempts"
+//   SyncFailed.terminal                → "terminal"
+//   EntitlementsRefreshed.count        → "count"
+//   PendingActionShown.actionType      → "actionType"
+
+/**
+ * Encodes a [ZeroSettleEvent] for the Flutter wire. The `"type"` field is the
+ * camelCase discriminator read by Dart's `ZeroSettleEvent.fromMap`. All field
+ * keys match the Dart `_fromMap` readers in `lib/models/zerosettle_event.dart`.
+ *
+ * Uses an explicit `when` over sealed variants — no `.name` reliance — so
+ * obfuscation and future variant renames can't silently break the wire.
+ */
+fun ZeroSettleEvent.toFlutterMap(): Map<String, Any?> = when (this) {
+    is ZeroSettleEvent.OfferShown -> mapOf(
+        "type" to "offerShown",
+        "productId" to productId,
+    )
+    is ZeroSettleEvent.OfferAccepted -> mapOf(
+        "type" to "offerAccepted",
+        "productId" to productId,
+    )
+    is ZeroSettleEvent.OfferDismissed -> mapOf(
+        "type" to "offerDismissed",
+        "productId" to productId,
+    )
+    is ZeroSettleEvent.OfferEvaluationFailed -> mapOf(
+        "type" to "offerEvaluationFailed",
+        "reason" to reason,
+    )
+    is ZeroSettleEvent.PurchaseSucceeded -> mapOf(
+        "type" to "purchaseSucceeded",
+        "productId" to productId,
+        "transactionId" to transactionId,
+    )
+    is ZeroSettleEvent.PurchaseFailed -> mapOf(
+        "type" to "purchaseFailed",
+        "productId" to productId,
+        "reason" to reason,
+    )
+    is ZeroSettleEvent.MigrationCompleted -> mapOf(
+        "type" to "migrationCompleted",
+        "productId" to productId,
+    )
+    is ZeroSettleEvent.SyncFailed -> mapOf(
+        "type" to "syncFailed",
+        "purchaseToken" to purchaseToken,
+        "attempts" to attempts,
+        "terminal" to terminal,
+    )
+    is ZeroSettleEvent.EntitlementsRefreshed -> mapOf(
+        "type" to "entitlementsRefreshed",
+        "count" to count,
+    )
+    is ZeroSettleEvent.PendingActionShown -> mapOf(
+        "type" to "pendingActionShown",
+        "actionType" to actionType,
+    )
+}

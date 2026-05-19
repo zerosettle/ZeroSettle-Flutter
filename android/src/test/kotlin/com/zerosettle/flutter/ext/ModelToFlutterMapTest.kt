@@ -1,6 +1,7 @@
 package com.zerosettle.flutter.ext
 
 import com.google.common.truth.Truth.assertThat
+import com.zerosettle.sdk.core.ZeroSettleEvent
 import com.zerosettle.sdk.models.BillingInterval
 import com.zerosettle.sdk.models.CheckoutTransaction
 import com.zerosettle.sdk.models.Entitlement
@@ -800,5 +801,106 @@ class ModelToFlutterMapTest {
         // storekitCancelRequired still derives from the offer (which has
         // requiresAppleCancel=false by default → false on the wire).
         assertThat(map["storekitCancelRequired"]).isEqualTo(false)
+    }
+
+    // ── ZeroSettleEvent.toFlutterMap (Task 11) ──────────────────────────────
+
+    /**
+     * Pins the wire-key mapping for each [com.zerosettle.sdk.core.ZeroSettleEvent]
+     * variant. Dart's `ZeroSettleEvent.fromMap` switch reads these exact keys;
+     * any mismatch here is silent runtime parse failure on the Dart side.
+     */
+    @Test
+    fun `ZeroSettleEvent PurchaseSucceeded encodes type + productId + transactionId`() {
+        val event = ZeroSettleEvent.PurchaseSucceeded(
+            productId = "com.example.premium",
+            transactionId = "txn_abc",
+        )
+
+        val map = event.toFlutterMap()
+
+        assertThat(map).containsExactly(
+            "type", "purchaseSucceeded",
+            "productId", "com.example.premium",
+            "transactionId", "txn_abc",
+        )
+    }
+
+    @Test
+    fun `ZeroSettleEvent SyncFailed encodes type + purchaseToken + attempts + terminal`() {
+        val event = ZeroSettleEvent.SyncFailed(
+            purchaseToken = "GPA.token-xyz",
+            attempts = 3,
+            terminal = true,
+        )
+
+        val map = event.toFlutterMap()
+
+        assertThat(map).containsExactly(
+            "type", "syncFailed",
+            "purchaseToken", "GPA.token-xyz",
+            "attempts", 3,
+            "terminal", true,
+        )
+    }
+
+    @Test
+    fun `ZeroSettleEvent EntitlementsRefreshed encodes type + count`() {
+        val event = ZeroSettleEvent.EntitlementsRefreshed(count = 2)
+
+        val map = event.toFlutterMap()
+
+        assertThat(map).containsExactly(
+            "type", "entitlementsRefreshed",
+            "count", 2,
+        )
+    }
+
+    @Test
+    fun `ZeroSettleEvent OfferShown encodes type + productId`() {
+        val map = ZeroSettleEvent.OfferShown("com.p.m").toFlutterMap()
+        assertThat(map["type"]).isEqualTo("offerShown")
+        assertThat(map["productId"]).isEqualTo("com.p.m")
+    }
+
+    @Test
+    fun `ZeroSettleEvent OfferAccepted encodes type + productId`() {
+        val map = ZeroSettleEvent.OfferAccepted("com.p.m").toFlutterMap()
+        assertThat(map["type"]).isEqualTo("offerAccepted")
+    }
+
+    @Test
+    fun `ZeroSettleEvent OfferDismissed encodes type + productId`() {
+        val map = ZeroSettleEvent.OfferDismissed("com.p.m").toFlutterMap()
+        assertThat(map["type"]).isEqualTo("offerDismissed")
+    }
+
+    @Test
+    fun `ZeroSettleEvent OfferEvaluationFailed encodes type + reason`() {
+        val map = ZeroSettleEvent.OfferEvaluationFailed("network error").toFlutterMap()
+        assertThat(map["type"]).isEqualTo("offerEvaluationFailed")
+        assertThat(map["reason"]).isEqualTo("network error")
+    }
+
+    @Test
+    fun `ZeroSettleEvent PurchaseFailed encodes type + productId + reason`() {
+        val map = ZeroSettleEvent.PurchaseFailed("com.p.m", "cancelled").toFlutterMap()
+        assertThat(map["type"]).isEqualTo("purchaseFailed")
+        assertThat(map["productId"]).isEqualTo("com.p.m")
+        assertThat(map["reason"]).isEqualTo("cancelled")
+    }
+
+    @Test
+    fun `ZeroSettleEvent MigrationCompleted encodes type + productId`() {
+        val map = ZeroSettleEvent.MigrationCompleted("com.p.m").toFlutterMap()
+        assertThat(map["type"]).isEqualTo("migrationCompleted")
+        assertThat(map["productId"]).isEqualTo("com.p.m")
+    }
+
+    @Test
+    fun `ZeroSettleEvent PendingActionShown encodes type + actionType`() {
+        val map = ZeroSettleEvent.PendingActionShown("migrationCompletedInfo").toFlutterMap()
+        assertThat(map["type"]).isEqualTo("pendingActionShown")
+        assertThat(map["actionType"]).isEqualTo("migrationCompletedInfo")
     }
 }

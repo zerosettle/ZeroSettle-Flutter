@@ -513,4 +513,14 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Future<Map<String, dynamic>> fetchUserOffer() {
     throw UnimplementedError('fetchUserOffer() has not been implemented.');
   }
+
+  // -- Task 11: SDK analytics/lifecycle events --
+
+  /// Raw stream of SDK analytics/lifecycle events. Each emission is a
+  /// `Map<String, dynamic>` with a `"type"` discriminator (camelCase).
+  /// The facade converts these to [ZeroSettleEvent] instances via
+  /// `ZeroSettleEvent.fromMap`.
+  Stream<Map<String, dynamic>> get eventsUpdates {
+    throw UnimplementedError('eventsUpdates has not been implemented.');
+  }
 }

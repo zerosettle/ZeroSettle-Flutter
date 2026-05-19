@@ -15,6 +15,7 @@ import 'models/identity.dart';
 import 'models/pending_claim.dart';
 import 'models/pending_action.dart';
 import 'models/user_offer.dart';
+import 'models/zerosettle_event.dart';
 import 'managers/migration_manager.dart';
 import 'managers/offer_manager.dart';
 
@@ -651,6 +652,14 @@ class ZeroSettle {
   /// Dismiss a pending action by [transactionId]. No-op on iOS.
   Future<void> dismissPendingAction({required String transactionId}) =>
       _wrap(() => _platform.dismissPendingAction(transactionId: transactionId));
+
+  // -- SDK Analytics/Lifecycle Events (Task 11) --
+
+  /// SDK analytics/lifecycle events. Fully populated on Android; on iOS
+  /// emits the subset translatable from delegate callbacks (wired in
+  /// the next task).
+  Stream<ZeroSettleEvent> get events =>
+      _platform.eventsUpdates.map(ZeroSettleEvent.fromMap);
 
   // -- User Offer (Task 9) --
 

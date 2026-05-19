@@ -21,6 +21,7 @@ import com.zerosettle.flutter.platformviews.MigrateTipViewFactory
 import com.zerosettle.flutter.platformviews.OfferTipFactory
 import com.zerosettle.flutter.platformviews.PendingActionBannerFactory
 import com.zerosettle.sdk.ZeroSettle
+import com.zerosettle.sdk.core.ZeroSettleEvent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -166,6 +167,8 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var isUcbEnabledEventChannel: EventChannel
     // Task 5 — pending-actions EventChannel (Android-only; iOS emits [] once).
     private lateinit var pendingActionsEventChannel: EventChannel
+    // Task 11 — SDK analytics/lifecycle events EventChannel.
+    private lateinit var eventsEventChannel: EventChannel
 
     /**
      * Reactive state channels (Gap 5). Each one mirrors a public SDK
@@ -205,6 +208,11 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     // Task 5 — pending-actions state channel (replayLatest so late subscribers
     // see the current list immediately, matching the entitlements pattern).
     internal val pendingActionsStreamHandler = BufferedStreamHandler(replayLatest = true)
+
+    // Task 11 — SDK analytics/lifecycle events. Events are discrete — do NOT
+    // replay a stale purchaseSucceeded to a late subscriber. replayLatest=false
+    // matches the checkout_events pattern and iOS's discrete-event channels.
+    internal val eventsStreamHandler = BufferedStreamHandler(replayLatest = false)
 
     /**
      * Reactive state channels (Gap 5). All four mirror SDK StateFlows
@@ -258,6 +266,9 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     /** Task 5 — pump for `pending_actions_updates`. */
     @Volatile private var pendingActionsPumpJob: Job? = null
+
+    /** Task 11 — collector for `ZeroSettle.events` SharedFlow. */
+    @Volatile private var eventsCollectorJob: Job? = null
 
     /**
      * F8 identity/lifecycle handler. Owns the 9 lifecycle methods Dart
@@ -419,6 +430,11 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         pendingActionsEventChannel = EventChannel(messenger, "zerosettle/pending_actions_updates").apply {
             setStreamHandler(pendingActionsStreamHandler)
         }
+        // Task 11 — SDK analytics/lifecycle events EventChannel. Events are
+        // discrete (not state snapshots), so replayLatest=false on the handler.
+        eventsEventChannel = EventChannel(messenger, "zerosettle/events").apply {
+            setStreamHandler(eventsStreamHandler)
+        }
 
         // F8 identity/lifecycle handler. Build the shared HandlerDependencies
         // bundle here so F9-F17 can adopt the same plumbing without each
@@ -529,6 +545,15 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             ZeroSettle.pendingActions,
             pendingActionsStreamHandler,
         ) { list -> list.map { it.toFlutterMap() } }
+        // Task 11 — collect `ZeroSettle.events` (SharedFlow — NOT StateFlow)
+        // and forward each event to the Dart stream. Must collect directly
+        // (not via pumpStateFlow) because SharedFlow has no `value` property.
+        // replayLatest=false on the handler matches the discrete-event semantics.
+        eventsCollectorJob = pluginScope.launch {
+            ZeroSettle.events.collect { event ->
+                eventsStreamHandler.emit(event.toFlutterMap())
+            }
+        }
 
         Log.i(
             "ZeroSettle",
@@ -554,6 +579,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         isBootstrappedEventChannel.setStreamHandler(null)
         isUcbEnabledEventChannel.setStreamHandler(null)
         pendingActionsEventChannel.setStreamHandler(null)
+        eventsEventChannel.setStreamHandler(null)
         // F25 + Gap 5 pump jobs — `pluginScope.cancel()` below would tear
         // them down anyway, but explicit cancellation makes ownership
         // obvious.
@@ -565,6 +591,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         isBootstrappedPumpJob?.cancel()
         isUcbEnabledPumpJob?.cancel()
         pendingActionsPumpJob?.cancel()
+        eventsCollectorJob?.cancel()
         entitlementPumpJob = null
         pendingClaimsPumpJob = null
         productsPumpJob = null
@@ -573,6 +600,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         isBootstrappedPumpJob = null
         isUcbEnabledPumpJob = null
         pendingActionsPumpJob = null
+        eventsCollectorJob = null
         offerManagerRegistry.disposeAll()
         pluginScope.cancel()
         applicationContext = null

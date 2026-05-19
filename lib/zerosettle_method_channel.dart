@@ -46,6 +46,9 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   final pendingActionsEventChannel =
       const EventChannel('zerosettle/pending_actions_updates');
 
+  @visibleForTesting
+  final eventsEventChannel = const EventChannel('zerosettle/events');
+
   // -- Configuration --
 
   @override
@@ -749,5 +752,17 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   Future<Map<String, dynamic>> fetchUserOffer() async {
     final result = await methodChannel.invokeMethod<Map>('fetchUserOffer');
     return Map<String, dynamic>.from(result!);
+  }
+
+  // -- Task 11: SDK analytics/lifecycle events --
+
+  Stream<Map<String, dynamic>>? _eventsUpdatesStream;
+
+  @override
+  Stream<Map<String, dynamic>> get eventsUpdates {
+    _eventsUpdatesStream ??= eventsEventChannel
+        .receiveBroadcastStream()
+        .map((event) => Map<String, dynamic>.from(event as Map));
+    return _eventsUpdatesStream!;
   }
 }

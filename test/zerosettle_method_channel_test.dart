@@ -879,6 +879,33 @@ void main() {
     expect(emissions.first.first['transactionId'], 'txn_1');
   });
 
+  // -- Task 11: eventsUpdates EventChannel --
+
+  test('eventsUpdates EventChannel forwards purchaseSucceeded map', () async {
+    const channelName = 'zerosettle/events';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final emissions = <Map<String, dynamic>>[];
+    final sub = platform.eventsUpdates.listen(emissions.add);
+
+    await Future<void>.delayed(Duration.zero);
+    final codec = const StandardMethodCodec();
+    final payload = <String, Object?>{
+      'type': 'purchaseSucceeded',
+      'productId': 'com.example.premium',
+      'transactionId': 'txn_abc',
+    };
+    final data = codec.encodeSuccessEnvelope(payload);
+    await messenger.handlePlatformMessage(channelName, data, (_) {});
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+
+    expect(emissions.length, 1);
+    expect(emissions.first['type'], 'purchaseSucceeded');
+    expect(emissions.first['productId'], 'com.example.premium');
+    expect(emissions.first['transactionId'], 'txn_abc');
+  });
+
   // -- Task 9: fetchUserOffer --
 
   test('fetchUserOffer invokes the channel and returns the decoded map', () async {

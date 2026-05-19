@@ -568,6 +568,14 @@ class MockZeroSettlePlatform
     _record('dismissPendingAction', {'transactionId': transactionId});
   }
 
+  // ---- Task 11: eventsUpdates stream ----
+
+  @override
+  Stream<Map<String, dynamic>> get eventsUpdates =>
+      Stream.fromIterable([
+        {'type': 'purchaseSucceeded', 'productId': 'p', 'transactionId': 't'},
+      ]);
+
   // ---- Task 9: fetchUserOffer ----
 
   @override
@@ -1255,6 +1263,15 @@ void main() {
       await ZeroSettle.instance.dismissPendingAction(transactionId: 'txn_1');
       expect(mockPlatform.calls.last['method'], 'dismissPendingAction');
       expect(mockPlatform.calls.last['transactionId'], 'txn_1');
+    });
+
+    // ==== Task 9: fetchUserOffer ====
+
+    // ==== Task 11: events stream ====
+
+    test('events decodes the stream into ZeroSettleEvent', () async {
+      final e = await ZeroSettle.instance.events.first;
+      expect(e, isA<ZSEventPurchaseSucceeded>());
     });
 
     // ==== Task 9: fetchUserOffer ====
