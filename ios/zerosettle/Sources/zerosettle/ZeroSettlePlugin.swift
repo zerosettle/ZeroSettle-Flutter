@@ -1034,6 +1034,9 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
 
         // -- State Queries --
 
+        case "getSdkVersion":
+            result(Configuration.sdkVersion)
+
         case "getIsConfigured":
             result(ZeroSettle.shared.isConfigured)
 

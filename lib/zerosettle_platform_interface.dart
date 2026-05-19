@@ -172,6 +172,10 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   // -- State Queries --
 
+  Future<String> getSdkVersion() {
+    throw UnimplementedError('getSdkVersion() has not been implemented.');
+  }
+
   Future<bool> getIsConfigured() {
     throw UnimplementedError('getIsConfigured() has not been implemented.');
   }

@@ -139,6 +139,7 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
      */
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
+            "getSdkVersion" -> result.success(ZeroSettle.sdkVersion)
             "handleUniversalLink" -> handleUniversalLink(result)
             "getRemoteConfig" -> result.success(null)
             "getDetectedJurisdiction" -> result.success(null)

@@ -46,6 +46,9 @@ class MockZeroSettlePlatform
     bool preloadCheckout = false,
     int? maxPreloadedWebViews,
     String? applePaySetupBehavior,
+    String? playLicenseKey,
+    bool syncPlayPurchases = true,
+    bool strictAck = false,
   }) async {
     configured = true;
     lastPublishableKey = publishableKey;
@@ -448,6 +451,29 @@ class MockZeroSettlePlatform
   @override
   Stream<List<Map<String, dynamic>>> get pendingClaimsUpdates =>
       Stream.fromIterable(pendingClaimsUpdatesValues);
+
+  // ---- Gap 5: reactive state streams ----
+
+  @override
+  Stream<List<Map<String, dynamic>>> get productsUpdates =>
+      Stream.value(const []);
+
+  @override
+  Stream<String?> get currentUserIdUpdates => Stream.value(null);
+
+  @override
+  Stream<bool> get pendingCheckoutUpdates => Stream.value(false);
+
+  @override
+  Stream<bool> get isBootstrappedUpdates => Stream.value(false);
+
+  // ---- getSdkVersion (Task 1) ----
+
+  @override
+  Future<String> getSdkVersion() async {
+    _record('getSdkVersion');
+    return '9.9.9-test';
+  }
 
   // ---- 1.3.2 Apple Pay primitives ----
 
@@ -1115,6 +1141,10 @@ void main() {
         await ZeroSettle.instance.getApplePayState(),
         ApplePayAvailabilityState.unavailable,
       );
+    });
+
+    test('getSdkVersion returns the platform value', () async {
+      expect(await ZeroSettle.instance.getSdkVersion(), '9.9.9-test');
     });
 
     test('applePayStateUpdates stream forwards raw values as enums', () async {

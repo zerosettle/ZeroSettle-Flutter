@@ -474,6 +474,9 @@ class ZeroSettle {
 
   // -- State Queries --
 
+  /// The native SDK version string (e.g. `"1.4.0"`).
+  Future<String> getSdkVersion() => _wrap(() => _platform.getSdkVersion());
+
   /// Whether the SDK has been configured.
   Future<bool> getIsConfigured() {
     return _wrap(() => _platform.getIsConfigured());

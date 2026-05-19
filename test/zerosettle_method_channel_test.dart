@@ -92,6 +92,8 @@ void main() {
             return null;
           case 'handleUniversalLink':
             return true;
+          case 'getSdkVersion':
+            return '1.4.0';
           case 'getIsConfigured':
             return true;
           case 'getPendingCheckout':
@@ -247,6 +249,11 @@ void main() {
   test('handleUniversalLink returns true', () async {
     final result = await platform.handleUniversalLink('https://example.com');
     expect(result, isTrue);
+  });
+
+  test('getSdkVersion invokes the channel', () async {
+    await platform.getSdkVersion();
+    expect(channelCalls.any((c) => c.method == 'getSdkVersion'), isTrue);
   });
 
   test('getIsConfigured returns true', () async {

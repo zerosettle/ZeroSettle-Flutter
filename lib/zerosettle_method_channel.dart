@@ -278,6 +278,12 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   // -- State Queries --
 
   @override
+  Future<String> getSdkVersion() async {
+    final v = await methodChannel.invokeMethod<String>('getSdkVersion');
+    return v ?? '';
+  }
+
+  @override
   Future<bool> getIsConfigured() async {
     final result = await methodChannel.invokeMethod<bool>('getIsConfigured');
     return result ?? false;
