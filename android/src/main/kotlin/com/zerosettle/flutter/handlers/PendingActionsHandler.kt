@@ -1,5 +1,6 @@
 package com.zerosettle.flutter.handlers
 
+import com.zerosettle.flutter.ext.sendError
 import com.zerosettle.flutter.ext.toFlutterMap
 import com.zerosettle.sdk.ZeroSettle
 import io.flutter.plugin.common.MethodCall
@@ -22,9 +23,12 @@ import kotlinx.coroutines.launch
  * `"manualPlayCancel"`) matching the Dart `PendingAction.fromMap` switch.
  *
  * Wire shape for `dismissPendingAction` args: `{"transactionId": String}`.
- * Uses [ZeroSettle.dismissPendingAction(transactionId)] directly (the
- * overload confirmed at ZeroSettle.kt:1250 — no need to resolve the action
- * object first).
+ * Uses the `ZeroSettle.dismissPendingAction(transactionId: String)`
+ * overload directly — no need to resolve the action object first.
+ * Failures route through the canonical [sendError] mapper so callers see
+ * the SDK's specific error code (e.g. `not_found` when the transactionId
+ * isn't in the `pendingActions` StateFlow) rather than a flattened
+ * `sdk_error`.
  *
  * ## "Android only" note
  *
@@ -68,13 +72,7 @@ internal class PendingActionsHandler(private val deps: HandlerDependencies) {
             val outcome = ZeroSettle.dismissPendingAction(transactionId)
             outcome.fold(
                 onSuccess = { result.success(null) },
-                onFailure = { err ->
-                    result.error(
-                        "sdk_error",
-                        err.message ?: "dismissPendingAction failed",
-                        null,
-                    )
-                },
+                onFailure = { result.sendError(it) },
             )
         }
     }

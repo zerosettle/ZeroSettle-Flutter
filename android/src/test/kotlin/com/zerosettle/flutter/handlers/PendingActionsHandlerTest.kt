@@ -5,6 +5,7 @@ import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.sdk.models.PendingAction
+import com.zerosettle.sdk.models.ZeroSettleError
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.mockk.coEvery
@@ -36,7 +37,9 @@ import org.robolectric.RobolectricTestRunner
  *   - `getPendingActions` wire shape pins corrected keys (`migrationCompletedInfo`,
  *     `playAccessEndsAt`, `manualPlayCancel`, `expiresAt`).
  *   - `dismissPendingAction` happy path → `success(null)` via the String overload.
- *   - `dismissPendingAction` SDK failure → `error("sdk_error", ...)`.
+ *   - `dismissPendingAction` SDK failure → routed through the canonical
+ *     `sendError` mapper, so a `ZeroSettleError.NotFound` (unknown
+ *     transactionId) surfaces as `"not_found"`, not a flattened `"sdk_error"`.
  *   - `dismissPendingAction` missing transactionId arg → `error("INVALID_ARGUMENTS", ...)`.
  *   - Unknown method → `handle` returns false (fall-through to next handler).
  */
@@ -183,14 +186,19 @@ class PendingActionsHandlerTest {
     }
 
     @Test
-    fun `dismissPendingAction SDK failure returns sdk_error`() {
-        val sdkError = RuntimeException("dismiss failed")
-        coEvery { ZeroSettle.dismissPendingAction("txn_fail") } returns Result.failure(sdkError)
+    fun `dismissPendingAction SDK failure routes through sendError to mapped code`() {
+        // The SDK's String dismissPendingAction returns Result.failure(NotFound)
+        // when the transactionId isn't in the pendingActions StateFlow. The
+        // canonical sendError mapper turns NotFound into "not_found" — the
+        // handler must NOT collapse it to a generic "sdk_error".
+        coEvery {
+            ZeroSettle.dismissPendingAction("txn_fail")
+        } returns Result.failure(ZeroSettleError.NotFound("no pending action for txn_fail"))
         val result = newResult()
 
         handler.handle(call("dismissPendingAction", mapOf("transactionId" to "txn_fail")), result)
 
-        verify { result.error(eq("sdk_error"), any(), null) }
+        verify { result.error(eq("not_found"), any(), null) }
         verify(exactly = 0) { result.success(any()) }
     }
 
