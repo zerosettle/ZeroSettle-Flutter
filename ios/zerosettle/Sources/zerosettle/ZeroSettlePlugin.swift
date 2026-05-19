@@ -71,6 +71,8 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private var isUcbEnabledEventChannel: FlutterEventChannel?
     // Pending Actions — Android/Play only; iOS emits [] once on subscribe.
     private var pendingActionsEventChannel: FlutterEventChannel?
+    // Task 12 — SDK analytics/lifecycle events stream (shared channel name with Android).
+    private var eventsEventChannel: FlutterEventChannel?
 
     /// Captured at `register(with:)` time so per-handle channels (built on
     /// demand inside `installMigrationHandle`) can attach without re-routing
@@ -99,6 +101,8 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
     private let isUcbEnabledStreamHandler = OneShotBoolStreamHandler(value: false)
     // Pending Actions — one-shot empty-list stub (Android/Play only; iOS emits [] on subscribe).
     private let pendingActionsStreamHandler = OneShotEmptyListStreamHandler()
+    // Task 12 — discrete events stream handler. No replay (replayLatest = false on Android).
+    private let eventsStreamHandler = EventsStreamHandler()
 
     /// Combine subscription that fires on `ZeroSettle.shared.objectWillChange`
     /// to mirror the three Observable-backed state properties (`products`,
@@ -192,6 +196,16 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
         let pendingActionsEC = FlutterEventChannel(name: "zerosettle/pending_actions_updates", binaryMessenger: registrar.messenger())
         pendingActionsEC.setStreamHandler(instance.pendingActionsStreamHandler)
         instance.pendingActionsEventChannel = pendingActionsEC
+
+        // Task 12 — SDK analytics/lifecycle events stream. Discrete (no replay on subscribe).
+        // iOS emits a subset translatable from ZeroSettleDelegate callbacks:
+        //   purchaseSucceeded, purchaseFailed, entitlementsRefreshed, syncFailed.
+        // Android-only events (offerShown/Accepted/Dismissed, offerEvaluationFailed,
+        //   migrationCompleted, pendingActionShown) are not emitted on iOS — they have
+        //   no corresponding delegate callback surface in ZeroSettleKit.
+        let eventsEC = FlutterEventChannel(name: "zerosettle/events", binaryMessenger: registrar.messenger())
+        eventsEC.setStreamHandler(instance.eventsStreamHandler)
+        instance.eventsEventChannel = eventsEC
 
         // Gap 5 — push initial state to late subscribers via onListenStarted,
         // matching the pendingClaims pattern. `products` / `pendingCheckout` /
@@ -1496,6 +1510,12 @@ extension ZeroSettlePlugin: ZeroSettleDelegate {
             "event": "checkoutDidComplete",
             "transaction": transaction.toFlutterMap(),
         ])
+        // Task 12 — also emit onto the unified events stream.
+        eventsStreamHandler.send([
+            "type": "purchaseSucceeded",
+            "productId": transaction.productId,
+            "transactionId": transaction.id,
+        ])
     }
 
     public func zeroSettleCheckoutDidCancel(productId: String) {
@@ -1511,10 +1531,25 @@ extension ZeroSettlePlugin: ZeroSettleDelegate {
             "productId": productId,
             "error": error.localizedDescription,
         ])
+        // Task 12 — also emit onto the unified events stream.
+        eventsStreamHandler.send([
+            "type": "purchaseFailed",
+            "productId": productId,
+            "reason": error.localizedDescription,
+        ])
     }
 
     public func zeroSettleEntitlementsDidUpdate(_ entitlements: [Entitlement]) {
         entitlementStreamHandler.send(entitlements.map { $0.toFlutterMap() })
+        // Task 12 — also emit onto the unified events stream.
+        // Filter to active-only to match Android's count semantics — Android's
+        // EntitlementPoller receives the API response which is active-only;
+        // iOS's delegate callback receives all entitlements (active + expired).
+        let activeCount = entitlements.filter { $0.isActive }.count
+        eventsStreamHandler.send([
+            "type": "entitlementsRefreshed",
+            "count": activeCount,
+        ])
     }
 
     public func zeroSettleDidSyncStoreKitTransaction(productId: String, transactionId: UInt64) {
@@ -1529,6 +1564,16 @@ extension ZeroSettlePlugin: ZeroSettleDelegate {
         checkoutStreamHandler.send([
             "event": "storeKitSyncFailed",
             "error": error.localizedDescription,
+        ])
+        // Task 12 — also emit onto the unified events stream.
+        // iOS delegate does not surface purchaseToken or retry count, so we
+        // emit degraded fields. `terminal=true` because ZeroSettleKit's
+        // StoreKit sync retry queue gives up before this delegate fires.
+        eventsStreamHandler.send([
+            "type": "syncFailed",
+            "purchaseToken": "",
+            "attempts": 1,
+            "terminal": true,
         ])
     }
 }
@@ -1686,6 +1731,30 @@ private class OneShotEmptyListStreamHandler: NSObject, FlutterStreamHandler {
 
     func onCancel(withArguments arguments: Any?) -> FlutterError? {
         return nil
+    }
+}
+
+/// Task 12 — discrete event stream handler for `zerosettle/events`.
+/// Same shape as `CheckoutStreamHandler` — no caching, no late-subscriber
+/// replay. Events are one-shot signals (purchase completed, sync failed, etc.)
+/// and replaying them to a late subscriber would cause double-processing.
+private class EventsStreamHandler: NSObject, FlutterStreamHandler {
+    private var eventSink: FlutterEventSink?
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        eventSink = events
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        eventSink = nil
+        return nil
+    }
+
+    func send(_ data: Any) {
+        DispatchQueue.main.async { [weak self] in
+            self?.eventSink?(data)
+        }
     }
 }
 
