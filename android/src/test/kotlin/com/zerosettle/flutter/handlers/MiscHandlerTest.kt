@@ -109,6 +109,7 @@ class MiscHandlerTest {
     fun `handle returns true for each owned method`() {
         // Stub the SDK boundary so suspend / StateFlow paths don't blow up.
         every { ZeroSettle.pendingCheckout } returns MutableStateFlow(false)
+        every { ZeroSettle.isUcbEnabled } returns MutableStateFlow(false)
         coEvery { ZeroSettle.trackMigrationConversion(any()) } returns Result.failure(
             ZeroSettleError.UserNotIdentified,
         )
@@ -419,16 +420,18 @@ class MiscHandlerTest {
         verify(exactly = 0) { result.success(any()) }
     }
 
-    // ─── getIsUcbEnabled — UCB stub → success(false) ────────────────────
+    // ─── getIsUcbEnabled — reads the SDK isUcbEnabled StateFlow ─────────
 
     @Test
-    fun `getIsUcbEnabled returns success(false) — UCB not yet in SDK 1_0_0`() {
-        // UCB (User Choice Billing) is Android/Play-specific. The published
-        // SDK 1.0.0 does not yet expose `ZeroSettle.isUcbEnabled`; the
-        // handler stubs `false` until the SDK jar ships the property.
+    fun `getIsUcbEnabled returns the SDK isUcbEnabled StateFlow value`() {
+        // The handler reads `ZeroSettle.isUcbEnabled.value` synchronously.
+        // Stub the StateFlow to `true` (not the default `false`) so this
+        // test fails if the handler ever reverts to a hardcoded value.
+        every { ZeroSettle.isUcbEnabled } returns MutableStateFlow(true)
+
         val result = newResult()
         val consumed = handler.handle(call("getIsUcbEnabled"), result)
         assertThat(consumed).isTrue()
-        verify { result.success(false) }
+        verify { result.success(true) }
     }
 }
