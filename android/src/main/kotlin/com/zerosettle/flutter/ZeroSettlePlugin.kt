@@ -15,6 +15,7 @@ import com.zerosettle.flutter.handlers.PendingActionsHandler
 import com.zerosettle.flutter.handlers.PendingClaimsHandler
 import com.zerosettle.flutter.handlers.PurchaseHandler
 import com.zerosettle.flutter.handlers.SubscriptionMgmtHandler
+import com.zerosettle.flutter.offermanager.MigrationManagerStaticHandler
 import com.zerosettle.flutter.offermanager.OfferManagerHandleRegistry
 import com.zerosettle.flutter.offermanager.OfferManagerStaticHandler
 import com.zerosettle.flutter.platformviews.MigrateTipViewFactory
@@ -158,6 +159,13 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     /** Static OfferManager channel (F19 handler). */
     private lateinit var offerManagerStaticChannel: MethodChannel
     private lateinit var offerManagerStaticHandler: OfferManagerStaticHandler
+
+    /** Static MigrationManager channel (Task 13). Routes Dart's deprecated
+     *  ZeroSettleMigrationManagerStatics to the same OfferDismissalStore as
+     *  the offer_manager_static channel. resetDismissedState is a no-op to
+     *  avoid conflating the two iOS-distinct dismissal stores on Android. */
+    private lateinit var migrationManagerStaticChannel: MethodChannel
+    private lateinit var migrationManagerStaticHandler: MigrationManagerStaticHandler
 
     /** EventChannels — names match iOS exactly + Dart wire contract. */
     private lateinit var entitlementEventChannel: EventChannel
@@ -476,6 +484,16 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 setMethodCallHandler(offerManagerStaticHandler)
             }
 
+        // MigrationManager static channel (Task 13). Dart's deprecated
+        // ZeroSettleMigrationManagerStatics uses this channel. Routes
+        // isPermanentlyDismissed / setDismissed to the same OfferDismissalStore
+        // as the offer_manager_static channel; resetDismissedState is a no-op.
+        migrationManagerStaticHandler = MigrationManagerStaticHandler(pluginScope)
+        migrationManagerStaticChannel =
+            MethodChannel(messenger, "zerosettle/migration_manager_static").apply {
+                setMethodCallHandler(migrationManagerStaticHandler)
+            }
+
         // PlatformView factories (F22–F24).
         binding.platformViewRegistry
             .registerViewFactory("com.zerosettle/offer_tip", OfferTipFactory())
@@ -568,6 +586,7 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         // is internally idempotent and synchronized.
         mainChannel.setMethodCallHandler(null)
         offerManagerStaticChannel.setMethodCallHandler(null)
+        migrationManagerStaticChannel.setMethodCallHandler(null)
         entitlementEventChannel.setStreamHandler(null)
         checkoutEventChannel.setStreamHandler(null)
         pendingClaimsEventChannel.setStreamHandler(null)
