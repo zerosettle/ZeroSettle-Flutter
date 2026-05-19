@@ -615,7 +615,7 @@ class ZeroSettle {
   /// Reactive [getIsUcbEnabled]. Emits `false` once on iOS.
   Stream<bool> get isUcbEnabledUpdates => _platform.isUcbEnabledUpdates;
 
-  // -- Task 3: releasePendingCheckout --
+  // -- Web Checkout --
 
   /// Cancels an in-flight web checkout. No-op on iOS.
   Future<void> releasePendingCheckout() =>
