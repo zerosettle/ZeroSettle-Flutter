@@ -235,13 +235,19 @@ class ZeroSettle {
 
   /// Present the payment sheet for a product.
   ///
+  /// **iOS only.** On Android this throws — payment routing goes through
+  /// Google Play's User Choice Billing, so the app must not present its own
+  /// payment sheet. The web payment sheet does appear on Android for
+  /// upgrade-&-save / switch-&-save offers (where Play billing does not
+  /// apply), but the SDK presents it internally as part of the offer flow —
+  /// it is not driven by this method.
+  ///
   /// Returns a [CheckoutTransaction] on successful payment.
   /// Throws [ZSCancelledException] if the user dismisses the sheet.
   /// Throws [ZSCheckoutFailedException] if the payment fails.
   ///
   /// - [productId]: The product to purchase
   /// - [userId]: Optional user identifier
-  /// - [freeTrialDays]: Number of free trial days to grant on web billing subscriptions (defaults to 0)
   /// - [dismissible]: Whether the sheet can be dismissed by the user
   Future<CheckoutTransaction> presentPaymentSheet({
     required String productId,

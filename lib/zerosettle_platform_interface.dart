@@ -93,6 +93,10 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   // -- Payment Sheet --
 
+  /// iOS only. Android intentionally returns a `not_implemented` error —
+  /// Android routes payment through Google Play User Choice Billing, and the
+  /// web payment sheet is presented internally by the SDK for upgrade/switch
+  /// offers rather than via this method.
   Future<Map<String, dynamic>> presentPaymentSheet({
     required String productId,
     String? userId,
