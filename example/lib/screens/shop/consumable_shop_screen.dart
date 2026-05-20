@@ -55,9 +55,10 @@ class _ConsumableShopScreenState extends State<ConsumableShopScreen> {
   Future<void> _onPurchased(Product p) async {
     final grant = streakSaverGrant(p);
     final prefs = InheritedJustOne.of(context).prefs;
-    await prefs.setStreakSaverCount(prefs.streakSaverCount + grant);
+    final newCount = prefs.streakSaverCount + grant;
+    await prefs.setStreakSaverCount(newCount);
     if (mounted) {
-      setState(() => _owned = prefs.streakSaverCount);
+      setState(() => _owned = newCount);
     }
   }
 
