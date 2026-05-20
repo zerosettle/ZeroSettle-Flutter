@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'dev_cancel_debug_screen.dart';
+import 'dev_debug_screen.dart';
 import 'dev_entitlements_screen.dart';
 import 'dev_offers_screen.dart';
 import 'dev_pending_actions_screen.dart';
@@ -11,8 +12,7 @@ import 'env_switcher_screen.dart';
 ///
 /// A [ListView] of 7 sub-screen entry [ListTile]s. Each tile pushes its
 /// target via [Navigator.push] (not go_router — developer sub-screens are
-/// outside the app's route graph). Sub-screens not yet built (Tasks 15–17)
-/// use the private [_ComingSoon] placeholder.
+/// outside the app's route graph).
 ///
 /// Mirrors [DeveloperScreen.kt] from the JustOne Android sample.
 class DeveloperScreen extends StatelessWidget {
@@ -47,7 +47,7 @@ class DeveloperScreen extends StatelessWidget {
     ),
     _DevEntry(
       label: 'Debug',
-      screen: _ComingSoon('Debug'),
+      screen: DevDebugScreen(),
     ),
   ];
 
@@ -83,24 +83,4 @@ class _DevEntry {
   final String label;
   final Widget screen;
   const _DevEntry({required this.label, required this.screen});
-}
-
-// ---------------------------------------------------------------------------
-// Placeholder for sub-screens not yet implemented (Tasks 15–17).
-// ---------------------------------------------------------------------------
-
-class _ComingSoon extends StatelessWidget {
-  final String name;
-  // No `key` param: this private placeholder is only ever constructed via
-  // `const _ComingSoon('<name>')` with no key, so a `super.key` parameter
-  // would be flagged dead by the analyzer (unused_element_parameter).
-  const _ComingSoon(this.name);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(name)),
-      body: const Center(child: Text('Coming soon')),
-    );
-  }
 }
