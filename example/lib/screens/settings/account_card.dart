@@ -60,18 +60,22 @@ class _AccountCardState extends State<AccountCard> {
   }
 
   Future<void> _signOut(BuildContext context) async {
+    // Capture the prefs reference before any await so cleanup never depends on
+    // `context` still being mounted.
+    final prefs = InheritedJustOne.of(context).prefs;
     try {
       await ZeroSettle.instance.logout();
     } on ZeroSettleException catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      // Surface the error if we can, but DON'T return — a failed server
+      // logout must not trap the user on the settings screen.
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
     }
-    // Always clear local state and navigate — a failed server logout should
-    // not trap the user on the settings screen.
-    if (!context.mounted) return;
-    await InheritedJustOne.of(context).prefs.clearAll();
+    // Always clear local state; navigate whenever the context is still alive.
+    await prefs.clearAll();
     if (!context.mounted) return;
     context.go(Routes.createUser);
   }

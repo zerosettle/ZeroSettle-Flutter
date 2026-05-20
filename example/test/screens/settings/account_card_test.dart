@@ -1,11 +1,13 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zerosettle/zerosettle.dart';
 import 'package:zerosettle/zerosettle_method_channel.dart';
 import 'package:zerosettle/zerosettle_platform_interface.dart';
 import 'package:zerosettle_example/app/inherited_just_one.dart';
+import 'package:zerosettle_example/app/routes.dart';
 import 'package:zerosettle_example/data/database.dart';
 import 'package:zerosettle_example/data/user_prefs.dart';
 import 'package:zerosettle_example/notifications/notification_service.dart';
@@ -31,6 +33,11 @@ class _ThrowingRestorePlatform extends MethodChannelZeroSettle {
       throw const ZSApiException('Network error');
 }
 
+class _ThrowingLogoutPlatform extends MethodChannelZeroSettle {
+  @override
+  Future<void> logout() async => throw const ZSApiException('Logout failed');
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -39,6 +46,23 @@ Widget _wrap(Widget child, JustOneScope scope) {
   return InheritedJustOne(
     scope: scope,
     child: MaterialApp(home: Scaffold(body: child)),
+  );
+}
+
+/// Router-aware wrapper for tests that exercise navigation (`_signOut` calls
+/// `context.go(Routes.createUser)`). The `_wrap` helper above has no GoRouter,
+/// so `context.go` would assert.
+Widget _wrapWithRouter(Widget child, JustOneScope scope) {
+  final router = GoRouter(initialLocation: '/', routes: [
+    GoRoute(path: '/', builder: (_, _) => Scaffold(body: child)),
+    GoRoute(
+      path: Routes.createUser,
+      builder: (_, _) => const Scaffold(body: Text('create-user')),
+    ),
+  ]);
+  return InheritedJustOne(
+    scope: scope,
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -117,6 +141,28 @@ void main() {
 
     // The ZeroSettleException message must surface in the SnackBar.
     expect(find.text('Network error'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Sign out still clears prefs when logout() throws', (tester) async {
+    ZeroSettlePlatform.instance = _ThrowingLogoutPlatform();
+
+    // Seed a pref so we can prove clearAll() ran despite the logout failure.
+    await prefs.setDisplayName('Test User');
+    expect(prefs.displayName, 'Test User');
+
+    await tester.pumpWidget(_wrapWithRouter(const AccountCard(), scope));
+    await tester.pump();
+
+    await tester.tap(find.text('Sign out'));
+    await tester.pumpAndSettle();
+
+    // ...cleanup must still run — a thrown logout() must not trap the user...
+    expect(prefs.displayName, isNull);
+    // ...and navigation to the create-user route must complete.
+    expect(find.text('create-user'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
