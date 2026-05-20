@@ -10,6 +10,21 @@ import 'domain/premium_status.dart';
 import 'iap_environment.dart';
 import 'notifications/notification_service.dart';
 
+// ---------------------------------------------------------------------------
+// Deep-link / web-checkout return handling
+// ---------------------------------------------------------------------------
+// ZeroSettle.instance.purchase() is fully awaitable on both platforms.
+// On Android, ZeroSettleHostActivity handles the Custom Tab return internally
+// and resolves the Future; no app-side onNewIntent / deep-link wiring is
+// required in this sample.
+// On iOS, the SDK exposes handleUniversalLink(String url) → Future<bool>
+// for apps that need to explicitly forward universal-link callbacks (e.g. when
+// the host app processes all universal links centrally).  This sample does NOT
+// need it because purchase() self-resolves — the awaited call in
+// DualPriceButtons completes once the user returns from the web checkout
+// Custom Tab / SFSafariViewController, regardless of platform.
+// ---------------------------------------------------------------------------
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

@@ -50,7 +50,16 @@ class HomeScreen extends StatelessWidget {
     final heatmapStart = today.subtract(const Duration(days: 84)); // 12 weeks
 
     return Scaffold(
-      appBar: AppBar(title: const Text('JustOne')),
+      appBar: AppBar(
+        title: const Text('JustOne'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () => context.go(Routes.settings),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _onFabPressed(context),
         child: const Icon(Icons.add),
