@@ -17,6 +17,10 @@ import '../../widgets/confetti_success.dart';
 /// composable's terminal outcomes — cancel, save-offer, pause, dismiss — but
 /// the intermediate questionnaire UI is simplified.
 ///
+/// When the server reports [CancelFlowConfig.enabled] == false the retention
+/// flow is off — the screen renders a cancel-only body (no offer / pause /
+/// questions).
+///
 /// Mirrors: `CancelFlowScreen.kt` in the JustOne Android sample.
 class CancelFlowScreen extends StatefulWidget {
   final String productId;
@@ -33,6 +37,10 @@ class _CancelFlowScreenState extends State<CancelFlowScreen> {
 
   /// When true, the body is replaced by [ConfettiSuccess].
   bool _showConfetti = false;
+
+  /// True while an SDK action call is in-flight — disables every action
+  /// button so a double-tap can't fire the same call twice.
+  bool _busy = false;
 
   /// Auto-navigation timer — cancelled in [dispose] if the widget unmounts
   /// before the 2.5 s confetti window elapses.
@@ -52,35 +60,59 @@ class _CancelFlowScreenState extends State<CancelFlowScreen> {
 
   // ---------------------------------------------------------------------------
   // Action handlers
+  //
+  // Each handler sets [_busy] for the duration of its SDK call so the action
+  // buttons disable, blocking a double-tap from firing the same call twice.
   // ---------------------------------------------------------------------------
 
-  Future<void> _onCancelAnyway(BuildContext ctx) async {
+  /// Cancels the subscription. On genuine success, swaps the body to
+  /// [ConfettiSuccess]; on failure, surfaces an error SnackBar and stays put —
+  /// confetti is never shown for a call that didn't succeed.
+  Future<void> _onCancel(BuildContext ctx, {bool immediate = false}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
-      await ZeroSettle.instance.cancelSubscription(productId: widget.productId);
+      await ZeroSettle.instance.cancelSubscription(
+        productId: widget.productId,
+        immediate: immediate,
+      );
+      if (!ctx.mounted) return;
+      _triggerConfetti(ctx);
     } catch (_) {
-      // Ignore — we still show confetti so the user knows it was requested.
+      if (!ctx.mounted) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't cancel your subscription. Please try again."),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (!ctx.mounted) return;
-    _triggerConfetti(ctx);
   }
 
   Future<void> _onAcceptOffer(BuildContext ctx) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
       await ZeroSettle.instance.acceptSaveOffer(productId: widget.productId);
       if (!ctx.mounted) return;
       ScaffoldMessenger.of(ctx).showSnackBar(
         const SnackBar(content: Text('Offer applied — thanks for staying!')),
       );
+      ctx.pop();
     } catch (e) {
       if (!ctx.mounted) return;
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(content: Text('Could not apply offer: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (ctx.mounted) ctx.pop();
   }
 
   Future<void> _onPause(BuildContext ctx, int? durationDays) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
       final resumeDate = await ZeroSettle.instance.pauseSubscription(
         productId: widget.productId,
@@ -91,24 +123,15 @@ class _CancelFlowScreenState extends State<CancelFlowScreen> {
           ? 'Paused until ${_formatDate(resumeDate)}'
           : 'Subscription paused';
       ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+      ctx.pop();
     } catch (e) {
       if (!ctx.mounted) return;
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(content: Text('Could not pause: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (ctx.mounted) ctx.pop();
-  }
-
-  Future<void> _onCancelConfirmed(BuildContext ctx) async {
-    try {
-      await ZeroSettle.instance
-          .cancelSubscription(productId: widget.productId, immediate: false);
-    } catch (_) {
-      // Proceed to confetti regardless.
-    }
-    if (!ctx.mounted) return;
-    _triggerConfetti(ctx);
   }
 
   /// Swaps the body to [ConfettiSuccess] and schedules auto-navigation home
@@ -183,7 +206,7 @@ class _CancelFlowScreenState extends State<CancelFlowScreen> {
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: () => _onCancelAnyway(ctx),
+                  onPressed: _busy ? null : () => _onCancel(ctx),
                   child: const Text('Cancel anyway'),
                 ),
                 const SizedBox(height: 8),
@@ -199,10 +222,28 @@ class _CancelFlowScreenState extends State<CancelFlowScreen> {
     );
   }
 
-  /// Renders the loaded [CancelFlowConfig] — questions summary, save offer,
-  /// pause option, cancel CTA, and keep-subscription escape.
+  /// Renders the loaded [CancelFlowConfig].
+  ///
+  /// When [CancelFlowConfig.enabled] is false the server has turned the
+  /// retention flow off — render a cancel-only body. Otherwise render the
+  /// full retention UI: questions summary, save offer, pause option.
   Widget _buildConfigBody(BuildContext ctx, CancelFlowConfig config) {
     final theme = Theme.of(ctx);
+
+    if (!config.enabled) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildCancelCta(ctx),
+            const SizedBox(height: 12),
+            _buildKeepEscape(ctx),
+          ],
+        ),
+      );
+    }
+
     final offer = config.offer;
     final pause = config.pause;
 
@@ -252,7 +293,7 @@ class _CancelFlowScreenState extends State<CancelFlowScreen> {
                     ),
                     const SizedBox(height: 12),
                     FilledButton(
-                      onPressed: () => _onAcceptOffer(ctx),
+                      onPressed: _busy ? null : () => _onAcceptOffer(ctx),
                       child: Text(offer.ctaText),
                     ),
                   ],
@@ -275,15 +316,17 @@ class _CancelFlowScreenState extends State<CancelFlowScreen> {
                     Text(pause.body, style: theme.textTheme.bodySmall),
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: () {
-                        // Use the first available duration option; if the list
-                        // is empty or durationDays is null, pass null and let
-                        // the backend choose the default.
-                        final days = pause.options.isNotEmpty
-                            ? pause.options.first.durationDays
-                            : null;
-                        _onPause(ctx, days);
-                      },
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              // Use the first available duration option; if the
+                              // list is empty or durationDays is null, pass null
+                              // and let the backend choose the default.
+                              final days = pause.options.isNotEmpty
+                                  ? pause.options.first.durationDays
+                                  : null;
+                              _onPause(ctx, days);
+                            },
                       child: Text(pause.ctaText),
                     ),
                   ],
@@ -294,23 +337,34 @@ class _CancelFlowScreenState extends State<CancelFlowScreen> {
           ],
 
           // --- Cancel CTA ---
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: theme.colorScheme.error,
-              foregroundColor: theme.colorScheme.onError,
-            ),
-            onPressed: () => _onCancelConfirmed(ctx),
-            child: const Text('Cancel my subscription'),
-          ),
+          _buildCancelCta(ctx),
           const SizedBox(height: 12),
 
           // --- Keep escape ---
-          TextButton(
-            onPressed: () => ctx.pop(),
-            child: const Text('Keep my subscription'),
-          ),
+          _buildKeepEscape(ctx),
         ],
       ),
+    );
+  }
+
+  /// The primary "Cancel my subscription" destructive CTA.
+  Widget _buildCancelCta(BuildContext ctx) {
+    final theme = Theme.of(ctx);
+    return FilledButton(
+      style: FilledButton.styleFrom(
+        backgroundColor: theme.colorScheme.error,
+        foregroundColor: theme.colorScheme.onError,
+      ),
+      onPressed: _busy ? null : () => _onCancel(ctx),
+      child: const Text('Cancel my subscription'),
+    );
+  }
+
+  /// The "Keep my subscription" escape control.
+  Widget _buildKeepEscape(BuildContext ctx) {
+    return TextButton(
+      onPressed: () => ctx.pop(),
+      child: const Text('Keep my subscription'),
     );
   }
 
