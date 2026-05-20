@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'dev_entitlements_screen.dart';
+import 'dev_pending_actions_screen.dart';
 import 'env_switcher_screen.dart';
 
 /// Developer tools shell screen.
@@ -22,7 +24,7 @@ class DeveloperScreen extends StatelessWidget {
     ),
     _DevEntry(
       label: 'Entitlements',
-      screen: _ComingSoon('Entitlements'),
+      screen: DevEntitlementsScreen(),
     ),
     _DevEntry(
       label: 'Offers',
@@ -30,7 +32,7 @@ class DeveloperScreen extends StatelessWidget {
     ),
     _DevEntry(
       label: 'Pending actions',
-      screen: _ComingSoon('Pending actions'),
+      screen: DevPendingActionsScreen(),
     ),
     _DevEntry(
       label: 'Cancel flow',
