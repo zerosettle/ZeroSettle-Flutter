@@ -6,9 +6,8 @@ import 'account_card.dart';
 
 /// Top-level settings screen for JustOne.
 ///
-/// Renders a [ListView] of cards:
-/// - [AccountCard] — user ID, SDK version, restore, sign-out
-/// - TODO(Task 10/11): SubscriptionCard, StreakSaverCard, ReminderCard, offer tip
+/// Renders a [ListView] of cards, currently just [AccountCard] — the
+/// remaining cards land in Tasks 10–11 (see the in-body placeholder).
 ///
 /// A "Developer" [ListTile] is always visible at the bottom of the list
 /// (no 7-tap easter egg in the sample — developer tools are always accessible).

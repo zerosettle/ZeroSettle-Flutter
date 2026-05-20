@@ -12,9 +12,30 @@ import '../../app/routes.dart';
 /// completes in that environment, which is fine). Always renders the static
 /// "Restore purchases" and "Sign out" buttons.
 ///
+/// The user-id / SDK-version futures are created once in [initState] and
+/// cached — passing `getCurrentUserId()` inline to a [FutureBuilder] would
+/// spawn a fresh Future on every `build`, resetting the builder to its
+/// `waiting` state and flickering. Mirrors the `StatefulWidget` pattern in
+/// sibling screens (`ConsumableShopScreen`, `LaunchPaywallScreen`).
+///
 /// Mirrors the `AccountCard` Composable in the JustOne Android sample.
-class AccountCard extends StatelessWidget {
+class AccountCard extends StatefulWidget {
   const AccountCard({super.key});
+
+  @override
+  State<AccountCard> createState() => _AccountCardState();
+}
+
+class _AccountCardState extends State<AccountCard> {
+  late final Future<String?> _userIdFuture;
+  late final Future<String> _sdkVersionFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _userIdFuture = ZeroSettle.instance.getCurrentUserId();
+    _sdkVersionFuture = ZeroSettle.instance.getSdkVersion();
+  }
 
   Future<void> _restorePurchases(BuildContext context) async {
     final results = await ZeroSettle.instance.restoreEntitlements();
@@ -63,7 +84,7 @@ class AccountCard extends StatelessWidget {
               ),
             ),
             FutureBuilder<String?>(
-              future: ZeroSettle.instance.getCurrentUserId(),
+              future: _userIdFuture,
               builder: (context, snapshot) {
                 return Text(
                   snapshot.data ?? '—',
@@ -76,7 +97,7 @@ class AccountCard extends StatelessWidget {
 
             // SDK version row
             FutureBuilder<String>(
-              future: ZeroSettle.instance.getSdkVersion(),
+              future: _sdkVersionFuture,
               builder: (context, snapshot) {
                 final version = snapshot.data;
                 return Text(
