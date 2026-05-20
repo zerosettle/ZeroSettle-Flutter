@@ -39,6 +39,9 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
   }
 
   Future<void> _switchEnv(IAPEnvironment env) async {
+    // Capture the prefs ref before any awaits — used for auto-re-identify
+    // after configure (mirrors main.dart's bootstrap sequence).
+    final prefs = InheritedJustOne.of(context).prefs;
     setState(() {
       _currentEnv = env;
       _busy = true;
@@ -47,14 +50,38 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
     await IAPEnvironment.save(env);
     await ZeroSettle.instance.logout();
     if (!mounted) return;
-    if (env.baseUrlOverride != null) {
-      await ZeroSettle.instance.setBaseUrlOverride(env.baseUrlOverride);
-    } else {
-      await ZeroSettle.instance.setBaseUrlOverride(null);
-    }
+    await ZeroSettle.instance.setBaseUrlOverride(env.baseUrlOverride);
     if (!mounted) return;
     await ZeroSettle.instance.configure(publishableKey: env.publishableKey);
     if (!mounted) return;
+
+    // Re-identify from persisted prefs so the SDK is bootstrapped against the
+    // new env without forcing a manual re-identify — mirrors main.dart.
+    final persistedId = prefs.userId;
+    final persistedName = prefs.displayName;
+    if (persistedId != null && persistedId.isNotEmpty) {
+      try {
+        await ZeroSettle.instance.identify(
+          Identity.user(id: persistedId, name: persistedName),
+        );
+        if (!mounted) return;
+        setState(() {
+          _busy = false;
+          _status = 'Switched to ${env.displayName}\n${env.effectiveUrl}\n'
+              'Re-identified as "$persistedId" ✓';
+        });
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _busy = false;
+          _status = 'Switched to ${env.displayName}\n${env.effectiveUrl}\n'
+              're-identify failed: $e';
+        });
+        return;
+      }
+    }
+
     setState(() {
       _busy = false;
       _status = 'Switched to ${env.displayName}\n${env.effectiveUrl}\n(re-identify below)';
@@ -76,6 +103,7 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
       if (!mounted) return;
       final prefs = InheritedJustOne.of(context).prefs;
       await prefs.setUserId(id);
+      if (!mounted) return;
       if (name.isNotEmpty) await prefs.setDisplayName(name);
       if (!mounted) return;
       setState(() {

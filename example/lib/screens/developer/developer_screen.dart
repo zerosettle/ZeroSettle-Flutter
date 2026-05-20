@@ -13,46 +13,48 @@ import 'env_switcher_screen.dart';
 class DeveloperScreen extends StatelessWidget {
   const DeveloperScreen({super.key});
 
+  /// The 7 developer sub-screen entries, in display order. Hoisted to a
+  /// `static const` so it isn't rebuilt on every [build].
+  static const List<_DevEntry> _entries = [
+    _DevEntry(
+      label: 'Environment',
+      screen: EnvSwitcherScreen(),
+    ),
+    _DevEntry(
+      label: 'Entitlements',
+      screen: _ComingSoon('Entitlements'),
+    ),
+    _DevEntry(
+      label: 'Offers',
+      screen: _ComingSoon('Offers'),
+    ),
+    _DevEntry(
+      label: 'Pending actions',
+      screen: _ComingSoon('Pending actions'),
+    ),
+    _DevEntry(
+      label: 'Cancel flow',
+      screen: _ComingSoon('Cancel flow'),
+    ),
+    _DevEntry(
+      label: 'Upgrade offer',
+      screen: _ComingSoon('Upgrade offer'),
+    ),
+    _DevEntry(
+      label: 'Debug',
+      screen: _ComingSoon('Debug'),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final entries = <_DevEntry>[
-      _DevEntry(
-        label: 'Environment',
-        screen: const EnvSwitcherScreen(),
-      ),
-      _DevEntry(
-        label: 'Entitlements',
-        screen: const _ComingSoon('Entitlements'),
-      ),
-      _DevEntry(
-        label: 'Offers',
-        screen: const _ComingSoon('Offers'),
-      ),
-      _DevEntry(
-        label: 'Pending actions',
-        screen: const _ComingSoon('Pending actions'),
-      ),
-      _DevEntry(
-        label: 'Cancel flow',
-        screen: const _ComingSoon('Cancel flow'),
-      ),
-      _DevEntry(
-        label: 'Upgrade offer',
-        screen: const _ComingSoon('Upgrade offer'),
-      ),
-      _DevEntry(
-        label: 'Debug',
-        screen: const _ComingSoon('Debug'),
-      ),
-    ];
-
     return Scaffold(
       appBar: AppBar(title: const Text('Developer')),
       body: ListView.separated(
-        itemCount: entries.length,
+        itemCount: _entries.length,
         separatorBuilder: (context, index) => const Divider(height: 1),
         itemBuilder: (context, index) {
-          final entry = entries[index];
+          final entry = _entries[index];
           return ListTile(
             title: Text(entry.label),
             trailing: const Icon(Icons.chevron_right),
@@ -84,6 +86,9 @@ class _DevEntry {
 
 class _ComingSoon extends StatelessWidget {
   final String name;
+  // No `key` param: this private placeholder is only ever constructed via
+  // `const _ComingSoon('<name>')` with no key, so a `super.key` parameter
+  // would be flagged dead by the analyzer (unused_element_parameter).
   const _ComingSoon(this.name);
 
   @override
