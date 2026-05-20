@@ -1,18 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:zerosettle/zerosettle.dart';
 
 import '../../app/inherited_just_one.dart';
 import '../../app/routes.dart';
 import '../../data/database.dart';
 import '../../domain/habit_calc.dart';
+import '../../domain/premium_status.dart';
+import '../../screens/paywall/premium_upsell_sheet.dart';
 import 'habit_list_item.dart';
 import 'heatmap_widget.dart';
 
 /// Top-level screen. Streams habits + completions from the Drift DAO and
 /// renders (1) an aggregated 12-week heatmap across all habits, (2) the
-/// list of habits with check-off buttons. FAB navigates to /add-habit.
+/// list of habits with check-off buttons. FAB navigates to /add-habit, or
+/// shows the upsell sheet when the user is at the 3-habit cap and not premium.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  static const _habitCap = 3;
+
+  Future<void> _onFabPressed(BuildContext context) async {
+    final dao = InheritedJustOne.of(context).db.habitDao;
+
+    final habits = await dao.allHabits();
+
+    List<Entitlement> entitlements;
+    try {
+      entitlements = await ZeroSettle.instance.getEntitlements();
+    } catch (_) {
+      entitlements = const [];
+    }
+
+    if (!context.mounted) return;
+
+    final premium = isPremium(entitlements);
+    if (habits.length >= _habitCap && !premium) {
+      await showPremiumUpsell(context);
+    } else {
+      context.go(Routes.addHabit);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +52,7 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('JustOne')),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go(Routes.addHabit),
+        onPressed: () => _onFabPressed(context),
         child: const Icon(Icons.add),
       ),
       body: StreamBuilder<List<Habit>>(

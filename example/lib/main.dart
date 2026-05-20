@@ -6,6 +6,7 @@ import 'app/app_theme.dart';
 import 'app/inherited_just_one.dart';
 import 'data/database.dart';
 import 'data/user_prefs.dart';
+import 'domain/premium_status.dart';
 import 'iap_environment.dart';
 import 'notifications/notification_service.dart';
 
@@ -33,7 +34,8 @@ Future<void> main() async {
   //    SDK is bootstrapped without re-prompting the user.
   final persistedId = prefs.userId;
   final persistedName = prefs.displayName;
-  if (persistedId != null && persistedId.isNotEmpty) {
+  final isOnboarded = persistedId != null && persistedId.isNotEmpty;
+  if (isOnboarded) {
     try {
       await ZeroSettle.instance.identify(
         Identity.user(id: persistedId, name: persistedName),
@@ -43,24 +45,48 @@ Future<void> main() async {
     }
   }
 
+  // 4. Determine whether to route the user to the launch paywall on startup.
+  //    Condition: onboarded user who has never dismissed the paywall AND is
+  //    not currently premium.
+  String? initialLocationOverride;
+  if (isOnboarded && prefs.paywallDismissedAt == null) {
+    bool notPremium = true;
+    try {
+      final entitlements = await ZeroSettle.instance.getEntitlements();
+      notPremium = !isPremium(entitlements);
+    } catch (_) {
+      // Treat errors as "not premium" — show the paywall conservatively.
+    }
+    if (notPremium) {
+      initialLocationOverride = Routes.launchPaywall;
+    }
+  }
+
   runApp(JustOneApp(
     scope: JustOneScope(db: db, prefs: prefs, notifications: notifications),
-    startAtHome: persistedId != null && persistedId.isNotEmpty,
+    startAtHome: isOnboarded,
+    initialLocationOverride: initialLocationOverride,
   ));
 }
 
 class JustOneApp extends StatelessWidget {
   final JustOneScope scope;
   final bool startAtHome;
+  final String? initialLocationOverride;
+
   const JustOneApp({
     super.key,
     required this.scope,
     required this.startAtHome,
+    this.initialLocationOverride,
   });
 
   @override
   Widget build(BuildContext context) {
-    final router = buildRouter(startAtHome: startAtHome);
+    final router = buildRouter(
+      startAtHome: startAtHome,
+      initialLocationOverride: initialLocationOverride,
+    );
     return InheritedJustOne(
       scope: scope,
       child: MaterialApp.router(

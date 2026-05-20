@@ -15,9 +15,16 @@ export 'routes.dart';
 
 /// Builds the [GoRouter]. Pass [startAtHome] = true after onboarding has
 /// completed so the app skips `/create-user`.
-GoRouter buildRouter({required bool startAtHome}) {
+///
+/// [initialLocationOverride] wins over [startAtHome] when non-null (e.g. to
+/// route a non-premium onboarded user straight to [Routes.launchPaywall]).
+GoRouter buildRouter({
+  required bool startAtHome,
+  String? initialLocationOverride,
+}) {
   return GoRouter(
-    initialLocation: startAtHome ? Routes.home : Routes.createUser,
+    initialLocation:
+        initialLocationOverride ?? (startAtHome ? Routes.home : Routes.createUser),
     routes: [
       GoRoute(
         path: Routes.createUser,
