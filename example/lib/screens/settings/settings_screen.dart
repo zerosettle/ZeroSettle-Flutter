@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/routes.dart';
 import 'account_card.dart';
+import 'subscription_card.dart';
 
 /// Top-level settings screen for JustOne.
 ///
@@ -24,7 +25,9 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
           const AccountCard(),
-          // TODO(Task 10/11): SubscriptionCard, StreakSaverCard, ReminderCard, offer tip
+          const SizedBox(height: 12),
+          const SubscriptionCard(),
+          // TODO(Task 11): StreakSaverCard, ReminderCard, offer tip
           const SizedBox(height: 16),
           Card(
             child: ListTile(
