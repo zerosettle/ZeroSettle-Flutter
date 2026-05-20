@@ -631,12 +631,35 @@ class ZeroSettle {
 
   // -- Pending Actions (Android only) --
 
+  /// Decodes raw pending-action maps, skipping any whose `type` a newer
+  /// native SDK introduced but this plugin version doesn't recognize.
+  /// Forward-compat: an unknown action is dropped rather than crashing the
+  /// entire list. ([PendingAction.fromMap] itself still throws on an
+  /// unknown type — the skip is applied here, at the list boundary.)
+  static List<PendingAction> _decodePendingActions(
+    List<Map<String, dynamic>> maps,
+  ) {
+    final actions = <PendingAction>[];
+    for (final map in maps) {
+      try {
+        actions.add(PendingAction.fromMap(map));
+      } on ArgumentError {
+        // Unknown action `type` from a newer native SDK — skip it.
+        // Deliberately narrow: a malformed payload for a *known* type
+        // throws TypeError, which is NOT caught here — that is a real
+        // bug we want surfaced, not a forward-compat case to swallow.
+      }
+    }
+    return actions;
+  }
+
   /// Returns the current list of backend-driven pending actions. Android only;
-  /// iOS always returns an empty list.
+  /// iOS always returns an empty list. Action types this plugin version does
+  /// not recognize are skipped (see [_decodePendingActions]).
   Future<List<PendingAction>> getPendingActions() {
     return _wrap(() async {
       final maps = await _platform.getPendingActions();
-      return maps.map(PendingAction.fromMap).toList();
+      return _decodePendingActions(maps);
     });
   }
 
@@ -644,9 +667,7 @@ class ZeroSettle {
   /// SDK's `pendingActions` StateFlow mutates on Android. iOS emits `[]`
   /// once on subscribe and never again.
   Stream<List<PendingAction>> get pendingActionsUpdates {
-    return _platform.pendingActionsUpdates.map(
-      (maps) => maps.map(PendingAction.fromMap).toList(),
-    );
+    return _platform.pendingActionsUpdates.map(_decodePendingActions);
   }
 
   /// Dismiss a pending action by [transactionId]. No-op on iOS.

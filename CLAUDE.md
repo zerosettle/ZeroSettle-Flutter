@@ -34,12 +34,13 @@ android/src/main/kotlin/com/zerosettle/flutter/
 * `EventChannel('zerosettle/checkout_events')` — Streams checkout delegate callbacks
 
 ## PlatformViews
-* `zerosettle/migrate_tip_view` — Embeds native `ZSMigrateTipView` SwiftUI component via UIHostingController
-  - Factory: `ZSMigrateTipViewFactory` creates `ZSMigrateTipViewFlutterContainer`
-  - Container wraps SwiftUI view in `UIHostingController` and attaches to view hierarchy
-  - Creation params: `backgroundColor` (ARGB int32), `userId` (String)
-  - Widget: `ZSMigrateTipView` in `lib/widgets/` — renders `UiKitView` on iOS, `SizedBox.shrink()` on Android
-  - Pattern: Thin wrapper around autonomous native view — no callbacks, no reactive updates, props set once at creation
+* Migrate tip view — embeds the native migration tip component
+  - iOS viewType `zerosettle/migrate_tip_view`: SwiftUI `MigrationTipView` via `ZSMigrateTipViewFactory` → `ZSMigrateTipViewFlutterContainer` (UIHostingController)
+  - Android viewType `com.zerosettle/migrate_tip_view`: Compose `ZeroSettleOfferTip` via `MigrateTipViewFactory.kt`
+  - Creation params (both platforms): `backgroundColor` (ARGB int32), `userId` (String)
+  - Widget: `MigrationTipView` in `lib/widgets/` (legacy alias `ZSMigrateTipView`) — renders `UiKitView` on iOS, `AndroidView` on Android, `SizedBox.shrink()` on desktop
+  - Pattern: thin wrapper around autonomous native view — props set once at creation; the only callback is a native→Dart `setSize` height bridge
+* Android-only PlatformViews (no iOS counterpart yet): `com.zerosettle/offer_tip` (`OfferTipFactory`, widget `ZeroSettleOfferTip`), `com.zerosettle/pending_action_banner` (`PendingActionBannerFactory`, widget `ZeroSettlePendingActionBanner`)
 
 ## Bridge Pattern
 * **iOS:** Swift `handle()` is nonisolated; dispatches to `@MainActor handleOnMainActor()` via `Task { @MainActor in }` (required because `ZeroSettle.shared` is `@MainActor`-isolated)
@@ -49,7 +50,7 @@ android/src/main/kotlin/com/zerosettle/flutter/
 * **Android:** `preloadPaymentSheet` and `warmUpPaymentSheet` are no-ops (iOS-specific optimizations)
 * Dates serialize as ISO 8601 strings across the bridge (Android SDK stores dates as strings natively)
 * Errors map: native `ZSError` → `FlutterError(code:)` → Dart `PlatformException` → `ZSException` subtypes
-* Android bridge serializes `playStoreAvailable`/`playStorePrice` as `storeKitAvailable`/`storeKitPrice` to share the same Dart model
+* The shared Dart `Product` model reuses StoreKit-named keys (`storeKitAvailable`/`storeKitPrice`) for both platforms. NOTE: the Android bridge currently does NOT populate them — `Product.toFlutterMap()` in `ModelToFlutterMap.kt` drops `playStorePrice`/`playProductId`/`playBasePlanId`. The native Android SDK exposes `playStorePrice` (a backend forward-compat slot, usually null) but has no Play-availability flag, so `storeKitAvailable` is always `false` on Android. Aliasing Play→StoreKit keys is a pending task, not current behavior.
 
 ## Cross-Framework API Compatibility
 This plugin wraps `ZeroSettleKit` (iOS) and `zerosettle-android` (Android). When a source SDK's public API changes:

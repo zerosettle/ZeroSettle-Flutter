@@ -122,7 +122,7 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
 
   /// Android peer of [purchaseViaStoreKit]. Routes through the Google Play
   /// Billing dialog and returns the resulting `CheckoutTransaction` shape
-  /// (`source == "play_billing"`).
+  /// (`source == "play_store"`).
   Future<Map<String, dynamic>> purchaseViaPlayBilling({
     required String productId,
   }) {

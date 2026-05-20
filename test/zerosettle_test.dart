@@ -553,15 +553,20 @@ class MockZeroSettlePlatform
 
   // ---- Task 5: Pending Actions ----
 
+  /// Test-controlled raw pending-action maps. Override to exercise decoding.
+  List<Map<String, dynamic>> pendingActionsReturnValue = [
+    {'type': 'migrationCompletedInfo', 'transactionId': 'txn_1', 'userMessage': 'msg'},
+  ];
+
   @override
   Future<List<Map<String, dynamic>>> getPendingActions() async {
     _record('getPendingActions');
-    return [{'type': 'migrationCompletedInfo', 'transactionId': 'txn_1', 'userMessage': 'msg'}];
+    return pendingActionsReturnValue;
   }
 
   @override
   Stream<List<Map<String, dynamic>>> get pendingActionsUpdates =>
-      Stream.value([{'type': 'migrationCompletedInfo', 'transactionId': 'txn_1', 'userMessage': 'msg'}]);
+      Stream.value(pendingActionsReturnValue);
 
   @override
   Future<void> dismissPendingAction({required String transactionId}) async {
@@ -1257,6 +1262,32 @@ void main() {
     test('pendingActionsUpdates decodes the stream', () async {
       final first = await ZeroSettle.instance.pendingActionsUpdates.first;
       expect(first.single.transactionId, 'txn_1');
+    });
+
+    test('getPendingActions skips unknown action types', () async {
+      // A newer native SDK may emit an action `type` this plugin version
+      // doesn't know — it must be skipped, not crash the whole list.
+      mockPlatform.pendingActionsReturnValue = [
+        {'type': 'migrationCompletedInfo', 'transactionId': 'txn_1', 'userMessage': 'msg'},
+        {'type': 'futureActionKind', 'transactionId': 'txn_x', 'userMessage': 'm'},
+      ];
+      final list = await ZeroSettle.instance.getPendingActions();
+      expect(list.single, isA<PendingActionMigrationCompletedInfo>());
+    });
+
+    test('pendingActionsUpdates skips unknown action types', () async {
+      mockPlatform.pendingActionsReturnValue = [
+        {'type': 'futureActionKind', 'transactionId': 'txn_x', 'userMessage': 'm'},
+        {
+          'type': 'manualPlayCancel',
+          'transactionId': 'txn_2',
+          'userMessage': 'm',
+          'originalPlayPurchaseToken': 'tok',
+          'deepLink': 'https://play.google.com',
+        },
+      ];
+      final first = await ZeroSettle.instance.pendingActionsUpdates.first;
+      expect(first.single, isA<PendingActionManualPlayCancel>());
     });
 
     test('dismissPendingAction passes the transactionId', () async {
