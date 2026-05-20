@@ -4,17 +4,9 @@ import '../screens/auth/create_user_screen.dart';
 import '../screens/habit/add_habit_screen.dart';
 import '../screens/habit/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
+import 'routes.dart';
 
-/// Top-level route names. Used as both `path` and `name` for `go_router`.
-class Routes {
-  Routes._();
-  static const createUser = '/create-user';
-  static const home = '/';
-  static const addHabit = '/add-habit';
-  // Habit detail uses a path parameter: /habit/123
-  static String habitDetail(int id) => '/habit/$id';
-  static const habitDetailTemplate = '/habit/:id';
-}
+export 'routes.dart';
 
 /// Builds the [GoRouter]. Pass [startAtHome] = true after onboarding has
 /// completed so the app skips `/create-user`.
