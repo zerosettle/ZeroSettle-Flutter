@@ -3,15 +3,14 @@ import 'package:flutter/material.dart';
 import '../../app/inherited_just_one.dart';
 
 /// Card with a "Daily reminder" toggle that persists the user's preference
-/// via [UserPrefs.setReminderEnabled].
+/// and schedules/cancels the EOD notification via [NotificationService].
 ///
-/// **Scheduling is NOT wired here** — Task 12 will add real notification
-/// scheduling to the toggle handler. For now, toggling only persists the pref
-/// so the switch survives app restarts.
+/// Toggling on calls [NotificationService.scheduleEodReminder] (daily at
+/// 20:00 device-local time); toggling off calls
+/// [NotificationService.cancelEodReminder]. The preference survives app
+/// restarts via [UserPrefs.setReminderEnabled].
 ///
-/// Mirrors `ReminderCard` in the JustOne Android sample (simplified: Flutter
-/// does not use the Android permission launcher or time-picker dialog in this
-/// task — those are part of Task 12's scheduling implementation).
+/// Mirrors `ReminderCard` in the JustOne Android sample.
 class ReminderCard extends StatefulWidget {
   const ReminderCard({super.key});
 
@@ -39,11 +38,17 @@ class _ReminderCardState extends State<ReminderCard> {
 
   Future<void> _onToggle(bool value) async {
     setState(() => _enabled = value);
-    // Capture the prefs reference BEFORE the await — Task 12 will add code
-    // after the suspension point and must not touch `context` post-await.
-    final prefs = InheritedJustOne.of(context).prefs;
+    // Capture InheritedJustOne references BEFORE the first await so we never
+    // touch `context` after a suspension point.
+    final scope = InheritedJustOne.of(context);
+    final prefs = scope.prefs;
+    final notifications = scope.notifications;
     await prefs.setReminderEnabled(value);
-    // Task 12 wires actual scheduling into this handler.
+    if (value) {
+      await notifications.scheduleEodReminder();
+    } else {
+      await notifications.cancelEodReminder();
+    }
   }
 
   @override
