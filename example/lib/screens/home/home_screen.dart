@@ -124,7 +124,7 @@ class _HabitRowState extends State<_HabitRow> {
           completedToday: done,
           onCheck: done ? () {} : _checkOff,
           onTap: () =>
-              context.push('/habit/${widget.habit.id}'),
+              context.push(Routes.habitDetail(widget.habit.id)),
         );
       },
     );
