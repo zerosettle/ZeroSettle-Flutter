@@ -25,17 +25,17 @@ GoRouter buildRouter({required bool startAtHome}) {
       GoRoute(
         path: Routes.createUser,
         name: 'create-user',
-        builder: (_, __) => const CreateUserScreen(),
+        builder: (_, _) => const CreateUserScreen(),
       ),
       GoRoute(
         path: Routes.home,
         name: 'home',
-        builder: (_, __) => const HomeScreen(),
+        builder: (_, _) => const HomeScreen(),
       ),
       GoRoute(
         path: Routes.addHabit,
         name: 'add-habit',
-        builder: (_, __) => const AddHabitScreen(),
+        builder: (_, _) => const AddHabitScreen(),
       ),
       GoRoute(
         path: Routes.habitDetailTemplate,
