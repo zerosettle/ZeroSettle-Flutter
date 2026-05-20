@@ -38,22 +38,38 @@ class _AccountCardState extends State<AccountCard> {
   }
 
   Future<void> _restorePurchases(BuildContext context) async {
-    final results = await ZeroSettle.instance.restoreEntitlements();
-    if (!context.mounted) return;
-    final count = results.length;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          count == 0
-              ? 'No purchases to restore.'
-              : 'Restored $count entitlement${count == 1 ? '' : 's'}.',
+    try {
+      final results = await ZeroSettle.instance.restoreEntitlements();
+      if (!context.mounted) return;
+      final count = results.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            count == 0
+                ? 'No purchases to restore.'
+                : 'Restored $count entitlement${count == 1 ? '' : 's'}.',
+          ),
         ),
-      ),
-    );
+      );
+    } on ZeroSettleException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
   }
 
   Future<void> _signOut(BuildContext context) async {
-    await ZeroSettle.instance.logout();
+    try {
+      await ZeroSettle.instance.logout();
+    } on ZeroSettleException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
+    // Always clear local state and navigate — a failed server logout should
+    // not trap the user on the settings screen.
     if (!context.mounted) return;
     await InheritedJustOne.of(context).prefs.clearAll();
     if (!context.mounted) return;

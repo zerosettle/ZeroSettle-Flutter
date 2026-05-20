@@ -16,7 +16,6 @@ the ZeroSettle SDK is integrated.
 | Navigation | `go_router` |
 | Preferences | `shared_preferences` |
 | Notifications | `flutter_local_notifications` + `flutter_timezone` |
-| Confetti | `confetti` |
 | Theme | Material 3 (`useMaterial3: true`) |
 
 ## Routes
@@ -80,10 +79,11 @@ not produce a server-side entitlement, so the owned count is tracked locally in
 ## EOD reminder
 
 `notifications/notification_service.dart` exposes
-`scheduleEodReminder(TimeOfDay)` and `cancelEodReminder()`. The reminder is a
-daily local notification scheduled via `flutter_local_notifications` zoned
-scheduling (device-local timezone resolved by `flutter_timezone`). The
-`ReminderCard` in Settings lets the user toggle it on/off and choose the time.
+`scheduleEodReminder({int hour = 20, int minute = 0})` and
+`cancelEodReminder()`. The reminder is a daily local notification scheduled
+via `flutter_local_notifications` zoned scheduling (device-local timezone
+resolved by `flutter_timezone`). The `ReminderCard` in Settings lets the user
+toggle it on/off.
 
 ## File layout
 

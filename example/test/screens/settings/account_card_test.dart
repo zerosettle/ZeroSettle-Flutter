@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:zerosettle/zerosettle.dart';
 import 'package:zerosettle/zerosettle_method_channel.dart';
 import 'package:zerosettle/zerosettle_platform_interface.dart';
 import 'package:zerosettle_example/app/inherited_just_one.dart';
@@ -22,6 +23,12 @@ class _EmptyRestorePlatform extends MethodChannelZeroSettle {
   @override
   Future<List<Map<String, dynamic>>> restoreEntitlementsForCurrentUser() async =>
       const [];
+}
+
+class _ThrowingRestorePlatform extends MethodChannelZeroSettle {
+  @override
+  Future<List<Map<String, dynamic>>> restoreEntitlementsForCurrentUser() async =>
+      throw const ZSApiException('Network error');
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +101,22 @@ void main() {
 
     // Empty restore result → "no purchases" copy in the SnackBar.
     expect(find.text('No purchases to restore.'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Restore purchases shows error SnackBar on ZeroSettleException', (tester) async {
+    ZeroSettlePlatform.instance = _ThrowingRestorePlatform();
+
+    await tester.pumpWidget(_wrap(const AccountCard(), scope));
+    await tester.pump();
+
+    await tester.tap(find.text('Restore purchases'));
+    await tester.pumpAndSettle();
+
+    // The ZeroSettleException message must surface in the SnackBar.
+    expect(find.text('Network error'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
