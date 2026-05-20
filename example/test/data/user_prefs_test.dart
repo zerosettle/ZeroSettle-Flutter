@@ -36,15 +36,25 @@ void main() {
     expect(prefs.paywallDismissedAt, ts);
   });
 
-  test('clearAll wipes everything', () async {
+  test('reminderEnabled defaults to false and round-trips', () async {
+    expect(prefs.reminderEnabled, false);
+    await prefs.setReminderEnabled(true);
+    expect(prefs.reminderEnabled, true);
+    await prefs.setReminderEnabled(false);
+    expect(prefs.reminderEnabled, false);
+  });
+
+  test('clearAll wipes everything including reminderEnabled', () async {
     await prefs.setDisplayName('Alice');
     await prefs.setUserId('u');
     await prefs.setStreakSaverCount(5);
     await prefs.setPaywallDismissedAt(DateTime.now());
+    await prefs.setReminderEnabled(true);
     await prefs.clearAll();
     expect(prefs.displayName, isNull);
     expect(prefs.userId, isNull);
     expect(prefs.streakSaverCount, 0);
     expect(prefs.paywallDismissedAt, isNull);
+    expect(prefs.reminderEnabled, false);
   });
 }

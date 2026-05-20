@@ -7,6 +7,7 @@ class UserPrefs {
   static const _kUserId = 'userId';
   static const _kStreakSaverCount = 'streakSaverCount';
   static const _kPaywallDismissedAtMs = 'paywallDismissedAtMs';
+  static const _kReminderEnabled = 'reminderEnabled';
 
   final SharedPreferences _store;
 
@@ -29,6 +30,10 @@ class UserPrefs {
   Future<void> setStreakSaverCount(int n) =>
       _store.setInt(_kStreakSaverCount, n);
 
+  bool get reminderEnabled => _store.getBool(_kReminderEnabled) ?? false;
+  Future<void> setReminderEnabled(bool value) =>
+      _store.setBool(_kReminderEnabled, value);
+
   DateTime? get paywallDismissedAt {
     final ms = _store.getInt(_kPaywallDismissedAtMs);
     return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
@@ -42,5 +47,6 @@ class UserPrefs {
     await _store.remove(_kUserId);
     await _store.remove(_kStreakSaverCount);
     await _store.remove(_kPaywallDismissedAtMs);
+    await _store.remove(_kReminderEnabled);
   }
 }

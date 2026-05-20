@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:zerosettle/zerosettle.dart';
 
 import '../../app/routes.dart';
 import 'account_card.dart';
+import 'reminder_card.dart';
+import 'streak_saver_card.dart';
 import 'subscription_card.dart';
 
 /// Top-level settings screen for JustOne.
 ///
-/// Renders a [ListView] of cards, currently just [AccountCard] — the
-/// remaining cards land in Tasks 10–11 (see the in-body placeholder).
-///
+/// Renders a [ListView] of cards: [AccountCard], [SubscriptionCard],
+/// [StreakSaverCard], [ReminderCard], and a [ZeroSettleOfferTip] slot.
 /// A "Developer" [ListTile] is always visible at the bottom of the list
 /// (no 7-tap easter egg in the sample — developer tools are always accessible).
 ///
@@ -27,7 +29,12 @@ class SettingsScreen extends StatelessWidget {
           const AccountCard(),
           const SizedBox(height: 12),
           const SubscriptionCard(),
-          // TODO(Task 11): StreakSaverCard, ReminderCard, offer tip
+          const SizedBox(height: 12),
+          const StreakSaverCard(),
+          const SizedBox(height: 12),
+          const ReminderCard(),
+          const SizedBox(height: 12),
+          const ZeroSettleOfferTip(),
           const SizedBox(height: 16),
           Card(
             child: ListTile(
