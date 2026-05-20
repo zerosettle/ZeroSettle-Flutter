@@ -50,7 +50,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   drift_dev: ^2.20.0
-  build_runner: ^2.4.13
+  build_runner: '>=2.4.13 <2.4.16'
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
