@@ -51,7 +51,7 @@ void main() {
   late AppDatabase db;
   late UserPrefs prefs;
   late JustOneScope scope;
-  late ZeroSettlePlatform _savedPlatform;
+  late ZeroSettlePlatform savedPlatform;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({'streakSaverCount': 4});
@@ -59,11 +59,11 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     scope = JustOneScope(db: db, prefs: prefs, notifications: NotificationService());
 
-    _savedPlatform = ZeroSettlePlatform.instance;
+    savedPlatform = ZeroSettlePlatform.instance;
   });
 
   tearDown(() async {
-    ZeroSettlePlatform.instance = _savedPlatform;
+    ZeroSettlePlatform.instance = savedPlatform;
     await db.close();
   });
 

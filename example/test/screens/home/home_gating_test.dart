@@ -43,7 +43,7 @@ void main() {
   late AppDatabase db;
   late UserPrefs prefs;
   late JustOneScope scope;
-  late ZeroSettlePlatform _savedPlatform;
+  late ZeroSettlePlatform savedPlatform;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -54,12 +54,12 @@ void main() {
 
     // Replace the platform with a stub so getEntitlements() resolves
     // immediately with an empty list (not premium).
-    _savedPlatform = ZeroSettlePlatform.instance;
+    savedPlatform = ZeroSettlePlatform.instance;
     ZeroSettlePlatform.instance = _EmptyEntitlementPlatform();
   });
 
   tearDown(() async {
-    ZeroSettlePlatform.instance = _savedPlatform;
+    ZeroSettlePlatform.instance = savedPlatform;
     await db.close();
   });
 

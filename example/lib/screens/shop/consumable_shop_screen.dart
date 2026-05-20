@@ -111,7 +111,7 @@ class _ConsumableShopScreenState extends State<ConsumableShopScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   itemCount: consumables.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final product = consumables[index];
                     return Card(
