@@ -13,8 +13,8 @@ import 'package:zerosettle_example/screens/home/habit_list_item.dart';
 
 Widget _wrap(Widget child, JustOneScope scope) {
   final router = GoRouter(initialLocation: '/', routes: [
-    GoRoute(path: '/', builder: (_, __) => child),
-    GoRoute(path: Routes.addHabit, builder: (_, __) =>
+    GoRoute(path: '/', builder: (_, _) => child),
+    GoRoute(path: Routes.addHabit, builder: (_, _) =>
         const Scaffold(body: Text('add'))),
   ]);
   return InheritedJustOne(
