@@ -34,9 +34,12 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
   /// renders the no-sub branch until the seed or first stream event arrives.
   List<Entitlement>? _seed;
 
-  /// Per-productId cache of upgrade-offer futures. Avoids spawning a new
-  /// network call on every rebuild.
-  final Map<String, Future<UpgradeOfferConfig>> _upgradeFutures = {};
+  /// Single-slot cache of the in-flight upgrade-offer future, keyed by the
+  /// product id it was created for. When the active subscription's product
+  /// changes the future is recreated, so a stale `available: true` from a
+  /// previous product is never reused.
+  Future<UpgradeOfferConfig>? _upgradeFuture;
+  String? _upgradeFutureProductId;
 
   @override
   void initState() {
@@ -49,16 +52,22 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
         .catchError((_) {});
   }
 
+  /// Returns the upgrade-offer future for [productId], recreating it whenever
+  /// [productId] differs from the slot's current key. Safe to call from
+  /// `build` — it only assigns fields, never calls `setState`.
   Future<UpgradeOfferConfig> _upgradeConfigFor(String productId) {
-    return _upgradeFutures.putIfAbsent(
-      productId,
-      () => ZeroSettle.instance.fetchUpgradeOfferConfig(productId: productId),
-    );
+    if (_upgradeFutureProductId != productId || _upgradeFuture == null) {
+      _upgradeFutureProductId = productId;
+      _upgradeFuture =
+          ZeroSettle.instance.fetchUpgradeOfferConfig(productId: productId);
+    }
+    return _upgradeFuture!;
   }
 
   Future<void> _presentUpgrade(BuildContext ctx, String? productId) async {
     try {
       await ZeroSettle.instance.presentUpgradeOffer(productId: productId);
+      if (!ctx.mounted) return;
     } catch (_) {
       // Dismissed / not available — no error surfaced.
     }
@@ -78,13 +87,19 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Entitlement>>(
-      initialData: _seed,
       stream: ZeroSettle.instance.entitlementUpdates,
       builder: (ctx, snap) {
+        // The stream is canonical once it emits; until then fall back to the
+        // cached seed loaded in initState. Reading the seed in the builder
+        // (rather than via `initialData`) means a `setState`-driven rebuild
+        // after the seed resolves is reflected — `initialData` is only
+        // consulted on a StreamBuilder's first build.
+        final entitlements = snap.data ?? _seed ?? const <Entitlement>[];
+
         // Find the first active entitlement (consumables never produce one —
         // confirmed JustOne behaviour; no productType field on Entitlement).
         Entitlement? active;
-        for (final e in snap.data ?? const <Entitlement>[]) {
+        for (final e in entitlements) {
           if (e.isActive) {
             active = e;
             break;
@@ -136,7 +151,7 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
 
     final statusLabel = switch (true) {
       _ when sub.isTrial => 'Free trial',
-      _ when sub.pausedAt != null => 'Paused',
+      _ when sub.isPaused => 'Paused',
       _ when sub.willRenew => 'Renews',
       _ => 'Active',
     };
@@ -182,7 +197,7 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
             if (upgradeSnap.hasData && upgradeSnap.data!.available) {
               return Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: GestureDetector(
+                child: InkWell(
                   onTap: () => _presentUpgrade(ctx, sub.productId),
                   child: Row(
                     children: [
@@ -212,7 +227,7 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
         const SizedBox(height: 12),
 
         // Resume button — only when paused
-        if (sub.pausedAt != null) ...[
+        if (sub.isPaused) ...[
           FilledButton(
             onPressed: () => _resume(ctx, sub.productId),
             child: const Text('Resume'),
