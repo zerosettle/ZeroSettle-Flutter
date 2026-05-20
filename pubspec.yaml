@@ -5,8 +5,8 @@ homepage: https://zerosettle.io
 repository: https://github.com/zerosettle/ZeroSettle-Flutter
 
 environment:
-  sdk: ^3.11.0
-  flutter: '>=3.41.0'
+  sdk: ^3.10.8
+  flutter: '>=3.38.9'
 
 dependencies:
   flutter:
