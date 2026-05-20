@@ -22,18 +22,27 @@ class ReminderCard extends StatefulWidget {
 class _ReminderCardState extends State<ReminderCard> {
   late bool _enabled;
 
+  /// One-time guard so a later [InheritedJustOne] change can't re-stomp the
+  /// user's live toggle state with the persisted pref.
+  bool _seeded = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Seed local state from the persisted pref. Called once on first build;
-    // InheritedJustOne changes will re-trigger but the user's local toggle
-    // state is the authoritative source after that point.
-    _enabled = InheritedJustOne.of(context).prefs.reminderEnabled;
+    // Seed local state from the persisted pref exactly once. After that the
+    // user's local toggle state is the authoritative source.
+    if (!_seeded) {
+      _enabled = InheritedJustOne.of(context).prefs.reminderEnabled;
+      _seeded = true;
+    }
   }
 
   Future<void> _onToggle(bool value) async {
     setState(() => _enabled = value);
-    await InheritedJustOne.of(context).prefs.setReminderEnabled(value);
+    // Capture the prefs reference BEFORE the await — Task 12 will add code
+    // after the suspension point and must not touch `context` post-await.
+    final prefs = InheritedJustOne.of(context).prefs;
+    await prefs.setReminderEnabled(value);
     // Task 12 wires actual scheduling into this handler.
   }
 
