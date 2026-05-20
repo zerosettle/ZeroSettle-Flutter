@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -14,14 +15,17 @@ class NotificationService {
       'End-of-day reminders to check off your habits.';
 
   /// Notification ID for the EOD reminder (matches JustOne Android NOTIF_ID).
-  static const _reminderNotificationId = 4201;
+  static const reminderNotificationId = 4201;
+
+  /// Global once-guard for timezone-database initialization.
+  /// `initializeTimeZones()` populates a process-wide database, so the guard
+  /// is `static` — once any instance has initialized it, all instances see it.
+  static bool _timezonesInitialized = false;
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  bool _timezonesInitialized = false;
-
-  /// Ensures timezone data is initialized exactly once per instance.
+  /// Initializes the process-wide timezone database exactly once.
   void _ensureTimeZones() {
     if (!_timezonesInitialized) {
       tzdata.initializeTimeZones();
@@ -33,6 +37,16 @@ class NotificationService {
   Future<void> init() async {
     // Initialize timezone data so zonedSchedule works correctly.
     _ensureTimeZones();
+
+    // Resolve the device-local timezone so reminders fire at local wall-clock
+    // time. Falls back to the timezone package default (UTC) if the lookup
+    // fails. This is a method-channel call, so it lives in `init()` only.
+    try {
+      final localTz = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(localTz.identifier));
+    } catch (_) {
+      // Lookup failed — leave `tz.local` at its default rather than throwing.
+    }
 
     const androidInit =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -64,10 +78,9 @@ class NotificationService {
   /// Schedules (or reschedules) the daily EOD reminder at [hour]:[minute]
   /// device-local time.
   ///
-  /// Uses `DateTimeComponents.time` for daily recurrence. Note: `tz.local`
-  /// defaults to UTC unless the host app supplies a platform-channel timezone
-  /// name via `tz.setLocalLocation`. In the example app this is acceptable;
-  /// production apps should set the local location using `flutter_timezone`.
+  /// Uses `DateTimeComponents.time` for daily recurrence. `init()` resolves
+  /// `tz.local` to the device timezone via `flutter_timezone`, so the reminder
+  /// fires at local wall-clock time.
   Future<void> scheduleEodReminder({int hour = 20, int minute = 0}) async {
     _ensureTimeZones();
     final now = tz.TZDateTime.now(tz.local);
@@ -90,9 +103,9 @@ class NotificationService {
     );
 
     await _plugin.zonedSchedule(
-      _reminderNotificationId,
+      reminderNotificationId,
       "Don't break your streak",
-      'Log today\'s habits before the day ends.',
+      "Log today's habits before the day ends.",
       scheduledDate,
       notificationDetails,
       uiLocalNotificationDateInterpretation:
@@ -104,14 +117,8 @@ class NotificationService {
 
   /// Cancels the scheduled EOD reminder.
   Future<void> cancelEodReminder() async {
-    await _plugin.cancel(_reminderNotificationId);
+    await _plugin.cancel(reminderNotificationId);
   }
-
-  /// Notification ID used for the EOD reminder.
-  static int get reminderNotificationId => _reminderNotificationId;
-
-  /// Exposed so Part 2 can schedule on the same instance.
-  FlutterLocalNotificationsPlugin get plugin => _plugin;
 
   /// Constants surfaced for scheduling code.
   static String get androidChannelId => _androidChannelId;

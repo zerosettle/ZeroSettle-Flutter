@@ -44,10 +44,21 @@ class _ReminderCardState extends State<ReminderCard> {
     final prefs = scope.prefs;
     final notifications = scope.notifications;
     await prefs.setReminderEnabled(value);
-    if (value) {
-      await notifications.scheduleEodReminder();
-    } else {
-      await notifications.cancelEodReminder();
+    try {
+      if (value) {
+        await notifications.scheduleEodReminder();
+      } else {
+        await notifications.cancelEodReminder();
+      }
+    } catch (_) {
+      // Scheduling can fail (e.g. notification permission denied on
+      // Android 13+). Revert the pref + UI so the switch reflects reality.
+      await prefs.setReminderEnabled(!value);
+      if (!mounted) return;
+      setState(() => _enabled = !value);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't update reminder")),
+      );
     }
   }
 
