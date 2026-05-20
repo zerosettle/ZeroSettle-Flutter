@@ -1,31 +1,31 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
-/// UCB-aware purchase button(s) for a [Product].
+/// UCB-aware, platform-aware purchase button(s) for a [Product].
+///
+/// ## Store routing
+///
+/// The "store-native" purchase targets whichever store the app runs on:
+/// StoreKit / the App Store on iOS, Google Play Billing on Android. Both the
+/// button label and the purchase API are selected from [defaultTargetPlatform]
+/// — there is a single shared code path, not a per-platform widget.
 ///
 /// ## Routing rule
 ///
-/// **UCB enabled** (`ucbEnabled == true`):
-/// A single `FilledButton` labelled "Buy" is shown. Tapping it calls
-/// `ZeroSettle.instance.purchaseViaPlayBilling` — Google's system-level
-/// choice screen handles whether the purchase goes through Play Billing or
-/// web checkout. The app must NOT show its own web-vs-Play picker when UCB
-/// is active.
+/// **UCB enabled** (`ucbEnabled == true` — Android only; iOS always reports
+/// `false`):
+/// A single `FilledButton` labelled "Buy" is shown. Tapping it routes through
+/// Google's system-level billing choice screen, which decides between Play
+/// Billing and web checkout. The app must NOT show its own web-vs-store
+/// picker when UCB is active.
 ///
 /// **UCB disabled** (`ucbEnabled == false`):
 /// - If [Product.webPrice] is non-null: a `FilledButton` "Pay on web" (calls
-///   `purchase`) and an `OutlinedButton` "Google Play" (calls
-///   `purchaseViaPlayBilling`) are both shown.
-/// - If [Product.webPrice] is null: only the `OutlinedButton` "Google Play"
+///   `purchase`) and an `OutlinedButton` for the store-native purchase
+///   (labelled "App Store" / "Google Play") are both shown.
+/// - If [Product.webPrice] is null: only the store-native `OutlinedButton`
 ///   is shown.
-///
-/// ## Flutter vs Android gap
-///
-/// The Android `DualPriceButtons` Composable reads `product.playStorePrice`
-/// to decide whether a Play SKU is available and to compute a savings
-/// percentage. Flutter's [Product] model has no `playStorePrice` field —
-/// the UCB/non-UCB distinction is therefore driven solely by the `ucbEnabled`
-/// parameter, and the "Pay on web" label never includes a savings percentage.
 ///
 /// ## Usage
 ///
@@ -64,6 +64,13 @@ class DualPriceButtons extends StatefulWidget {
 class _DualPriceButtonsState extends State<DualPriceButtons> {
   bool _busy = false;
 
+  /// Whether the host platform's native store is the Apple App Store.
+  /// Drives both the store-native button label and the purchase API.
+  bool get _isAppleStore => defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// User-facing name of the host platform's native store.
+  String get _storeName => _isAppleStore ? 'App Store' : 'Google Play';
+
   Future<void> _run(Future<dynamic> Function() action) async {
     setState(() => _busy = true);
     try {
@@ -86,9 +93,13 @@ class _DualPriceButtonsState extends State<DualPriceButtons> {
         () => ZeroSettle.instance.purchase(productId: widget.product.id),
       );
 
-  void _buyPlay() => _run(
-        () => ZeroSettle.instance
-            .purchaseViaPlayBilling(productId: widget.product.id),
+  /// Store-native purchase: StoreKit on iOS, Play Billing on Android.
+  void _buyNative() => _run(
+        () => _isAppleStore
+            ? ZeroSettle.instance
+                .purchaseViaStoreKit(productId: widget.product.id)
+            : ZeroSettle.instance
+                .purchaseViaPlayBilling(productId: widget.product.id),
       );
 
   @override
@@ -104,19 +115,14 @@ class _DualPriceButtonsState extends State<DualPriceButtons> {
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
-        onPressed: _busy ? null : _buyPlay,
-        child: _busy
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Text('Buy'),
+        onPressed: _busy ? null : _buyNative,
+        child: _busy ? const _ButtonSpinner() : const Text('Buy'),
       ),
     );
   }
 
-  /// UCB disabled: web + Play buttons (or just Play when no webPrice).
+  /// UCB disabled: web + store-native buttons (or just store-native when
+  /// there is no webPrice).
   Widget _buildLegacyButtons() {
     final hasWebPrice = widget.product.webPrice != null;
 
@@ -124,14 +130,8 @@ class _DualPriceButtonsState extends State<DualPriceButtons> {
       return SizedBox(
         width: double.infinity,
         child: OutlinedButton(
-          onPressed: _busy ? null : _buyPlay,
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Google Play'),
+          onPressed: _busy ? null : _buyNative,
+          child: _busy ? const _ButtonSpinner() : Text(_storeName),
         ),
       );
     }
@@ -142,26 +142,28 @@ class _DualPriceButtonsState extends State<DualPriceButtons> {
       children: [
         FilledButton(
           onPressed: _busy ? null : _buyWeb,
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Pay on web'),
+          child: _busy ? const _ButtonSpinner() : const Text('Pay on web'),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
-          onPressed: _busy ? null : _buyPlay,
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Google Play'),
+          onPressed: _busy ? null : _buyNative,
+          child: _busy ? const _ButtonSpinner() : Text(_storeName),
         ),
       ],
+    );
+  }
+}
+
+/// Shared 16×16 progress spinner sized to sit inside a button.
+class _ButtonSpinner extends StatelessWidget {
+  const _ButtonSpinner();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 16,
+      height: 16,
+      child: CircularProgressIndicator(strokeWidth: 2),
     );
   }
 }

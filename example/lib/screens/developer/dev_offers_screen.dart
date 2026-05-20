@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
+import '../../widgets/migration_tip_card.dart';
+
 /// Developer inspector for the user-offer API.
 ///
 /// A "Fetch user offer" button calls [ZeroSettle.instance.fetchUserOffer] and
 /// renders the resulting [UserOfferResponse] as labeled key/value rows.
-/// Also embeds [ZeroSettleOfferTip] (Android-only; collapses to
-/// [SizedBox.shrink] on iOS).
+/// Also embeds [MigrationTipCard], the cross-platform migration tip view
+/// (renders on both iOS and Android).
 ///
 /// Mirrors [OffersScreen.kt] from the JustOne Android sample.
 class DevOffersScreen extends StatefulWidget {
@@ -48,8 +50,8 @@ class _DevOffersScreenState extends State<DevOffersScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Native Android offer tip widget (SizedBox.shrink on iOS).
-          const ZeroSettleOfferTip(),
+          // Cross-platform migration tip view (renders on iOS and Android).
+          const MigrationTipCard(),
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _busy ? null : () => _fetch(context),
