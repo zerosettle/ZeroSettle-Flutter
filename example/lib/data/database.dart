@@ -30,11 +30,13 @@ class Completions extends Table {
   DateTimeColumn get completedOn => dateTime()();
 }
 
+/// Drift database for the JustOne example app.
 @DriftDatabase(tables: [Habits, Completions], daos: [HabitDao])
 class AppDatabase extends _$AppDatabase {
+  /// Production constructor opens an on-device SQLite file.
   AppDatabase() : super(_openConnection());
 
-  /// Production constructor opens an on-device SQLite file.
+  /// Test-only constructor; passes [e] directly to Drift.
   AppDatabase.forTesting(QueryExecutor e) : super(e);
 
   @override
@@ -48,6 +50,7 @@ class AppDatabase extends _$AppDatabase {
   );
 }
 
+/// Opens the on-device SQLite file in the app documents directory.
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();
