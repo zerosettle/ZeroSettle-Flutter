@@ -45,7 +45,10 @@ class _DevDebugScreenState extends State<DevDebugScreen> {
       final now = DateTime.now();
       final ts =
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-      setState(() => _events.insert(0, '[$ts] ${_describeEvent(event)}'));
+      setState(() {
+        _events.insert(0, '[$ts] ${_describeEvent(event)}');
+        if (_events.length > 200) _events.removeLast();
+      });
     });
   }
 

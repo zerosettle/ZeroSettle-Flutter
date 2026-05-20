@@ -57,6 +57,9 @@ void main() {
 
     expect(find.text('Fetch transaction history'), findsOneWidget);
     expect(find.text('Restore entitlements'), findsOneWidget);
+    expect(find.text('Fetch products'), findsOneWidget);
+    expect(find.text('Get SDK version'), findsOneWidget);
+    expect(find.text('UCB enabled?'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
