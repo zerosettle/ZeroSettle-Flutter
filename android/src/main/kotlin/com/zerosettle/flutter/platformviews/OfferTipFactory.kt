@@ -2,10 +2,8 @@ package com.zerosettle.flutter.platformviews
 
 import android.content.Context
 import android.view.View
-import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.ui.ZeroSettleOfferTip
 import com.zerosettle.ui.theme.ZeroSettleTheme
 import io.flutter.plugin.common.StandardMessageCodec
@@ -27,13 +25,16 @@ import io.flutter.plugin.platform.PlatformViewFactory
  *     [ZeroSettle.offerManager] (subscription-group routing key, see
  *     ZSOfferManager Dart docstring + the `:core` `OfferManager` ctor).
  *
- * No event channel: the Composable drives every state transition internally
- * (`OfferState.PRESENTED` is set in its `LaunchedEffect`, dismissals call
+ * No event channel: the Composable observes the [OfferManager] StateFlows and
+ * drives transitions internally (dismissals call
  * [com.zerosettle.sdk.offers.OfferManager.dismiss], acceptance calls
  * [com.zerosettle.sdk.offers.OfferManager.acceptOffer]). No callbacks need
- * surfacing to Dart — the spec is explicit on this (design doc §"PendingActionShown",
- * line 262 — "consumers read state via the StateFlow accessor or the PlatformView
- * which subscribes to the SDK state internally").
+ * surfacing to Dart — consumers read state via the StateFlow accessor or the
+ * PlatformView, which subscribes to SDK state internally.
+ *
+ * Eligibility evaluation is triggered by [rememberEvaluatedOfferManager] — the
+ * Composable itself does NOT auto-evaluate, and the Android SDK's OfferManager
+ * is caller-driven, so the factory must kick it off.
  *
  * The factory is registered in `ZeroSettlePlugin.onAttachedToEngine` (lands
  * with F7) as `com.zerosettle/offer_tip`.
@@ -88,9 +89,7 @@ internal class OfferTipPlatformView(
     private val composeView: ComposeView = ComposeView(context).apply {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent {
-            val offerManager = remember(params.stripeCustomerId) {
-                ZeroSettle.offerManager(params.stripeCustomerId)
-            }
+            val offerManager = rememberEvaluatedOfferManager(params.stripeCustomerId)
             ZeroSettleTheme {
                 ZeroSettleOfferTip(offerManager = offerManager)
             }

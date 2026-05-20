@@ -65,6 +65,22 @@ class OfferManagerHandleBridge(
         entry.methodChannel.setMethodCallHandler { call, result ->
             onMethodCall(call, result)
         }
+        // Kick off eligibility evaluation. The Android SDK's OfferManager is
+        // caller-driven — unlike iOS's ZSOfferManager (which auto-evaluates in
+        // init), it does nothing until evaluate() is called. Without this the
+        // manager stays in LOADING with offerData == null forever: getState
+        // never advances, the state stream never fires, and acceptOffer /
+        // startCheckout fail OfferIneligible. Triggering it here makes the
+        // Flutter API behave identically on iOS and Android.
+        entry.scope.launch {
+            try {
+                entry.manager.evaluate()
+            } catch (_: Throwable) {
+                // evaluate() transitions the manager's own state to ERROR on
+                // failure; the state channel already streams that. Swallow so
+                // a failure can't crash the per-handle scope.
+            }
+        }
         entry.stateChannel.setStreamHandler(object : EventChannel.StreamHandler {
             private var collectionJob: Job? = null
 

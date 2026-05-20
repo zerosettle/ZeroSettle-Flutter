@@ -109,6 +109,21 @@ class OfferManagerHandleBridgeTest {
         return streamSlot.captured
     }
 
+    // --- Eligibility evaluation -------------------------------------------
+
+    @Test
+    fun `start triggers eligibility evaluation on the manager`() = runTest {
+        // The Android SDK's OfferManager is caller-driven — unlike iOS's
+        // ZSOfferManager it does NOT auto-evaluate on construction. The
+        // bridge must kick off evaluate() or the manager stays in LOADING
+        // forever and no offer ever surfaces.
+        coEvery { manager.evaluate() } returns Unit
+
+        startAndCaptureMethodHandler()
+
+        coVerify { manager.evaluate() }
+    }
+
     // --- Method-channel routing -------------------------------------------
 
     @Test

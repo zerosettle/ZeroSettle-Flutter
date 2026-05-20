@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.ui.ZeroSettleOfferTip
 import com.zerosettle.ui.theme.ZeroSettleTheme
 import io.flutter.plugin.common.BinaryMessenger
@@ -125,9 +124,7 @@ internal class MigrateTipViewPlatformView(
     private val composeView: ComposeView = ComposeView(context).apply {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent {
-            val offerManager = remember(params.stripeCustomerId) {
-                ZeroSettle.offerManager(params.stripeCustomerId)
-            }
+            val offerManager = rememberEvaluatedOfferManager(params.stripeCustomerId)
             // Forward the ARGB int from the Dart side as a Compose Color. iOS
             // applies the same value to the SwiftUI card's surface; on Android
             // the `:ui` Composable exposes it through its `backgroundColor`
