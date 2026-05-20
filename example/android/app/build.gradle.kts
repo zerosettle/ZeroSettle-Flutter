@@ -31,6 +31,9 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // flutter_local_notifications uses Java 8+ APIs (java.time) that
+        // require core library desugaring to run on minSdk 26 devices.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -85,4 +88,7 @@ dependencies {
     // io.zerosettle:zerosettle-android SDK; the explicit declaration
     // here documents intent and keeps the example app self-describing.
     implementation("com.android.billingclient:billing-ktx:7.1.1")
+
+    // Required by flutter_local_notifications for core library desugaring.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
