@@ -12,4 +12,13 @@ class Routes {
   /// Habit detail uses a path parameter: `/habit/123`.
   static String habitDetail(int id) => '/habit/$id';
   static const habitDetailTemplate = '/habit/:id';
+
+  static const launchPaywall = '/paywall';
+  static const shop = '/shop';
+  static const settings = '/settings';
+  static const developer = '/developer';
+
+  /// Cancel flow takes the product id: `/cancel/com.app.pro`.
+  static String cancelFlow(String productId) => '/cancel/$productId';
+  static const cancelFlowTemplate = '/cancel/:productId';
 }

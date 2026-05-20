@@ -1,9 +1,14 @@
 import 'package:go_router/go_router.dart';
 
 import '../screens/auth/create_user_screen.dart';
+import '../screens/cancel/cancel_flow_screen.dart';
+import '../screens/developer/developer_screen.dart';
 import '../screens/habit/add_habit_screen.dart';
 import '../screens/habit/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
+import '../screens/paywall/launch_paywall_screen.dart';
+import '../screens/settings/settings_screen.dart';
+import '../screens/shop/consumable_shop_screen.dart';
 import 'routes.dart';
 
 export 'routes.dart';
@@ -36,6 +41,32 @@ GoRouter buildRouter({required bool startAtHome}) {
           final id = int.parse(state.pathParameters['id']!);
           return HabitDetailScreen(habitId: id);
         },
+      ),
+      GoRoute(
+        path: Routes.launchPaywall,
+        name: 'paywall',
+        builder: (_, _) => const LaunchPaywallScreen(),
+      ),
+      GoRoute(
+        path: Routes.shop,
+        name: 'shop',
+        builder: (_, _) => const ConsumableShopScreen(),
+      ),
+      GoRoute(
+        path: Routes.settings,
+        name: 'settings',
+        builder: (_, _) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: Routes.cancelFlowTemplate,
+        name: 'cancel-flow',
+        builder: (_, state) =>
+            CancelFlowScreen(productId: state.pathParameters['productId']!),
+      ),
+      GoRoute(
+        path: Routes.developer,
+        name: 'developer',
+        builder: (_, _) => const DeveloperScreen(),
       ),
     ],
   );
