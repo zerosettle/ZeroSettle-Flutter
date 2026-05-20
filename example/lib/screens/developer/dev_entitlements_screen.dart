@@ -109,25 +109,26 @@ class _EntitlementCard extends StatelessWidget {
           children: [
             Text(e.productId, style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
-            _row('source', e.source.rawValue),
-            _row('status', e.status ?? 'n/a'),
-            _row('isActive', '${e.isActive}'),
-            _row('willRenew', '${e.willRenew}'),
-            _row('isTrial', '${e.isTrial}'),
-            _row('expiresAt', _fmt(e.expiresAt)),
-            if (e.pausedAt != null) _row('pausedAt', _fmt(e.pausedAt)),
+            _row(context, 'source', e.source.rawValue),
+            _row(context, 'status', e.status ?? 'n/a'),
+            _row(context, 'isActive', '${e.isActive}'),
+            _row(context, 'willRenew', '${e.willRenew}'),
+            _row(context, 'isTrial', '${e.isTrial}'),
+            _row(context, 'expiresAt', _fmt(e.expiresAt)),
+            if (e.pausedAt != null) _row(context, 'pausedAt', _fmt(e.pausedAt)),
           ],
         ),
       ),
     );
   }
 
-  Widget _row(String label, String value) {
+  Widget _row(BuildContext context, String label, String value) {
+    final baseStyle = Theme.of(context).textTheme.bodySmall;
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: RichText(
         text: TextSpan(
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          style: baseStyle,
           children: [
             TextSpan(
               text: '$label: ',

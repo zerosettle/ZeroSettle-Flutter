@@ -88,7 +88,7 @@ class _DevPendingActionsScreenState extends State<DevPendingActionsScreen> {
                     return _PendingActionCard(
                       action: action,
                       isBusy: _busy.contains(action.transactionId),
-                      onDismiss: () => _dismiss(ctx, action.transactionId),
+                      onDismiss: () => _dismiss(context, action.transactionId),
                     );
                   },
                 );
@@ -129,17 +129,17 @@ class _PendingActionCard extends StatelessWidget {
         typeLabel = 'Migration Completed Info';
         extraRows = [
           if (a.playAccessEndsAt != null)
-            _row('playAccessEndsAt', a.playAccessEndsAt!),
+            _row(context, 'playAccessEndsAt', a.playAccessEndsAt!),
           if (a.newSubscriptionPriceCents != null)
-            _row('price', '${a.newSubscriptionPriceCents} ${a.newSubscriptionCurrency ?? ''}'),
+            _row(context, 'price', '${a.newSubscriptionPriceCents} ${a.newSubscriptionCurrency ?? ''}'),
           if (a.newSubscriptionInterval != null)
-            _row('interval', a.newSubscriptionInterval!),
+            _row(context, 'interval', a.newSubscriptionInterval!),
         ];
       case final PendingActionManualPlayCancel a:
         typeLabel = 'Manual Play Cancel';
         extraRows = [
-          _row('deepLink', a.deepLink),
-          if (a.expiresAt != null) _row('expiresAt', a.expiresAt!),
+          _row(context, 'deepLink', a.deepLink),
+          if (a.expiresAt != null) _row(context, 'expiresAt', a.expiresAt!),
         ];
     }
 
@@ -164,7 +164,7 @@ class _PendingActionCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(action.userMessage, style: theme.textTheme.bodyMedium),
-            _row('transactionId', action.transactionId),
+            _row(context, 'transactionId', action.transactionId),
             ...extraRows,
             const SizedBox(height: 8),
             OutlinedButton(
@@ -177,12 +177,13 @@ class _PendingActionCard extends StatelessWidget {
     );
   }
 
-  Widget _row(String label, String value) {
+  Widget _row(BuildContext context, String label, String value) {
+    final baseStyle = Theme.of(context).textTheme.bodySmall;
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: RichText(
         text: TextSpan(
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          style: baseStyle,
           children: [
             TextSpan(
               text: '$label: ',
