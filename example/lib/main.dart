@@ -4,10 +4,10 @@ import 'package:zerosettle/zerosettle.dart';
 import 'app/app_routes.dart';
 import 'app/app_theme.dart';
 import 'app/inherited_just_one.dart';
+import 'app_environment.dart';
 import 'data/database.dart';
 import 'data/user_prefs.dart';
 import 'domain/premium_status.dart';
-import 'iap_environment.dart';
 import 'notifications/notification_service.dart';
 
 // ---------------------------------------------------------------------------
@@ -34,16 +34,27 @@ Future<void> main() async {
   final notifications = NotificationService();
   await notifications.init();
 
-  // 2. ZeroSettle SDK. Use the existing env roster.
-  // IAPEnvironment has no synchronous activeEnvironment getter — load() is
-  // the canonical way to resolve the persisted (or default-first-enabled) env.
-  final env = await IAPEnvironment.load();
-  if (env.baseUrlOverride != null) {
-    await ZeroSettle.instance.setBaseUrlOverride(env.baseUrlOverride);
+  // 2. ZeroSettle SDK. Resolve the persisted environment (or the default
+  //    for a fresh install) and configure against it. The user can switch
+  //    environments from the create-user screen's segmented control.
+  //
+  //    configure() throws if the publishable key isn't a real
+  //    `zs_pk_live_`/`zs_pk_test_` value, so skip it when the resolved env
+  //    has no key issued yet (e.g. the default `prod`) — otherwise a fresh
+  //    install crashes here before runApp(). The create-user screen surfaces
+  //    the missing key and lets the user pick a usable environment.
+  final env = await AppEnvironment.load();
+  if (env.hasKey) {
+    try {
+      await ZeroSettle.instance.setBaseUrlOverride(env.baseUrl);
+      await ZeroSettle.instance.configure(publishableKey: env.publishableKey);
+    } catch (e) {
+      // Non-fatal at startup; the env picker can re-configure. Logged so a
+      // launch-time SDK failure is visible (it leaves products/entitlements
+      // unloaded — e.g. an empty paywall).
+      debugPrint('[ZeroSettle] configure() failed at startup: $e');
+    }
   }
-  await ZeroSettle.instance.configure(
-    publishableKey: env.publishableKey,
-  );
 
   // 3. If a userId was persisted from a prior launch, re-identify so the
   //    SDK is bootstrapped without re-prompting the user.
@@ -55,8 +66,11 @@ Future<void> main() async {
       await ZeroSettle.instance.identify(
         Identity.user(id: persistedId, name: persistedName),
       );
-    } catch (_) {
-      // Non-fatal on launch; the user can re-onboard.
+    } catch (e) {
+      // Non-fatal on launch; the user can re-onboard. Logged so a failed
+      // identify() is visible — it leaves the product catalog unfetched,
+      // which surfaces downstream as an empty paywall / empty shop.
+      debugPrint('[ZeroSettle] identify() failed at launch: $e');
     }
   }
 

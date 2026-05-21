@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
 import '../../app/inherited_just_one.dart';
-import '../../iap_environment.dart';
+import '../../app_environment.dart';
+import '../../widgets/environment_picker.dart';
 
 /// Developer tool: pick a backend environment and re-identify.
 ///
 /// Mirrors [EnvSwitcherScreen.kt] from the JustOne Android sample.
 /// State:
-/// - current [IAPEnvironment] selection (persisted)
+/// - current [AppEnvironment] selection (persisted)
 /// - user-id / name text fields for re-identify
 class EnvSwitcherScreen extends StatefulWidget {
   const EnvSwitcherScreen({super.key});
@@ -19,7 +20,7 @@ class EnvSwitcherScreen extends StatefulWidget {
 
 class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
   // Loaded async; null means still loading.
-  IAPEnvironment? _currentEnv;
+  AppEnvironment? _currentEnv;
 
   final _userIdController = TextEditingController();
   final _nameController = TextEditingController(text: 'Sample User');
@@ -34,11 +35,11 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
   }
 
   Future<void> _loadEnv() async {
-    final env = await IAPEnvironment.load();
+    final env = await AppEnvironment.load();
     if (mounted) setState(() => _currentEnv = env);
   }
 
-  Future<void> _switchEnv(IAPEnvironment env) async {
+  Future<void> _switchEnv(AppEnvironment env) async {
     // Capture the prefs ref before any awaits — used for auto-re-identify
     // after configure (mirrors main.dart's bootstrap sequence).
     final prefs = InheritedJustOne.of(context).prefs;
@@ -47,13 +48,30 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
       _busy = true;
       _status = 'Switching to ${env.displayName}…';
     });
-    await IAPEnvironment.save(env);
-    await ZeroSettle.instance.logout();
+    // Shared helper: save + logout + setBaseUrlOverride + configure.
+    try {
+      await applyEnvironment(env);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _status = 'Switch to ${env.displayName} failed: $e';
+      });
+      return;
+    }
     if (!mounted) return;
-    await ZeroSettle.instance.setBaseUrlOverride(env.baseUrlOverride);
-    if (!mounted) return;
-    await ZeroSettle.instance.configure(publishableKey: env.publishableKey);
-    if (!mounted) return;
+
+    // Envs whose publishable key has not been issued yet (staging iOS, prod)
+    // can't be configured — applyEnvironment skipped configure(). Stop here
+    // rather than attempting a re-identify that cannot succeed.
+    if (!env.hasKey) {
+      setState(() {
+        _busy = false;
+        _status = 'Switched to ${env.displayName}\n${env.baseUrl}\n'
+            'No publishable key for this environment yet — pick another.';
+      });
+      return;
+    }
 
     // Re-identify from persisted prefs so the SDK is bootstrapped against the
     // new env without forcing a manual re-identify — mirrors main.dart.
@@ -67,7 +85,7 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
         if (!mounted) return;
         setState(() {
           _busy = false;
-          _status = 'Switched to ${env.displayName}\n${env.effectiveUrl}\n'
+          _status = 'Switched to ${env.displayName}\n${env.baseUrl}\n'
               'Re-identified as "$persistedId" ✓';
         });
         return;
@@ -75,7 +93,7 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
         if (!mounted) return;
         setState(() {
           _busy = false;
-          _status = 'Switched to ${env.displayName}\n${env.effectiveUrl}\n'
+          _status = 'Switched to ${env.displayName}\n${env.baseUrl}\n'
               're-identify failed: $e';
         });
         return;
@@ -84,7 +102,7 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
 
     setState(() {
       _busy = false;
-      _status = 'Switched to ${env.displayName}\n${env.effectiveUrl}\n(re-identify below)';
+      _status = 'Switched to ${env.displayName}\n${env.baseUrl}\n(re-identify below)';
     });
   }
 
@@ -144,7 +162,6 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final envs = IAPEnvironment.values.where((e) => e.isEnabled).toList();
     final current = _currentEnv;
 
     return Scaffold(
@@ -168,25 +185,12 @@ class _EnvSwitcherScreenState extends State<EnvSwitcherScreen> {
           const SizedBox(height: 8),
           if (current == null)
             const CircularProgressIndicator()
-          else ...[
-            ...envs.map(
-              (env) => ListTile(
-                leading: Icon(
-                  env == current
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  color: env == current
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-                title: Text(env.displayName),
-                subtitle: Text(env.effectiveUrl,
-                    style: Theme.of(context).textTheme.bodySmall),
-                onTap: _busy ? null : () => _switchEnv(env),
-                contentPadding: EdgeInsets.zero,
-              ),
+          else
+            EnvironmentPicker(
+              current: current,
+              enabled: !_busy,
+              onChanged: _switchEnv,
             ),
-          ],
 
           const Divider(height: 32),
 

@@ -26,7 +26,7 @@ val keystoreProps = Properties().apply {
 }
 
 android {
-    namespace = "io.zerosettle.zsstorefront"
+    namespace = "io.zerosettle.justoneflutter"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -43,7 +43,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.zerosettle.zsstorefront"
+        applicationId = "io.zerosettle.justoneflutter"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26

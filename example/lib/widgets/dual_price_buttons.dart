@@ -2,59 +2,26 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
-/// UCB-aware, platform-aware purchase button(s) for a [Product].
+/// Platform-adaptive purchase button(s) for a [Product].
 ///
-/// ## Store routing
+/// **Android** — a single "Buy" [FilledButton]. The purchase is initiated via
+/// `purchaseViaPlayBilling`; Google's User Choice Billing screen presents the
+/// Play-vs-web choice, so the app must never hand-roll its own picker. A
+/// two-button web-vs-store layout does not make sense here.
 ///
-/// The "store-native" purchase targets whichever store the app runs on:
-/// StoreKit / the App Store on iOS, Google Play Billing on Android. Both the
-/// button label and the purchase API are selected from [defaultTargetPlatform]
-/// — there is a single shared code path, not a per-platform widget.
-///
-/// ## Routing rule
-///
-/// **UCB enabled** (`ucbEnabled == true` — Android only; iOS always reports
-/// `false`):
-/// A single `FilledButton` labelled "Buy" is shown. Tapping it routes through
-/// Google's system-level billing choice screen, which decides between Play
-/// Billing and web checkout. The app must NOT show its own web-vs-store
-/// picker when UCB is active.
-///
-/// **UCB disabled** (`ucbEnabled == false`):
-/// - If [Product.webPrice] is non-null: a `FilledButton` "Pay on web" (calls
-///   `purchase`) and an `OutlinedButton` for the store-native purchase
-///   (labelled "App Store" / "Google Play") are both shown.
-/// - If [Product.webPrice] is null: only the store-native `OutlinedButton`
-///   is shown.
-///
-/// ## Usage
-///
-/// The `ucbEnabled` parameter is a plain `bool` so the widget is trivially
-/// testable in isolation. Callers that need to react to live UCB state should
-/// wrap this widget in a `StreamBuilder` over
-/// `ZeroSettle.instance.isUcbEnabledUpdates`:
-///
-/// ```dart
-/// StreamBuilder<bool>(
-///   stream: ZeroSettle.instance.isUcbEnabledUpdates,
-///   initialData: false,
-///   builder: (context, snapshot) => DualPriceButtons(
-///     product: product,
-///     ucbEnabled: snapshot.requireData,
-///     onPurchased: onPurchased,
-///   ),
-/// )
-/// ```
+/// **iOS** — there is no User Choice Billing, so the app surfaces the choice
+/// itself:
+/// - [Product.webPrice] non-null → a "Pay on web" [FilledButton] (web checkout
+///   via `purchase`) plus an "App Store" [OutlinedButton] (`purchaseViaStoreKit`).
+/// - [Product.webPrice] null → only the "App Store" button.
 class DualPriceButtons extends StatefulWidget {
   const DualPriceButtons({
     super.key,
     required this.product,
-    required this.ucbEnabled,
     required this.onPurchased,
   });
 
   final Product product;
-  final bool ucbEnabled;
   final VoidCallback onPurchased;
 
   @override
@@ -63,13 +30,6 @@ class DualPriceButtons extends StatefulWidget {
 
 class _DualPriceButtonsState extends State<DualPriceButtons> {
   bool _busy = false;
-
-  /// Whether the host platform's native store is the Apple App Store.
-  /// Drives both the store-native button label and the purchase API.
-  bool get _isAppleStore => defaultTargetPlatform == TargetPlatform.iOS;
-
-  /// User-facing name of the host platform's native store.
-  String get _storeName => _isAppleStore ? 'App Store' : 'Google Play';
 
   Future<void> _run(Future<dynamic> Function() action) async {
     setState(() => _busy = true);
@@ -93,45 +53,47 @@ class _DualPriceButtonsState extends State<DualPriceButtons> {
         () => ZeroSettle.instance.purchase(productId: widget.product.id),
       );
 
-  /// Store-native purchase: StoreKit on iOS, Play Billing on Android.
-  void _buyNative() => _run(
-        () => _isAppleStore
-            ? ZeroSettle.instance
-                .purchaseViaStoreKit(productId: widget.product.id)
-            : ZeroSettle.instance
-                .purchaseViaPlayBilling(productId: widget.product.id),
+  void _buyStoreKit() => _run(
+        () => ZeroSettle.instance.purchaseViaStoreKit(productId: widget.product.id),
+      );
+
+  void _buyPlayBilling() => _run(
+        () => ZeroSettle.instance
+            .purchaseViaPlayBilling(productId: widget.product.id),
       );
 
   @override
   Widget build(BuildContext context) {
-    if (widget.ucbEnabled) {
-      return _buildUcbButton();
+    // The web-vs-store picker only makes sense on iOS, where there is no
+    // User Choice Billing. On Android, Google's UCB screen presents the
+    // billing choice — the app shows a single "Buy" button.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return _buildAndroidButton();
     }
-    return _buildLegacyButtons();
+    return _buildIosButtons();
   }
 
-  /// UCB enabled: single "Buy" FilledButton.
-  Widget _buildUcbButton() {
+  /// Android: a single "Buy" button. `purchaseViaPlayBilling` triggers
+  /// Google's User Choice Billing screen, which routes Play-vs-web.
+  Widget _buildAndroidButton() {
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
-        onPressed: _busy ? null : _buyNative,
+        onPressed: _busy ? null : _buyPlayBilling,
         child: _busy ? const _ButtonSpinner() : const Text('Buy'),
       ),
     );
   }
 
-  /// UCB disabled: web + store-native buttons (or just store-native when
-  /// there is no webPrice).
-  Widget _buildLegacyButtons() {
-    final hasWebPrice = widget.product.webPrice != null;
-
-    if (!hasWebPrice) {
+  /// iOS: no UCB, so the app surfaces the choice — "Pay on web" + "App Store"
+  /// (or just "App Store" when the product has no web price).
+  Widget _buildIosButtons() {
+    if (widget.product.webPrice == null) {
       return SizedBox(
         width: double.infinity,
         child: OutlinedButton(
-          onPressed: _busy ? null : _buyNative,
-          child: _busy ? const _ButtonSpinner() : Text(_storeName),
+          onPressed: _busy ? null : _buyStoreKit,
+          child: _busy ? const _ButtonSpinner() : const Text('App Store'),
         ),
       );
     }
@@ -146,8 +108,8 @@ class _DualPriceButtonsState extends State<DualPriceButtons> {
         ),
         const SizedBox(height: 8),
         OutlinedButton(
-          onPressed: _busy ? null : _buyNative,
-          child: _busy ? const _ButtonSpinner() : Text(_storeName),
+          onPressed: _busy ? null : _buyStoreKit,
+          child: _busy ? const _ButtonSpinner() : const Text('App Store'),
         ),
       ],
     );

@@ -8,8 +8,7 @@ import '../../widgets/dual_price_buttons.dart';
 ///
 /// Resolves the first [ZSProductType.autoRenewableSubscription] product from
 /// [ZeroSettle.instance.getProducts], renders [CheckoutSheetHeader] +
-/// [DualPriceButtons] (UCB state from [ZeroSettle.instance.isUcbEnabledUpdates]),
-/// and offers a "Maybe later" escape hatch.
+/// [DualPriceButtons], and offers a "Maybe later" escape hatch.
 ///
 /// Mirrors the visual hierarchy of the Android `PremiumUpsellSheet` Composable.
 Future<void> showPremiumUpsell(BuildContext context) {
@@ -98,17 +97,9 @@ class _PremiumUpsellSheetState extends State<_PremiumUpsellSheet> {
                     children: [
                       CheckoutSheetHeader(product: subscription),
                       const SizedBox(height: 20),
-                      StreamBuilder<bool>(
-                        stream: ZeroSettle.instance.isUcbEnabledUpdates,
-                        initialData: false,
-                        builder: (context, ucbSnapshot) {
-                          return DualPriceButtons(
-                            product: subscription,
-                            ucbEnabled: ucbSnapshot.data ?? false,
-                            onPurchased: () =>
-                                Navigator.of(context).maybePop(),
-                          );
-                        },
+                      DualPriceButtons(
+                        product: subscription,
+                        onPurchased: () => Navigator.of(context).maybePop(),
                       ),
                     ],
                   );

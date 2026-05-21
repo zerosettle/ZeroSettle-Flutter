@@ -4,9 +4,15 @@ import 'package:zerosettle/zerosettle.dart';
 
 import '../../app/inherited_just_one.dart';
 import '../../app/routes.dart';
+import '../../app_environment.dart';
+import '../../widgets/environment_picker.dart';
 
 /// First-launch onboarding. Captures a display name, identifies the user
 /// to ZeroSettle, persists it to [UserPrefs], and routes to [Routes.home].
+///
+/// The backend [AppEnvironment] is selectable here via a segmented control,
+/// so the developer can point the app at local / staging / prod before the
+/// first `identify()` call.
 class CreateUserScreen extends StatefulWidget {
   const CreateUserScreen({super.key});
 
@@ -17,21 +23,52 @@ class CreateUserScreen extends StatefulWidget {
 class _CreateUserScreenState extends State<CreateUserScreen> {
   final TextEditingController _controller = TextEditingController();
   bool _submitting = false;
+  bool _switchingEnv = false;
   String? _error;
 
+  /// Loaded async; null while the persisted env is still resolving.
+  AppEnvironment? _env;
+
   bool get _canSubmit =>
-      !_submitting && _controller.text.trim().isNotEmpty;
+      !_submitting &&
+      !_switchingEnv &&
+      _env != null &&
+      _env!.hasKey &&
+      _controller.text.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(() => setState(() {}));
+    _loadEnv();
+  }
+
+  Future<void> _loadEnv() async {
+    final env = await AppEnvironment.load();
+    if (mounted) setState(() => _env = env);
   }
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Switch the backend environment. Re-points the SDK so the subsequent
+  /// `identify()` on "Continue" hits the chosen backend.
+  Future<void> _onEnvChanged(AppEnvironment env) async {
+    setState(() {
+      _env = env;
+      _switchingEnv = true;
+      _error = null;
+    });
+    try {
+      await applyEnvironment(env);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Environment switch failed: $e');
+    } finally {
+      if (mounted) setState(() => _switchingEnv = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -62,6 +99,8 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final env = _env;
+    final busy = _submitting || _switchingEnv;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -83,7 +122,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                   const SizedBox(height: 24),
                   TextField(
                     controller: _controller,
-                    enabled: !_submitting,
+                    enabled: !busy,
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _canSubmit ? _submit() : null,
                     decoration: const InputDecoration(
@@ -91,6 +130,26 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                       border: OutlineInputBorder(),
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  // Backend environment selector. Switching re-points the SDK
+                  // so the `identify()` on Continue hits the chosen backend.
+                  if (env != null)
+                    EnvironmentPicker(
+                      current: env,
+                      enabled: !busy,
+                      onChanged: _onEnvChanged,
+                    ),
+                  if (env != null && !env.hasKey) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'No publishable key configured for ${env.displayName} '
+                      'yet — pick another environment to continue.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(_error!,
@@ -100,7 +159,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _canSubmit ? _submit : null,
-                    child: _submitting
+                    child: busy
                         ? const SizedBox(
                             height: 18,
                             width: 18,

@@ -320,6 +320,7 @@ fun PendingAction.ManualPlayCancel.toFlutterMap(): Map<String, Any?> {
 fun UserOffer.OfferData.toFlutterMap(): Map<String, Any?> {
     val flow: String = when (actionType) {
         UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB -> "migration"
+        UserOffer.ActionType.MIGRATE_PLAY_TO_WEB -> "migration"
         UserOffer.ActionType.UPGRADE_STOREKIT_TO_WEB -> "upgrade"
         UserOffer.ActionType.UPGRADE_WEB_TO_WEB -> "upgrade"
         UserOffer.ActionType.NO_ACTION -> throw IllegalStateException(
@@ -328,7 +329,8 @@ fun UserOffer.OfferData.toFlutterMap(): Map<String, Any?> {
                 "before encoding."
         )
     }
-    val isMigration = actionType == UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB
+    val isMigration = actionType == UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB ||
+        actionType == UserOffer.ActionType.MIGRATE_PLAY_TO_WEB
     // iOS-legacy `productId` semantics:
     //   migration: target product (what the user will buy on web)
     //   upgrade:   source product (the user's current sub; target lives in `toProductId`)
@@ -406,6 +408,7 @@ fun UserOffer.OfferData.toFlutterMap(): Map<String, Any?> {
 private fun UserOffer.ActionType.toUserOfferWireString(): String = when (this) {
     UserOffer.ActionType.NO_ACTION -> "noAction"
     UserOffer.ActionType.MIGRATE_STOREKIT_TO_WEB -> "migrateStorekitToWeb"
+    UserOffer.ActionType.MIGRATE_PLAY_TO_WEB -> "migratePlayToWeb"
     UserOffer.ActionType.UPGRADE_STOREKIT_TO_WEB -> "upgradeStorekitToWeb"
     UserOffer.ActionType.UPGRADE_WEB_TO_WEB -> "upgradeWebToWeb"
 }
@@ -693,56 +696,76 @@ fun OfferManager.toCompositeStateMap(): Map<String, Any?> {
 }
 
 /**
- * Encode the Android [UpgradeOffer.Config] for the Flutter wire.
+ * Encode [UpgradeOffer.Config] for the Flutter wire.
  *
- * **Shape divergence from iOS.** The Android SDK's `UpgradeOffer.Config` is
- * the chunk-4 placeholder (`fromProductId` / `toProductId` /
- * `savingsPercent` / `display{ offer_* / accepted_* / completed_* }`); the
- * iOS plugin emits the chunk-5 wire shape (`available`, `currentProduct`,
- * `targetProduct`, `proration`, `display{title, body, ctaText, ...}`,
- * `variantId`, …). The Android `UpgradeOffer.kt` file carries a
- * `TODO(chunk-5)` to align with the real `GET /v1/iap/upgrade-offer/`
- * response — that alignment is **out of F13 scope**.
- *
- * Until chunk-5 lands, this encoder reflects the *Android-side* placeholder
- * shape as-is: Dart code that consumes this map must know it's looking at
- * the Android shape. Cross-platform Dart parsers will see different keys on
- * each platform. This is a known gap recorded in the plan at row 238.
- *
- * **Runtime risk.** kotlinx-serialization's decode of the backend response
- * into `UpgradeOffer.Config` may fail with `MissingFieldException` if the
- * server emits the chunk-5 shape (which lacks `from_product_id` /
- * `to_product_id` as top-level keys). The handler surfaces decode failure
- * as `sdk_error` via the shared `sendError` extension — the encoder itself
- * is never reached in that path.
- *
- * **Wire keys are camelCase** to match the rest of the encoders in this
- * file. The `@SerialName` snake_case annotations on the model are for the
- * backend boundary only.
+ * Emits the camelCase chunk-5 shape consumed by `UpgradeOfferConfig.fromMap`
+ * in `lib/models/upgrade_offer.dart` — identical to what the iOS bridge
+ * emits, so the shared Dart model deserializes the same on both platforms.
+ * Optional fields are omitted when null (a not-available config is just
+ * `{available: false, reason: ...}`).
  */
-fun UpgradeOffer.Config.toFlutterMap(): Map<String, Any?> = mapOf(
-    "fromProductId" to fromProductId,
-    "toProductId" to toProductId,
-    "savingsPercent" to savingsPercent,
-    "display" to display.toFlutterMap(),
-)
+fun UpgradeOffer.Config.toFlutterMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>("available" to available)
+    reason?.let { map["reason"] = it }
+    currentProduct?.let { map["currentProduct"] = it.toFlutterMap() }
+    targetProduct?.let { map["targetProduct"] = it.toFlutterMap() }
+    savingsPercent?.let { map["savingsPercent"] = it }
+    upgradeType?.let { map["upgradeType"] = it }
+    proration?.let { map["proration"] = it.toFlutterMap() }
+    display?.let { map["display"] = it.toFlutterMap() }
+    variantId?.let { map["variantId"] = it }
+    return map
+}
 
 /**
- * Encode the legacy [UpgradeOffer.Display] block. Keys mirror the
- * `@SerialName` snake_case wire (e.g. `offerTitle`, `acceptedMessage`) in
- * camelCase form to match the Flutter wire convention; see encoder above
- * for the chunk-5 alignment caveat.
+ * Encode [UpgradeOffer.ProductInfo] (current or target product). `durationDays`
+ * is intentionally not emitted — the Android SDK has no such field; the Dart
+ * model treats it as optional.
  */
-fun UpgradeOffer.Display.toFlutterMap(): Map<String, Any?> = mapOf(
-    "offerTitle" to offerTitle,
-    "offerMessage" to offerMessage,
-    "offerCta" to offerCta,
-    "acceptedTitle" to acceptedTitle,
-    "acceptedMessage" to acceptedMessage,
-    "acceptedCta" to acceptedCta,
-    "completedTitle" to completedTitle,
-    "completedMessage" to completedMessage,
-)
+fun UpgradeOffer.ProductInfo.toFlutterMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "referenceId" to referenceId,
+        "name" to name,
+        "priceCents" to priceCents,
+        "currency" to currency,
+        "billingLabel" to billingLabel,
+    )
+    monthlyEquivalentCents?.let { map["monthlyEquivalentCents"] = it }
+    return map
+}
+
+/**
+ * Encode [UpgradeOffer.Proration]. The SDK holds `nextBillingDate` as an
+ * ISO-8601 string; the Dart model (and the iOS bridge) expect epoch seconds,
+ * so it is converted here. An unparseable date is omitted rather than faked.
+ */
+fun UpgradeOffer.Proration.toFlutterMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "prorationAmountCents" to amountCents,
+        "currency" to currency,
+    )
+    nextBillingDate
+        ?.let { runCatching { java.time.OffsetDateTime.parse(it).toEpochSecond() }.getOrNull() }
+        ?.let { map["nextBillingDate"] = it }
+    return map
+}
+
+/**
+ * Encode [UpgradeOffer.Display]. Keys match `UpgradeOfferDisplay.fromMap` in
+ * `upgrade_offer.dart` — note `storekitCancelInstructions` is emitted under
+ * the key `cancelInstructions`, matching the iOS bridge.
+ */
+fun UpgradeOffer.Display.toFlutterMap(): Map<String, Any?> {
+    val map = mutableMapOf<String, Any?>(
+        "title" to title,
+        "body" to body,
+        "ctaText" to ctaText,
+        "dismissText" to dismissText,
+    )
+    storekitMigrationBody?.let { map["storekitMigrationBody"] = it }
+    storekitCancelInstructions?.let { map["cancelInstructions"] = it }
+    return map
+}
 
 // ---------------------------------------------------------------------------
 // ZeroSettleEvent → Flutter wire (Task 11: events stream)

@@ -12,6 +12,9 @@ enum UserOfferActionType {
   /// Migrate an active StoreKit subscription to web (Stripe) billing.
   migrateStorekitToWeb,
 
+  /// Migrate an active Google Play subscription to web (Stripe) billing.
+  migratePlayToWeb,
+
   /// Upgrade the user's StoreKit subscription to a higher-tier web plan.
   upgradeStorekitToWeb,
 
@@ -24,6 +27,8 @@ enum UserOfferActionType {
     switch (s) {
       case 'migrateStorekitToWeb':
         return UserOfferActionType.migrateStorekitToWeb;
+      case 'migratePlayToWeb':
+        return UserOfferActionType.migratePlayToWeb;
       case 'upgradeStorekitToWeb':
         return UserOfferActionType.upgradeStorekitToWeb;
       case 'upgradeWebToWeb':

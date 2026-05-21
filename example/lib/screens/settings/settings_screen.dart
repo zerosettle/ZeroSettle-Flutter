@@ -40,7 +40,7 @@ class SettingsScreen extends StatelessWidget {
             child: ListTile(
               title: const Text('Developer'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.go(Routes.developer),
+              onTap: () => context.push(Routes.developer),
             ),
           ),
         ],

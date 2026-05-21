@@ -34,10 +34,11 @@ android/src/main/kotlin/com/zerosettle/flutter/
 * `EventChannel('zerosettle/checkout_events')` — Streams checkout delegate callbacks
 
 ## PlatformViews
-* Migrate tip view — embeds the native migration tip component
-  - iOS viewType `zerosettle/migrate_tip_view`: SwiftUI `MigrationTipView` via `ZSMigrateTipViewFactory` → `ZSMigrateTipViewFlutterContainer` (UIHostingController)
+* Offer tip (`migrate_tip_view`) — embeds the native unified `ZSOfferManager`-backed offer tip
+  - iOS viewType `zerosettle/migrate_tip_view`: SwiftUI `OfferTipView` via `ZSMigrateTipViewFactory` → `MigrationTipViewFlutterContainer` (UIHostingController)
   - Android viewType `com.zerosettle/migrate_tip_view`: Compose `ZeroSettleOfferTip` via `MigrateTipViewFactory.kt`
-  - Creation params (both platforms): `backgroundColor` (ARGB int32), `userId` (String)
+  - Both natives are identify-first — they resolve the active user from `identify(_:)`; no `userId` is consumed
+  - Creation params (both platforms): `backgroundColor` (ARGB int32). `userId` (String) is still sent but deprecated/ignored — removed in 2.0
   - Widget: `MigrationTipView` in `lib/widgets/` (legacy alias `ZSMigrateTipView`) — renders `UiKitView` on iOS, `AndroidView` on Android, `SizedBox.shrink()` on desktop
   - Pattern: thin wrapper around autonomous native view — props set once at creation; the only callback is a native→Dart `setSize` height bridge
 * Android-only PlatformViews (no iOS counterpart yet): `com.zerosettle/offer_tip` (`OfferTipFactory`, widget `ZeroSettleOfferTip`), `com.zerosettle/pending_action_banner` (`PendingActionBannerFactory`, widget `ZeroSettlePendingActionBanner`)

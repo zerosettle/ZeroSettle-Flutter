@@ -10,7 +10,7 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Run Prepare Flutter Framework Script"
-               scriptText = "/bin/sh &quot;$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh&quot; prepare&#10;">
+               scriptText = "/bin/sh &quot;$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh&quot; prepare&#10;# Force the Flutter-generated SPM package to the app&apos;s iOS deployment&#10;# target. Flutter regenerates it at its 13.0 default here; only the&#10;# `flutter` CLI build path bumps it, so Xcode-native builds otherwise fail&#10;# SPM resolution against the iOS-18 zerosettle plugin chain.&#10;PKG=&quot;$SRCROOT/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift&quot;&#10;[ -f &quot;$PKG&quot; ] &amp;&amp; /usr/bin/sed -i '' -E 's/\.iOS\(&quot;[0-9.]+&quot;\)/.iOS(&quot;18.0&quot;)/' &quot;$PKG&quot;&#10;">
                <EnvironmentBuildable>
                   <BuildableReference
                      BuildableIdentifier = "primary"

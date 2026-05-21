@@ -13,7 +13,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: MigrationTipView(
-              userId: 'test_user',
               backgroundColor: Colors.black,
             ),
           ),
@@ -34,7 +33,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: MigrationTipView(
-              userId: 'test_user',
               backgroundColor: Colors.black,
             ),
           ),
@@ -55,13 +53,11 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
       const testColor = Color(0xFFAABBCC);
-      const testUserId = 'user_android_42';
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: MigrationTipView(
-              userId: testUserId,
               backgroundColor: testColor,
             ),
           ),
@@ -76,11 +72,11 @@ void main() {
       // MigrateTipViewFactory registers under exactly this string.
       expect(androidView.viewType, 'com.zerosettle/migrate_tip_view');
 
-      // Creation params share the iOS shape (userId + backgroundColor ARGB).
+      // Creation params share the iOS shape. `backgroundColor` (ARGB int) is
+      // the only consumed param — the offer tip is identify-first.
       expect(androidView.creationParams, isA<Map<String, Object?>>());
       final params = androidView.creationParams as Map<String, Object?>;
       expect(params['backgroundColor'], testColor.toARGB32());
-      expect(params['userId'], testUserId);
 
       // StandardMessageCodec matches F24's PlatformViewFactory.
       expect(androidView.creationParamsCodec, isA<StandardMessageCodec>());
@@ -102,7 +98,6 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: MigrationTipView(
-                userId: 'test_user',
                 backgroundColor: Colors.black,
               ),
             ),
@@ -122,13 +117,11 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
       const testColor = Color(0xFF123456);
-      const testUserId = 'user_abc_123';
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: MigrationTipView(
-              userId: testUserId,
               backgroundColor: testColor,
             ),
           ),
@@ -144,7 +137,6 @@ void main() {
       expect(uiKitView.creationParams, isA<Map<String, dynamic>>());
       final params = uiKitView.creationParams as Map<String, dynamic>;
       expect(params['backgroundColor'], testColor.toARGB32());
-      expect(params['userId'], testUserId);
 
       // Verify codec
       expect(uiKitView.creationParamsCodec, isA<StandardMessageCodec>());
@@ -159,7 +151,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: MigrationTipView(
-              userId: 'test',
               backgroundColor: Colors.blue,
             ),
           ),

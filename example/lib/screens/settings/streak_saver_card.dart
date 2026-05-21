@@ -44,7 +44,7 @@ class StreakSaverCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             OutlinedButton(
-              onPressed: () => context.go(Routes.shop),
+              onPressed: () => context.push(Routes.shop),
               child: const Text('Buy more'),
             ),
           ],

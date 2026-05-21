@@ -2,9 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Embeds the native migration tip view inside a Flutter app:
-/// SwiftUI `MigrationTipView` on iOS (from ZeroSettleKit), Compose
+/// Embeds the native ZeroSettle offer tip inside a Flutter app:
+/// SwiftUI `OfferTipView` on iOS (from ZeroSettleKit), Compose
 /// `ZeroSettleOfferTip` on Android (from ZeroSettle-Android `:ui`).
+///
+/// Both are the unified, `ZSOfferManager`-backed tip — they resolve the
+/// active user from `identify(_:)`, so call `ZeroSettle.instance.identify(...)`
+/// once before this widget mounts.
 ///
 /// The native view is intrinsically self-sizing — its height changes based
 /// on event state (CTA swap when Apple Pay needs setup, dismissal, loading
@@ -31,12 +35,14 @@ import 'package:flutter/services.dart';
 /// Example:
 /// ```dart
 /// MigrationTipView(
-///   userId: 'user123',
 ///   backgroundColor: Theme.of(context).colorScheme.primary,
 /// )
 /// ```
 class MigrationTipView extends StatefulWidget {
-  /// The user ID to pass to the native SDK.
+  /// (Deprecated) Legacy user identifier. The native offer tip is
+  /// identify-first — it resolves the active user from
+  /// `ZeroSettle.instance.identify(...)` — so this value is ignored on both
+  /// platforms. Retained for source compatibility; removed in zerosettle 2.0.
   final String userId;
 
   /// Used as both the card fill AND the CTA text color on the native view
@@ -46,7 +52,11 @@ class MigrationTipView extends StatefulWidget {
 
   const MigrationTipView({
     super.key,
-    required this.userId,
+    @Deprecated(
+      'Identify-first: the offer tip resolves the user from identify(_:). '
+      'This parameter is ignored; will be removed in zerosettle 2.0.',
+    )
+    this.userId = '',
     this.backgroundColor = const Color(0xFF000000),
   });
 

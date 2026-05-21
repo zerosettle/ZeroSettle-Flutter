@@ -17,9 +17,14 @@ private final class _LayoutObservingView: UIView {
     }
 }
 
+/// Hosts the SDK's unified offer tip (`OfferTipView`) for the
+/// `zerosettle/migrate_tip_view` PlatformView. `OfferTipView` is the
+/// `ZSOfferManager`-backed replacement for the deprecated `MigrationTipView`
+/// SwiftUI view; the container and viewType keep their legacy names for wire
+/// compatibility with the Dart `MigrationTipView` widget.
 class MigrationTipViewFlutterContainer: NSObject, FlutterPlatformView {
     private let containerView: _LayoutObservingView
-    private var hostingController: UIHostingController<MigrationTipView>?
+    private var hostingController: UIHostingController<OfferTipView>?
 
     /// Per-view MethodChannel that this container pushes size updates to.
     /// The Dart `MigrationTipView` widget subscribes to it on
@@ -46,27 +51,28 @@ class MigrationTipViewFlutterContainer: NSObject, FlutterPlatformView {
         self.containerView = containerView
         super.init()
 
-        // Parse creation arguments
+        // Parse creation arguments. `OfferTipView` is identify-first — it
+        // resolves the active user from `ZeroSettle.shared.offerManager()`, so
+        // the legacy `userId` creation param is no longer consumed (parity with
+        // the Android factory, which already ignores it).
         var backgroundColor = Color.black
-        var userId = ""
 
-        if let args = args as? [String: Any] {
+        if let args = args as? [String: Any],
+           let colorInt = args["backgroundColor"] as? Int {
             // Convert Flutter Color (ARGB int32) to SwiftUI Color
-            if let colorInt = args["backgroundColor"] as? Int {
-                let a = Double((colorInt >> 24) & 0xFF) / 255.0
-                let r = Double((colorInt >> 16) & 0xFF) / 255.0
-                let g = Double((colorInt >> 8) & 0xFF) / 255.0
-                let b = Double(colorInt & 0xFF) / 255.0
-                backgroundColor = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
-            }
-            userId = args["userId"] as? String ?? ""
+            let a = Double((colorInt >> 24) & 0xFF) / 255.0
+            let r = Double((colorInt >> 16) & 0xFF) / 255.0
+            let g = Double((colorInt >> 8) & 0xFF) / 255.0
+            let b = Double(colorInt & 0xFF) / 255.0
+            backgroundColor = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
         }
 
-        // Create SwiftUI view
-        let swiftUIView = MigrationTipView(
-            userId: userId,
-            backgroundColor: backgroundColor
-        )
+        // Create SwiftUI view. `OfferTipView` is the unified, ZSOfferManager-
+        // backed tip — the supported replacement for the deprecated
+        // `MigrationTipView`. It self-collapses to height 0 while loading or
+        // when no offer is available, so the Flutter SizedBox stays empty
+        // until an offer surfaces.
+        let swiftUIView = OfferTipView(backgroundColor: backgroundColor)
 
         // Wrap in UIHostingController
         let hostingController = UIHostingController(rootView: swiftUIView)

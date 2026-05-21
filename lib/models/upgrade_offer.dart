@@ -71,7 +71,10 @@ class UpgradeOfferCurrentProduct {
   final String name;
   final int priceCents;
   final String currency;
-  final int durationDays;
+
+  /// Billing-cycle length in days. Not emitted by every platform (the Android
+  /// SDK has no such field) — `null` when unknown.
+  final int? durationDays;
   final String billingLabel;
 
   UpgradeOfferCurrentProduct({
@@ -79,7 +82,7 @@ class UpgradeOfferCurrentProduct {
     required this.name,
     required this.priceCents,
     required this.currency,
-    required this.durationDays,
+    this.durationDays,
     required this.billingLabel,
   });
 
@@ -89,7 +92,7 @@ class UpgradeOfferCurrentProduct {
       name: map['name'] as String,
       priceCents: map['priceCents'] as int,
       currency: map['currency'] as String,
-      durationDays: map['durationDays'] as int,
+      durationDays: map['durationDays'] as int?,
       billingLabel: map['billingLabel'] as String,
     );
   }
@@ -100,7 +103,7 @@ class UpgradeOfferCurrentProduct {
       'name': name,
       'priceCents': priceCents,
       'currency': currency,
-      'durationDays': durationDays,
+      if (durationDays != null) 'durationDays': durationDays,
       'billingLabel': billingLabel,
     };
   }
@@ -112,18 +115,24 @@ class UpgradeOfferTargetProduct {
   final String name;
   final int priceCents;
   final String currency;
-  final int durationDays;
+
+  /// Billing-cycle length in days. Not emitted by every platform (the Android
+  /// SDK has no such field) — `null` when unknown.
+  final int? durationDays;
   final String billingLabel;
-  final int monthlyEquivalentCents;
+
+  /// Monthly-equivalent price for annual/multi-month plans. `null` when the
+  /// backend does not provide one.
+  final int? monthlyEquivalentCents;
 
   UpgradeOfferTargetProduct({
     required this.referenceId,
     required this.name,
     required this.priceCents,
     required this.currency,
-    required this.durationDays,
+    this.durationDays,
     required this.billingLabel,
-    required this.monthlyEquivalentCents,
+    this.monthlyEquivalentCents,
   });
 
   factory UpgradeOfferTargetProduct.fromMap(Map<String, dynamic> map) {
@@ -132,9 +141,9 @@ class UpgradeOfferTargetProduct {
       name: map['name'] as String,
       priceCents: map['priceCents'] as int,
       currency: map['currency'] as String,
-      durationDays: map['durationDays'] as int,
+      durationDays: map['durationDays'] as int?,
       billingLabel: map['billingLabel'] as String,
-      monthlyEquivalentCents: map['monthlyEquivalentCents'] as int,
+      monthlyEquivalentCents: map['monthlyEquivalentCents'] as int?,
     );
   }
 
@@ -144,9 +153,10 @@ class UpgradeOfferTargetProduct {
       'name': name,
       'priceCents': priceCents,
       'currency': currency,
-      'durationDays': durationDays,
+      if (durationDays != null) 'durationDays': durationDays,
       'billingLabel': billingLabel,
-      'monthlyEquivalentCents': monthlyEquivalentCents,
+      if (monthlyEquivalentCents != null)
+        'monthlyEquivalentCents': monthlyEquivalentCents,
     };
   }
 }

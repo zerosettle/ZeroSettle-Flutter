@@ -1,4 +1,4 @@
-package io.zerosettle.zsstorefront
+package io.zerosettle.justoneflutter
 
 import io.flutter.embedding.android.FlutterActivity
 

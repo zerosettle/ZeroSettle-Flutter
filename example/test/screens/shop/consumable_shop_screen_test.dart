@@ -22,19 +22,29 @@ class _EmptyProductsPlatform extends MethodChannelZeroSettle {
   Future<List<Map<String, dynamic>>> getProducts() async => const [];
 
   @override
+  Future<Map<String, dynamic>> fetchProducts({String? userId}) async =>
+      <String, dynamic>{'products': <Map<String, dynamic>>[]};
+
+  @override
   Future<List<Map<String, dynamic>>> getEntitlements() async => const [];
 }
 
 class _OneConsumablePlatform extends MethodChannelZeroSettle {
+  static final Map<String, dynamic> _consumable = const Product(
+    id: 'io.zerosettle.JustOneFlutter.5streakSaver',
+    displayName: 'Streak Saver 5-Pack',
+    productDescription: 'Five streak savers',
+    type: ZSProductType.consumable,
+  ).toMap();
+
   @override
-  Future<List<Map<String, dynamic>>> getProducts() async => [
-        const Product(
-          id: 'com.app.streaksaver5',
-          displayName: 'Streak Saver 5-Pack',
-          productDescription: 'Five streak savers',
-          type: ZSProductType.consumable,
-        ).toMap(),
-      ];
+  Future<List<Map<String, dynamic>>> getProducts() async => [_consumable];
+
+  @override
+  Future<Map<String, dynamic>> fetchProducts({String? userId}) async =>
+      <String, dynamic>{
+        'products': <Map<String, dynamic>>[_consumable],
+      };
 
   @override
   Future<List<Map<String, dynamic>>> getEntitlements() async => const [];
@@ -116,12 +126,25 @@ void main() {
           type: ZSProductType.consumable,
         );
 
-    test('parses trailing integer from product id', () {
-      expect(streakSaverGrant(makeProduct('com.app.streaksaver5')), 5);
+    test('parses the quantity from a <N>streakSaver product id', () {
+      expect(
+        streakSaverGrant(
+            makeProduct('io.zerosettle.JustOneFlutter.5streakSaver')),
+        5,
+      );
+      expect(
+        streakSaverGrant(
+            makeProduct('io.zerosettle.JustOneFlutter.1streakSaver')),
+        1,
+      );
     });
 
-    test('falls back to 1 when id has no trailing digits', () {
-      expect(streakSaverGrant(makeProduct('com.app.streaksaver')), 1);
+    test('falls back to 1 when the id has no quantity', () {
+      expect(
+        streakSaverGrant(
+            makeProduct('io.zerosettle.JustOneFlutter.streakSaver')),
+        1,
+      );
     });
   });
 }

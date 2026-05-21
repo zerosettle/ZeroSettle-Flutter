@@ -11,9 +11,8 @@ import '../../widgets/dual_price_buttons.dart';
 /// purchased a subscription and hasn't dismissed the paywall.
 ///
 /// Resolves the subscription product from [ZeroSettle.instance.getProducts],
-/// renders [CheckoutSheetHeader] + [DualPriceButtons] (UCB state from
-/// [ZeroSettle.instance.isUcbEnabledUpdates]), and offers a "Continue with
-/// free version" escape hatch that writes [UserPrefs.setPaywallDismissedAt]
+/// renders [CheckoutSheetHeader] + [DualPriceButtons], and offers a "Continue
+/// with free version" escape hatch that writes [UserPrefs.setPaywallDismissedAt]
 /// before navigating to [Routes.home].
 ///
 /// Mirrors the visual hierarchy of the Android `LaunchPaywallScreen` Composable.
@@ -30,7 +29,11 @@ class _LaunchPaywallScreenState extends State<LaunchPaywallScreen> {
   @override
   void initState() {
     super.initState();
-    _productsFuture = ZeroSettle.instance.getProducts();
+    // Actively fetch the catalog — a product-display screen must not assume
+    // the SDK's product cache (`getProducts()`) was pre-warmed by an earlier
+    // `identify()`. `fetchProducts()` loads it (or surfaces a real error).
+    _productsFuture =
+        ZeroSettle.instance.fetchProducts().then((catalog) => catalog.products);
   }
 
   Future<void> _dismiss(BuildContext context) async {
@@ -81,6 +84,15 @@ class _LaunchPaywallScreenState extends State<LaunchPaywallScreen> {
               FutureBuilder<List<Product>>(
                 future: _productsFuture,
                 builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Text(
+                      "Couldn't load Premium right now.\n${snapshot.error}",
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                      textAlign: TextAlign.center,
+                    );
+                  }
                   if (!snapshot.hasData) {
                     return const SizedBox(
                       height: 120,
@@ -110,16 +122,9 @@ class _LaunchPaywallScreenState extends State<LaunchPaywallScreen> {
                     children: [
                       CheckoutSheetHeader(product: subscription),
                       const SizedBox(height: 20),
-                      StreamBuilder<bool>(
-                        stream: ZeroSettle.instance.isUcbEnabledUpdates,
-                        initialData: false,
-                        builder: (context, ucbSnapshot) {
-                          return DualPriceButtons(
-                            product: subscription,
-                            ucbEnabled: ucbSnapshot.data ?? false,
-                            onPurchased: () => _finish(context),
-                          );
-                        },
+                      DualPriceButtons(
+                        product: subscription,
+                        onPurchased: () => _finish(context),
                       ),
                     ],
                   );

@@ -2301,9 +2301,13 @@ extension UpgradeOffer.ProductInfo {
             "name": name,
             "priceCents": price.amountCents,
             "currency": price.currencyCode,
-            "durationDays": 0, // Not directly available on iOS ProductInfo
             "billingLabel": billingLabel,
         ]
+        // `durationDays` is not available on iOS `ProductInfo`. Omit the key
+        // rather than emitting `0` — the Dart model treats it as `int?` and
+        // the Android encoder omits it when unknown. Emitting `0` here would
+        // make the same "unknown" state read as `0` on iOS and `null` on
+        // Android — a cross-platform parity bug.
         if let monthlyEquivalent {
             map["monthlyEquivalentCents"] = monthlyEquivalent.amountCents
         }

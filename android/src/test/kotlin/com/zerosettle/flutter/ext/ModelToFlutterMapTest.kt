@@ -11,6 +11,7 @@ import com.zerosettle.sdk.models.PendingClaim
 import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
 import com.zerosettle.sdk.models.ProductType
+import com.zerosettle.sdk.models.UpgradeOffer
 import com.zerosettle.sdk.models.UserOffer
 import com.zerosettle.sdk.models.ZeroSettleError
 import com.zerosettle.sdk.offers.OfferManager
@@ -902,5 +903,67 @@ class ModelToFlutterMapTest {
         val map = ZeroSettleEvent.PendingActionShown("migrationCompletedInfo").toFlutterMap()
         assertThat(map["type"]).isEqualTo("pendingActionShown")
         assertThat(map["actionType"]).isEqualTo("migrationCompletedInfo")
+    }
+
+    // --- UpgradeOffer.Config (chunk-5) ------------------------------------
+
+    @Test
+    fun `UpgradeOffer Config encodes chunk-5 camelCase shape`() {
+        val map = UpgradeOffer.Config(
+            available = true,
+            savingsPercent = 33,
+            upgradeType = "web_to_web",
+            currentProduct = UpgradeOffer.ProductInfo(
+                "cur", "Monthly", 999, "USD", "$9.99/mo",
+            ),
+            targetProduct = UpgradeOffer.ProductInfo(
+                "tgt", "Yearly", 7999, "USD", "$79.99/yr", monthlyEquivalentCents = 667,
+            ),
+            display = UpgradeOffer.Display("Save 33%", "Switch.", "Upgrade", "Not now"),
+        ).toFlutterMap()
+
+        assertThat(map["available"]).isEqualTo(true)
+        assertThat(map["savingsPercent"]).isEqualTo(33)
+        @Suppress("UNCHECKED_CAST")
+        val target = map["targetProduct"] as Map<String, Any?>
+        assertThat(target["referenceId"]).isEqualTo("tgt")
+        assertThat(target["monthlyEquivalentCents"]).isEqualTo(667)
+        // durationDays is not an Android SDK field — must be absent.
+        assertThat(target).doesNotContainKey("durationDays")
+        @Suppress("UNCHECKED_CAST")
+        val display = map["display"] as Map<String, Any?>
+        assertThat(display["title"]).isEqualTo("Save 33%")
+    }
+
+    @Test
+    fun `UpgradeOffer Config not-available omits optional blocks`() {
+        val map = UpgradeOffer.Config(available = false, reason = "already_highest_tier")
+            .toFlutterMap()
+        assertThat(map["available"]).isEqualTo(false)
+        assertThat(map["reason"]).isEqualTo("already_highest_tier")
+        assertThat(map).doesNotContainKey("currentProduct")
+        assertThat(map).doesNotContainKey("display")
+    }
+
+    @Test
+    fun `UpgradeOffer Proration converts ISO nextBillingDate to epoch seconds`() {
+        val map = UpgradeOffer.Proration(
+            amountCents = -250,
+            currency = "USD",
+            nextBillingDate = "2026-06-20T00:00:00Z",
+        ).toFlutterMap()
+        assertThat(map["prorationAmountCents"]).isEqualTo(-250)
+        // 2026-06-20T00:00:00Z == 1781913600 epoch seconds.
+        assertThat(map["nextBillingDate"]).isEqualTo(1781913600L)
+    }
+
+    @Test
+    fun `UpgradeOffer Proration omits an unparseable nextBillingDate`() {
+        val map = UpgradeOffer.Proration(
+            amountCents = 0,
+            currency = "USD",
+            nextBillingDate = "not-a-date",
+        ).toFlutterMap()
+        assertThat(map).doesNotContainKey("nextBillingDate")
     }
 }

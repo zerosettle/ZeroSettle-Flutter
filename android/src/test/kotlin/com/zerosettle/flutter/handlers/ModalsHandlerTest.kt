@@ -88,18 +88,29 @@ class ModalsHandlerTest {
     private fun newResult() = mockk<MethodChannel.Result>(relaxed = true)
 
     private fun sampleConfig() = UpgradeOffer.Config(
-        fromProductId = "com.app.weekly",
-        toProductId = "com.app.monthly",
+        available = true,
         savingsPercent = 20,
+        currentProduct = UpgradeOffer.ProductInfo(
+            referenceId = "com.app.weekly",
+            name = "Weekly",
+            priceCents = 299,
+            currency = "USD",
+            billingLabel = "$2.99/wk",
+        ),
+        targetProduct = UpgradeOffer.ProductInfo(
+            referenceId = "com.app.monthly",
+            name = "Monthly",
+            priceCents = 999,
+            currency = "USD",
+            billingLabel = "$9.99/mo",
+            monthlyEquivalentCents = 999,
+        ),
+        upgradeType = "web_to_web",
         display = UpgradeOffer.Display(
-            offerTitle = "Save 20%",
-            offerMessage = "Switch to monthly",
-            offerCta = "Switch",
-            acceptedTitle = "Done",
-            acceptedMessage = "You're on monthly now",
-            acceptedCta = "OK",
-            completedTitle = "All set",
-            completedMessage = "Enjoy your savings",
+            title = "Save 20%",
+            body = "Switch to monthly",
+            ctaText = "Switch",
+            dismissText = "Not now",
         ),
     )
 
@@ -188,13 +199,19 @@ class ModalsHandlerTest {
         verify { result.success(capture(mapSlot)) }
         verify(exactly = 0) { result.error(any(), any(), any()) }
 
-        // Wire shape: camelCase keys mirroring the encoder in ModelToFlutterMap.
-        assertThat(mapSlot.captured["fromProductId"]).isEqualTo("com.app.weekly")
-        assertThat(mapSlot.captured["toProductId"]).isEqualTo("com.app.monthly")
+        // Wire shape: camelCase chunk-5 keys mirroring the encoder in
+        // ModelToFlutterMap (identical to what the iOS bridge emits).
+        assertThat(mapSlot.captured["available"]).isEqualTo(true)
         assertThat(mapSlot.captured["savingsPercent"]).isEqualTo(20)
+        assertThat(mapSlot.captured["upgradeType"]).isEqualTo("web_to_web")
+        @Suppress("UNCHECKED_CAST")
+        val target = mapSlot.captured["targetProduct"] as Map<String, Any?>
+        assertThat(target["referenceId"]).isEqualTo("com.app.monthly")
+        assertThat(target["monthlyEquivalentCents"]).isEqualTo(999)
         @Suppress("UNCHECKED_CAST")
         val display = mapSlot.captured["display"] as Map<String, Any?>
-        assertThat(display["offerTitle"]).isEqualTo("Save 20%")
+        assertThat(display["title"]).isEqualTo("Save 20%")
+        assertThat(display["ctaText"]).isEqualTo("Switch")
     }
 
     @Test
@@ -256,11 +273,10 @@ class ModalsHandlerTest {
 
     @Test
     fun `fetchUpgradeOfferConfig maps NetworkError to network_error wire code`() = runTest {
-        // Covers the chunk-5 decode-failure path: when the backend response
-        // doesn't match the placeholder UpgradeOffer.Config schema, the
-        // SDK's mapDecode wraps the MissingFieldException in NetworkError.
-        // The handler must surface it as wire code `network_error` for
-        // Dart pattern-matching.
+        // Covers the decode-failure path: when the backend response cannot
+        // be decoded into UpgradeOffer.Config, the SDK's mapDecode wraps the
+        // failure in NetworkError. The handler must surface it as wire code
+        // `network_error` for Dart pattern-matching.
         coEvery { ZeroSettle.fetchUpgradeOfferConfig(any()) } returns Result.failure(
             ZeroSettleError.NetworkError(RuntimeException("decode failed")),
         )

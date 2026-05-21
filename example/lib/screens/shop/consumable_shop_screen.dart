@@ -7,13 +7,13 @@ import '../../widgets/dual_price_buttons.dart';
 
 /// The number of streak savers a given consumable product grants.
 ///
-/// Parses the trailing integer from the product id
-/// (e.g. `com.app.streaksaver5` → 5). A real app would model the grant
-/// amount explicitly per product; parsing the id is a sample convenience
-/// that only holds because of the `…streaksaver<N>` naming convention.
-/// Falls back to 1 for any id that doesn't end in a number.
+/// Parses the quantity from the product id, which follows the `<N>streakSaver`
+/// convention (e.g. `io.zerosettle.JustOneFlutter.5streakSaver` → 5). A real
+/// app would model the grant amount explicitly per product; parsing the id is
+/// a sample convenience. Falls back to 1 for any id without a quantity.
 int streakSaverGrant(Product product) {
-  final match = RegExp(r'(\d+)$').firstMatch(product.id);
+  final match =
+      RegExp(r'(\d+)streaksaver', caseSensitive: false).firstMatch(product.id);
   if (match == null) return 1;
   return int.tryParse(match.group(1) ?? '') ?? 1;
 }
@@ -41,7 +41,11 @@ class _ConsumableShopScreenState extends State<ConsumableShopScreen> {
   @override
   void initState() {
     super.initState();
-    _productsFuture = ZeroSettle.instance.getProducts();
+    // Actively fetch the catalog — a product-display screen must not assume
+    // the SDK's product cache (`getProducts()`) was pre-warmed by an earlier
+    // `identify()`. `fetchProducts()` loads it (or surfaces a real error).
+    _productsFuture =
+        ZeroSettle.instance.fetchProducts().then((catalog) => catalog.products);
   }
 
   @override
@@ -84,6 +88,20 @@ class _ConsumableShopScreenState extends State<ConsumableShopScreen> {
             child: FutureBuilder<List<Product>>(
               future: _productsFuture,
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        "Couldn't load streak savers.\n${snapshot.error}",
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -122,16 +140,9 @@ class _ConsumableShopScreenState extends State<ConsumableShopScreen> {
                           children: [
                             CheckoutSheetHeader(product: product),
                             const SizedBox(height: 12),
-                            StreamBuilder<bool>(
-                              stream: ZeroSettle.instance.isUcbEnabledUpdates,
-                              initialData: false,
-                              builder: (context, ucbSnapshot) {
-                                return DualPriceButtons(
-                                  product: product,
-                                  ucbEnabled: ucbSnapshot.data ?? false,
-                                  onPurchased: () => _onPurchased(product),
-                                );
-                              },
+                            DualPriceButtons(
+                              product: product,
+                              onPurchased: () => _onPurchased(product),
                             ),
                           ],
                         ),

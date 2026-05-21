@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zerosettle_example/app/inherited_just_one.dart';
 import 'package:zerosettle_example/data/database.dart';
 import 'package:zerosettle_example/data/user_prefs.dart';
-import 'package:zerosettle_example/iap_environment.dart';
+import 'package:zerosettle_example/app_environment.dart';
 import 'package:zerosettle_example/notifications/notification_service.dart';
 import 'package:zerosettle_example/screens/developer/env_switcher_screen.dart';
 
@@ -44,21 +44,19 @@ void main() {
   testWidgets('EnvSwitcherScreen renders AppBar titled "Environment"',
       (tester) async {
     await tester.pumpWidget(_wrap(const EnvSwitcherScreen(), scope));
-    // pumpAndSettle so IAPEnvironment.load() resolves.
+    // pumpAndSettle so AppEnvironment.load() resolves.
     await tester.pumpAndSettle();
 
     expect(find.text('Environment'), findsOneWidget);
   });
 
-  testWidgets('EnvSwitcherScreen renders the enabled environment list',
+  testWidgets('EnvSwitcherScreen renders the environment picker',
       (tester) async {
     await tester.pumpWidget(_wrap(const EnvSwitcherScreen(), scope));
     await tester.pumpAndSettle();
 
-    // Every enabled IAPEnvironment should appear as a tile (by display name).
-    final enabled = IAPEnvironment.values.where((e) => e.isEnabled);
-    expect(enabled, isNotEmpty);
-    for (final env in enabled) {
+    // All three environments appear as segments (by display name).
+    for (final env in AppEnvironment.values) {
       expect(find.text(env.displayName), findsOneWidget);
     }
   });

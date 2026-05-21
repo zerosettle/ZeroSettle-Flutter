@@ -1,6 +1,5 @@
 allprojects {
     repositories {
-        mavenLocal() // Local development: zerosettle-android from ~/.m2
         google()
         mavenCentral()
     }

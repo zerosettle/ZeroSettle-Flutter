@@ -1,41 +1,57 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zerosettle/zerosettle.dart';
 import 'package:zerosettle_example/widgets/dual_price_buttons.dart';
 
-Product _product() => Product.fromMap({
-      'id': 'com.app.pro', 'displayName': 'Premium',
-      'productDescription': 'd', 'type': 'auto_renewable_subscription',
-      'webPrice': {'amountCents': 499, 'currencyCode': 'USD'},
+Product _product({bool withWebPrice = true}) => Product.fromMap({
+      'id': 'com.app.pro',
+      'displayName': 'Premium',
+      'productDescription': 'd',
+      'type': 'auto_renewable_subscription',
+      if (withWebPrice) 'webPrice': {'amountCents': 499, 'currencyCode': 'USD'},
     });
 
-void main() {
-  testWidgets('UCB enabled → single Buy button', (tester) async {
-    await tester.pumpWidget(MaterialApp(
+Widget _host(Product product) => MaterialApp(
       home: Scaffold(
-        body: DualPriceButtons(
-          product: _product(),
-          ucbEnabled: true,
-          onPurchased: () {},
-        ),
+        body: DualPriceButtons(product: product, onPurchased: () {}),
       ),
-    ));
+    );
+
+void main() {
+  testWidgets('Android → a single "Buy" button (UCB routes the choice)',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await tester.pumpWidget(_host(_product()));
+
     expect(find.widgetWithText(FilledButton, 'Buy'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Google Play'), findsNothing);
+    // No web-vs-store picker on Android.
+    expect(find.widgetWithText(FilledButton, 'Pay on web'), findsNothing);
+    expect(find.byType(OutlinedButton), findsNothing);
+
+    debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('UCB disabled with webPrice → web button + Google Play button',
+  testWidgets('iOS with a web price → "Pay on web" + "App Store" buttons',
       (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: DualPriceButtons(
-          product: _product(),
-          ucbEnabled: false,
-          onPurchased: () {},
-        ),
-      ),
-    ));
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await tester.pumpWidget(_host(_product()));
+
     expect(find.widgetWithText(FilledButton, 'Pay on web'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Google Play'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'App Store'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Buy'), findsNothing);
+
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('iOS without a web price → only the "App Store" button',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await tester.pumpWidget(_host(_product(withWebPrice: false)));
+
+    expect(find.widgetWithText(OutlinedButton, 'App Store'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Pay on web'), findsNothing);
+
+    debugDefaultTargetPlatformOverride = null;
   });
 }
