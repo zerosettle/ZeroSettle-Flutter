@@ -53,13 +53,12 @@ import kotlinx.coroutines.launch
  *
  * Each Dart wire method targets one platform's store. iOS receives
  * `transferStoreKitOwnershipToCurrentUser({productId})`; Android receives
- * `transferPlayOwnershipToCurrentUser({productId, originalTransactionId})`.
- * The Android-side StoreKit method returns `not_implemented`; the iOS-side
- * Play method returns `not_implemented` symmetrically. Plan F10 + D2
- * confirm this is the intended Android behaviour — the Android Play
- * analogue needs `originalTransactionId` (the Play purchase token) in
- * addition to `productId`, so cross-routing the StoreKit signature would
- * silently drop a required arg.
+ * `transferPlayOwnershipToCurrentUser({productId})`. The Android-side
+ * StoreKit method returns `not_implemented`; the iOS-side Play method
+ * returns `not_implemented` symmetrically. Both transfer methods take only
+ * `productId` — the native SDK resolves the store-specific transaction
+ * reference (the Play purchase token) internally from the matching
+ * `PendingClaim`.
  *
  * ## suspend dispatch
  *
@@ -294,14 +293,13 @@ internal class IdentityHandler(private val deps: HandlerDependencies) {
     private fun transferStoreKitOwnershipToCurrentUser(result: MethodChannel.Result) {
         // The Dart method targets the iOS StoreKit ownership-transfer flow
         // (`Identity → claim a Storekit purchase`). On Android the peer
-        // wire method is `transferPlayOwnershipToCurrentUser` (below),
-        // which carries the additional `originalTransactionId` arg the
-        // Play API requires. Return a tagged error so Dart's `_wrap`
-        // surfaces a PlatformException callers can match on.
+        // wire method is `transferPlayOwnershipToCurrentUser` (below).
+        // Return a tagged error so Dart's `_wrap` surfaces a
+        // PlatformException callers can match on.
         result.error(
             "not_implemented",
             "transferStoreKitOwnershipToCurrentUser is iOS-only. " +
-                "On Android, use transferPlayOwnershipToCurrentUser(productId, originalTransactionId).",
+                "On Android, use transferPlayOwnershipToCurrentUser(productId).",
             null,
         )
     }
@@ -313,23 +311,20 @@ internal class IdentityHandler(private val deps: HandlerDependencies) {
         result: MethodChannel.Result,
     ) {
         val productId = call.argument<String>("productId")
-        val originalTransactionId = call.argument<String>("originalTransactionId")
         if (productId == null) {
             result.error("INVALID_ARGUMENTS", "productId is required", null)
             return
         }
-        if (originalTransactionId == null) {
-            result.error("INVALID_ARGUMENTS", "originalTransactionId is required", null)
-            return
-        }
         // Suspending SDK call — `ZeroSettle.transferPlayOwnershipToCurrentUser`
-        // hits the backend's claim-entitlement endpoint. Launch on the
-        // shared plugin scope so we don't stall the Flutter platform
+        // hits the backend's claim-play-entitlement endpoint. The SDK
+        // resolves the Play purchase token internally from the matching
+        // `PendingClaim`, so only `productId` crosses the wire. Launch on
+        // the shared plugin scope so we don't stall the Flutter platform
         // thread; the result is folded back through the standard wire
         // contract (success(null) or sendError(typed code)).
         deps.scope.launch {
             val sdkResult = runCatching {
-                ZeroSettle.transferPlayOwnershipToCurrentUser(productId, originalTransactionId)
+                ZeroSettle.transferPlayOwnershipToCurrentUser(productId)
             }
             sdkResult.fold(
                 onSuccess = { res ->

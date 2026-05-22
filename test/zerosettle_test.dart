@@ -184,11 +184,9 @@ class MockZeroSettlePlatform
   @override
   Future<void> transferPlayOwnershipToCurrentUser({
     required String productId,
-    required String originalTransactionId,
   }) async {
     _record('transferPlayOwnershipToCurrentUser', {
       'productId': productId,
-      'originalTransactionId': originalTransactionId,
     });
   }
 
@@ -934,19 +932,21 @@ void main() {
 
     // ==== D2: transferPlayOwnershipToCurrentUser Android peer ====
 
-    test(
-        'transferPlayOwnershipToCurrentUser forwards productId + originalTransactionId',
-        () async {
+    test('transferPlayOwnershipToCurrentUser forwards productId', () async {
       await ZeroSettle.instance.transferPlayOwnershipToCurrentUser(
         productId: 'p1',
-        originalTransactionId: 'GPA.token_abc',
       );
       expect(
         mockPlatform.calls.last['method'],
         'transferPlayOwnershipToCurrentUser',
       );
       expect(mockPlatform.calls.last['productId'], 'p1');
-      expect(mockPlatform.calls.last['originalTransactionId'], 'GPA.token_abc');
+      // The Play purchase token is resolved SDK-side from the PendingClaim
+      // — it never crosses the Dart facade.
+      expect(
+        mockPlatform.calls.last.containsKey('originalTransactionId'),
+        isFalse,
+      );
     });
 
     // ==== 1.3.0: No-userId facade methods ====

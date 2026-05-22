@@ -183,21 +183,18 @@ class ZeroSettle {
   /// user. Use after an [identify] call when you want to claim a Play
   /// purchase that was previously made under a different ZeroSettle account.
   ///
-  /// Both [productId] and [originalTransactionId] are required — the Play
-  /// API needs the purchase token (carried as `originalTransactionId`) in
-  /// addition to the product reference to resolve which purchase is being
-  /// transferred. Typical usage: render a [PendingClaim], then call this
-  /// with the claim's `productId` + `originalTransactionId`.
+  /// Only [productId] is required — the SDK resolves the Play purchase token
+  /// internally from the matching [PendingClaim] and verifies ownership
+  /// server-side. Typical usage: render a [PendingClaim] surfaced via
+  /// [pendingClaimsUpdates], then call this with the claim's `productId`.
   ///
   /// **Android-only.** On iOS the bridge returns `not_implemented` — use
   /// [transferStoreKitOwnershipToCurrentUser] for the StoreKit equivalent.
   Future<void> transferPlayOwnershipToCurrentUser({
     required String productId,
-    required String originalTransactionId,
   }) =>
       _wrap(() => _platform.transferPlayOwnershipToCurrentUser(
             productId: productId,
-            originalTransactionId: originalTransactionId,
           ));
 
   /// Quick check: does the user have an active entitlement for [productId]?

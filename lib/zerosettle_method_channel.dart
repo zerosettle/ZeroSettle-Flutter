@@ -132,11 +132,9 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   @override
   Future<void> transferPlayOwnershipToCurrentUser({
     required String productId,
-    required String originalTransactionId,
   }) async {
     await methodChannel.invokeMethod('transferPlayOwnershipToCurrentUser', {
       'productId': productId,
-      'originalTransactionId': originalTransactionId,
     });
   }
 

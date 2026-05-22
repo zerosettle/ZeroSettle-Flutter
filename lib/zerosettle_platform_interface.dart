@@ -61,12 +61,11 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('transferStoreKitOwnershipToCurrentUser() has not been implemented.');
   }
 
-  /// Android peer of [transferStoreKitOwnershipToCurrentUser]. Takes both
-  /// `productId` and `originalTransactionId` (the Play purchase token) —
-  /// the SDK needs both to resolve the source purchase via the Play API.
+  /// Android peer of [transferStoreKitOwnershipToCurrentUser]. Takes only
+  /// `productId` — the SDK resolves the Play purchase token internally from
+  /// the matching `PendingClaim` and verifies ownership server-side.
   Future<void> transferPlayOwnershipToCurrentUser({
     required String productId,
-    required String originalTransactionId,
   }) {
     throw UnimplementedError(
       'transferPlayOwnershipToCurrentUser() has not been implemented.',

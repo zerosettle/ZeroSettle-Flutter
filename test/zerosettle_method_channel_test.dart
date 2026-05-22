@@ -599,18 +599,19 @@ void main() {
   // ==== D2: transferPlayOwnershipToCurrentUser Android peer ====
 
   test(
-      'transferPlayOwnershipToCurrentUser channel call carries productId + originalTransactionId',
+      'transferPlayOwnershipToCurrentUser channel call carries only productId',
       () async {
     await platform.transferPlayOwnershipToCurrentUser(
       productId: 'premium_monthly',
-      originalTransactionId: 'GPA.token_abc',
     );
     final call = channelCalls.firstWhere(
       (c) => c.method == 'transferPlayOwnershipToCurrentUser',
     );
     final args = Map<String, dynamic>.from(call.arguments as Map);
     expect(args['productId'], 'premium_monthly');
-    expect(args['originalTransactionId'], 'GPA.token_abc');
+    // The Play purchase token is resolved SDK-side from the PendingClaim —
+    // it never crosses the method channel.
+    expect(args.containsKey('originalTransactionId'), isFalse);
     // No userId on the wire — current-user-scoped (matches the StoreKit peer).
     expect(args.containsKey('userId'), isFalse);
   });

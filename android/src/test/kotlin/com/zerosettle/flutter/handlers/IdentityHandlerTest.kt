@@ -441,49 +441,10 @@ class IdentityHandlerTest {
     // ─── transferPlayOwnershipToCurrentUser (D2) ────────────────────────
 
     @Test
-    fun `transferPlayOwnershipToCurrentUser forwards both args and returns success(null)`() = runTest {
+    fun `transferPlayOwnershipToCurrentUser forwards productId and returns success(null)`() = runTest {
         coEvery {
-            ZeroSettle.transferPlayOwnershipToCurrentUser("com.foo.bar", "GPA.tok_abc")
+            ZeroSettle.transferPlayOwnershipToCurrentUser("com.foo.bar")
         } returns Result.success(Unit)
-        val result = newResult()
-
-        handler.handle(
-            call(
-                "transferPlayOwnershipToCurrentUser",
-                mapOf(
-                    "productId" to "com.foo.bar",
-                    "originalTransactionId" to "GPA.tok_abc",
-                ),
-            ),
-            result,
-        )
-
-        coVerify {
-            ZeroSettle.transferPlayOwnershipToCurrentUser("com.foo.bar", "GPA.tok_abc")
-        }
-        verify { result.success(null) }
-    }
-
-    @Test
-    fun `transferPlayOwnershipToCurrentUser errors on missing productId`() {
-        val result = newResult()
-
-        handler.handle(
-            call(
-                "transferPlayOwnershipToCurrentUser",
-                mapOf("originalTransactionId" to "GPA.tok_abc"),
-            ),
-            result,
-        )
-
-        verify { result.error("INVALID_ARGUMENTS", "productId is required", null) }
-        coVerify(exactly = 0) {
-            ZeroSettle.transferPlayOwnershipToCurrentUser(any(), any())
-        }
-    }
-
-    @Test
-    fun `transferPlayOwnershipToCurrentUser errors on missing originalTransactionId`() {
         val result = newResult()
 
         handler.handle(
@@ -494,19 +455,20 @@ class IdentityHandlerTest {
             result,
         )
 
-        verify {
-            result.error("INVALID_ARGUMENTS", "originalTransactionId is required", null)
+        coVerify {
+            ZeroSettle.transferPlayOwnershipToCurrentUser("com.foo.bar")
         }
-        coVerify(exactly = 0) {
-            ZeroSettle.transferPlayOwnershipToCurrentUser(any(), any())
-        }
+        verify { result.success(null) }
     }
 
     @Test
-    fun `transferPlayOwnershipToCurrentUser maps SDK Result_failure to typed error code`() = runTest {
+    fun `transferPlayOwnershipToCurrentUser ignores a stray originalTransactionId arg`() = runTest {
+        // The Play purchase token is resolved SDK-side from the matching
+        // PendingClaim — even if a caller passes the legacy arg, only
+        // productId reaches the 1-arg SDK method.
         coEvery {
-            ZeroSettle.transferPlayOwnershipToCurrentUser(any(), any())
-        } returns Result.failure(ZeroSettleError.UserNotIdentified)
+            ZeroSettle.transferPlayOwnershipToCurrentUser("com.foo.bar")
+        } returns Result.success(Unit)
         val result = newResult()
 
         handler.handle(
@@ -514,8 +476,42 @@ class IdentityHandlerTest {
                 "transferPlayOwnershipToCurrentUser",
                 mapOf(
                     "productId" to "com.foo.bar",
-                    "originalTransactionId" to "GPA.tok_abc",
+                    "originalTransactionId" to "GPA.legacy_arg",
                 ),
+            ),
+            result,
+        )
+
+        coVerify { ZeroSettle.transferPlayOwnershipToCurrentUser("com.foo.bar") }
+        verify { result.success(null) }
+    }
+
+    @Test
+    fun `transferPlayOwnershipToCurrentUser errors on missing productId`() {
+        val result = newResult()
+
+        handler.handle(
+            call("transferPlayOwnershipToCurrentUser", emptyMap()),
+            result,
+        )
+
+        verify { result.error("INVALID_ARGUMENTS", "productId is required", null) }
+        coVerify(exactly = 0) {
+            ZeroSettle.transferPlayOwnershipToCurrentUser(any())
+        }
+    }
+
+    @Test
+    fun `transferPlayOwnershipToCurrentUser maps SDK Result_failure to typed error code`() = runTest {
+        coEvery {
+            ZeroSettle.transferPlayOwnershipToCurrentUser(any())
+        } returns Result.failure(ZeroSettleError.UserNotIdentified)
+        val result = newResult()
+
+        handler.handle(
+            call(
+                "transferPlayOwnershipToCurrentUser",
+                mapOf("productId" to "com.foo.bar"),
             ),
             result,
         )
@@ -526,17 +522,14 @@ class IdentityHandlerTest {
     @Test
     fun `transferPlayOwnershipToCurrentUser maps SDK throw to sdk_error`() = runTest {
         coEvery {
-            ZeroSettle.transferPlayOwnershipToCurrentUser(any(), any())
+            ZeroSettle.transferPlayOwnershipToCurrentUser(any())
         } throws RuntimeException("boom")
         val result = newResult()
 
         handler.handle(
             call(
                 "transferPlayOwnershipToCurrentUser",
-                mapOf(
-                    "productId" to "com.foo.bar",
-                    "originalTransactionId" to "GPA.tok_abc",
-                ),
+                mapOf("productId" to "com.foo.bar"),
             ),
             result,
         )
