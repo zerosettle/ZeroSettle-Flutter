@@ -1,6 +1,8 @@
 package com.zerosettle.flutter
 
 import com.google.common.truth.Truth.assertThat
+import com.zerosettle.flutter.ext.toFlutterMap
+import com.zerosettle.sdk.models.PendingClaim
 import io.flutter.plugin.common.EventChannel
 import io.mockk.every
 import io.mockk.mockk
@@ -331,6 +333,77 @@ class EventPumpsTest {
         val sink = mockk<EventChannel.EventSink>(relaxed = true)
         handler.onListen(null, sink)
         verify { sink.success(null) }
+    }
+
+    // ─── pending_claims_updates pump (Play transfer) ───────────────────
+
+    @Test
+    fun `pending_claims pump emits PendingClaim list with purchaseToken to Dart`() {
+        // Pins the `pending_claims_updates` channel wiring: a StateFlow of
+        // PendingClaim (the shape of ZeroSettle.pendingClaims) is pumped
+        // through the same encoder the plugin installs at
+        // ZeroSettlePlugin.kt — `it.map { c -> c.toFlutterMap() }`. A
+        // late-attaching Dart sink must see the Play purchaseToken.
+        val claim = PendingClaim(
+            productId = "com.app.pro",
+            originalTransactionId = "100000123",
+            existingOwnerHint = "a1b2c3d4",
+            purchaseToken = "GPA.1234-5678-9012-34567",
+        )
+        val source = MutableStateFlow(listOf(claim))
+        val handler = BufferedStreamHandler(replayLatest = true)
+
+        pumpStateFlow(scope, source, handler) { list -> list.map { it.toFlutterMap() } }
+
+        val sink = mockk<EventChannel.EventSink>(relaxed = true)
+        handler.onListen(null, sink)
+        verify {
+            sink.success(
+                listOf(
+                    mapOf(
+                        "productId" to "com.app.pro",
+                        "originalTransactionId" to "100000123",
+                        "existingOwnerHint" to "a1b2c3d4",
+                        "purchaseToken" to "GPA.1234-5678-9012-34567",
+                    )
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `pending_claims pump forwards a newly-detected conflict to an attached sink`() {
+        // A conflict appearing after the pump is live (the real flow: a
+        // Play sync detects a cross-user conflict and pushes a PendingClaim
+        // onto ZeroSettle.pendingClaims) must reach the Dart sink.
+        val source = MutableStateFlow<List<PendingClaim>>(emptyList())
+        val handler = BufferedStreamHandler(replayLatest = true)
+        val sink = mockk<EventChannel.EventSink>(relaxed = true)
+        handler.onListen(null, sink)
+
+        pumpStateFlow(scope, source, handler) { list -> list.map { it.toFlutterMap() } }
+        verify { sink.success(emptyList<Map<String, Any?>>()) }
+
+        source.value = listOf(
+            PendingClaim(
+                productId = "com.app.pro",
+                originalTransactionId = "100000123",
+                existingOwnerHint = "deadbeef",
+                purchaseToken = "GPA.token-xyz",
+            )
+        )
+        verify {
+            sink.success(
+                listOf(
+                    mapOf(
+                        "productId" to "com.app.pro",
+                        "originalTransactionId" to "100000123",
+                        "existingOwnerHint" to "deadbeef",
+                        "purchaseToken" to "GPA.token-xyz",
+                    )
+                )
+            )
+        }
     }
 
     @Test
