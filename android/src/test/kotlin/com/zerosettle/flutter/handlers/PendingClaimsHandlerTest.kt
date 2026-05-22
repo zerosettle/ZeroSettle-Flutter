@@ -78,10 +78,12 @@ class PendingClaimsHandlerTest {
         productId: String = "com.app.coins",
         originalTransactionId: String = "txn_orig_1",
         existingOwnerHint: String = "alice@example.com",
+        purchaseToken: String? = null,
     ) = PendingClaim(
         productId = productId,
         originalTransactionId = originalTransactionId,
         existingOwnerHint = existingOwnerHint,
+        purchaseToken = purchaseToken,
     )
 
     // ─── handle() routing ───────────────────────────────────────────────
@@ -178,5 +180,27 @@ class PendingClaimsHandlerTest {
             "originalTransactionId",
             "existingOwnerHint",
         )
+    }
+
+    @Test
+    fun `getPendingClaims encodes purchaseToken for a Play conflict`() {
+        // A Play-Billing cross-user conflict carries the purchaseToken the
+        // SDK needs to verify ownership during a transfer. The handler must
+        // surface it through the wire so the Dart PendingClaim sees it.
+        val claim = newClaim(
+            productId = "com.app.pro",
+            originalTransactionId = "txn_orig_1",
+            existingOwnerHint = "alice@example.com",
+            purchaseToken = "GPA.1234-5678-9012-34567",
+        )
+        every { ZeroSettle.pendingClaims } returns MutableStateFlow(listOf(claim))
+        val listSlot = slot<List<Map<String, Any?>>>()
+        val result = newResult()
+        every { result.success(capture(listSlot)) } answers { }
+
+        handler.handle(call("getPendingClaims"), result)
+
+        val map = listSlot.captured.single()
+        assertThat(map["purchaseToken"]).isEqualTo("GPA.1234-5678-9012-34567")
     }
 }

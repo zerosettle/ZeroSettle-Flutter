@@ -240,10 +240,31 @@ class ModelToFlutterMapTest {
 
         val map = claim.toFlutterMap()
 
+        // purchaseToken is omitted when null — keeps the wire shape lean and
+        // matches the StoreKit case (no Play token) + the Dart toMap.
         assertThat(map).containsExactly(
             "productId", "com.app.pro",
             "originalTransactionId", "100000123",
             "existingOwnerHint", "a1b2c3d4",
+        )
+    }
+
+    @Test
+    fun `PendingClaim encodes purchaseToken for a Play conflict`() {
+        val claim = PendingClaim(
+            productId = "com.app.pro",
+            originalTransactionId = "100000123",
+            existingOwnerHint = "a1b2c3d4",
+            purchaseToken = "GPA.1234-5678-9012-34567",
+        )
+
+        val map = claim.toFlutterMap()
+
+        assertThat(map).containsExactly(
+            "productId", "com.app.pro",
+            "originalTransactionId", "100000123",
+            "existingOwnerHint", "a1b2c3d4",
+            "purchaseToken", "GPA.1234-5678-9012-34567",
         )
     }
 

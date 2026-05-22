@@ -183,11 +183,14 @@ fun CheckoutTransaction.toFlutterMap(): Map<String, Any?> {
     return map
 }
 
-fun PendingClaim.toFlutterMap(): Map<String, Any?> = mapOf(
-    "productId" to productId,
-    "originalTransactionId" to originalTransactionId,
-    "existingOwnerHint" to existingOwnerHint,
-)
+fun PendingClaim.toFlutterMap(): Map<String, Any?> = buildMap {
+    put("productId", productId)
+    put("originalTransactionId", originalTransactionId)
+    put("existingOwnerHint", existingOwnerHint)
+    // Play-conflict claims carry a purchaseToken; StoreKit conflicts don't.
+    // Omit the key when null to mirror the Dart PendingClaim.toMap shape.
+    purchaseToken?.let { put("purchaseToken", it) }
+}
 
 /**
  * Encodes a [PendingAction] for the Flutter wire with a `"type"`
