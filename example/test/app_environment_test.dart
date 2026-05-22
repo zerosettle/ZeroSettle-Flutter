@@ -36,11 +36,11 @@ void main() {
       expect(AppEnvironment.local.hasKey, isTrue);
     });
 
-    test('staging has an Android key but no iOS key yet', () {
+    test('staging has a key on both platforms', () {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       expect(AppEnvironment.staging.hasKey, isTrue);
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      expect(AppEnvironment.staging.hasKey, isFalse);
+      expect(AppEnvironment.staging.hasKey, isTrue);
     });
 
     test('prod has no key yet on either platform', () {

@@ -6,6 +6,7 @@ import 'app/app_theme.dart';
 import 'app/inherited_just_one.dart';
 import 'app_environment.dart';
 import 'data/database.dart';
+import 'data/identity_store.dart';
 import 'data/user_prefs.dart';
 import 'domain/premium_status.dart';
 import 'notifications/notification_service.dart';
@@ -56,15 +57,45 @@ Future<void> main() async {
     }
   }
 
-  // 3. If a userId was persisted from a prior launch, re-identify so the
-  //    SDK is bootstrapped without re-prompting the user.
-  final persistedId = prefs.userId;
-  final persistedName = prefs.displayName;
-  final isOnboarded = persistedId != null && persistedId.isNotEmpty;
+  // 2b. Re-apply the persisted "Force ECL available" testing override
+  //     (Switch & Save) so it survives launches — without this the offer
+  //     tip re-evaluates with the ECL gate live on every launch/refresh.
+  try {
+    await ZeroSettle.instance
+        .setEclAvailabilityOverride(prefs.eclOverride ? true : null);
+  } catch (e) {
+    debugPrint('[ZeroSettle] setEclAvailabilityOverride() failed: $e');
+  }
+
+  // 2c. Re-apply the persisted "Switch & Save full test mode" override so it
+  //     survives launches — when on, the whole Switch & Save flow (incl. the
+  //     "Switch Now" CTA) runs on a device not enrolled in Google's ECL
+  //     program. Android-only; a no-op on iOS.
+  try {
+    await ZeroSettle.instance
+        .setSwitchAndSaveTestMode(prefs.switchAndSaveTestMode);
+  } catch (e) {
+    debugPrint('[ZeroSettle] setSwitchAndSaveTestMode() failed: $e');
+  }
+
+  // 3. Load the per-environment identity store. On a fresh store this also
+  //    migrates any legacy single-value UserPrefs identity into the store
+  //    (under the resolved env) so an existing install's user is preserved.
+  //    If the resolved env has an active identity, re-identify so the SDK is
+  //    bootstrapped without re-prompting the user.
+  final identityStore = await IdentityStore.create(
+    legacyPrefs: prefs,
+    legacyEnvId: env.name,
+  );
+  final activeIdentity = identityStore.activeIdentityFor(env.name);
+  final isOnboarded = activeIdentity != null;
   if (isOnboarded) {
     try {
       await ZeroSettle.instance.identify(
-        Identity.user(id: persistedId, name: persistedName),
+        Identity.user(
+          id: activeIdentity.userId,
+          name: activeIdentity.displayName,
+        ),
       );
     } catch (e) {
       // Non-fatal on launch; the user can re-onboard. Logged so a failed
@@ -92,7 +123,12 @@ Future<void> main() async {
   }
 
   runApp(JustOneApp(
-    scope: JustOneScope(db: db, prefs: prefs, notifications: notifications),
+    scope: JustOneScope(
+      db: db,
+      prefs: prefs,
+      identityStore: identityStore,
+      notifications: notifications,
+    ),
     startAtHome: isOnboarded,
     initialLocationOverride: initialLocationOverride,
   ));

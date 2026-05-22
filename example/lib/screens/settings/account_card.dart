@@ -4,6 +4,7 @@ import 'package:zerosettle/zerosettle.dart';
 
 import '../../app/inherited_just_one.dart';
 import '../../app/routes.dart';
+import '../../app_environment.dart';
 
 /// Account info card shown at the top of [SettingsScreen].
 ///
@@ -60,9 +61,11 @@ class _AccountCardState extends State<AccountCard> {
   }
 
   Future<void> _signOut(BuildContext context) async {
-    // Capture the prefs reference before any await so cleanup never depends on
-    // `context` still being mounted.
-    final prefs = InheritedJustOne.of(context).prefs;
+    // Capture the scope references before any await so cleanup never depends
+    // on `context` still being mounted.
+    final scope = InheritedJustOne.of(context);
+    final prefs = scope.prefs;
+    final identityStore = scope.identityStore;
     try {
       await ZeroSettle.instance.logout();
     } on ZeroSettleException catch (e) {
@@ -75,7 +78,11 @@ class _AccountCardState extends State<AccountCard> {
       }
     }
     // Always clear local state; navigate whenever the context is still alive.
+    // Clear the *active* identity for this env (routing falls back to
+    // onboarding) but keep the saved identity so it can be re-selected.
     await prefs.clearAll();
+    final env = await AppEnvironment.load();
+    await identityStore.clearActive(env.name);
     if (!context.mounted) return;
     context.go(Routes.createUser);
   }
@@ -96,19 +103,24 @@ class _AccountCardState extends State<AccountCard> {
             ),
             const SizedBox(height: 12),
 
-            // User ID row
+            // User ID row — surfaced prominently so the active identity is
+            // always visible (matters when switching between test users).
             Text(
-              'User ID',
+              'Signed in as',
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 2),
             FutureBuilder<String?>(
               future: _userIdFuture,
               builder: (context, snapshot) {
+                final userId = snapshot.data;
                 return Text(
-                  snapshot.data ?? '—',
-                  style: theme.textTheme.bodyMedium,
+                  userId == null || userId.isEmpty ? 'Not identified' : userId,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 );
               },
             ),

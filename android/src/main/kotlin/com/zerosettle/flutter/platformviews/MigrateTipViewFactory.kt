@@ -1,9 +1,13 @@
 package com.zerosettle.flutter.platformviews
 
+import android.app.Activity
 import android.content.Context
+import android.util.Log
 import android.view.View
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
@@ -23,12 +27,11 @@ import kotlin.math.abs
  * into a Flutter widget tree via
  * `AndroidView(viewType: "com.zerosettle/migrate_tip_view")`.
  *
- * The Composable is the same one mounted by [OfferTipFactory]; the
- * difference is the **per-view height-bridge** [MethodChannel] this factory
- * opens at `zerosettle/migrate_tip_view_<viewId>`. The Dart-side
- * `MigrationTipView` widget (`lib/widgets/zs_migrate_tip_view.dart`)
- * subscribes to this channel for `setSize { height }` callbacks so the
- * surrounding `SizedBox` resizes to the rendered content.
+ * It opens a **per-view height-bridge** [MethodChannel] at
+ * `zerosettle/migrate_tip_view_<viewId>`; the Dart-side `OfferTipView`
+ * widget (`lib/widgets/zs_offer_tip_view.dart`) subscribes to this channel
+ * for `setSize { height }` callbacks so the surrounding `SizedBox` resizes
+ * to the rendered content.
  *
  * **iOS parity:**
  *   - iOS factory: `ZSMigrateTipViewFactory` registered as
@@ -55,13 +58,27 @@ import kotlin.math.abs
  * per-view channel. A `0.5dp` dead-band coalesces near-duplicate updates
  * (matches iOS at `ZSMigrateTipViewFlutterContainer.swift:126`). Width is
  * fixed by Flutter's parent; only height is reported.
+ *
+ * **Host Activity:** the [ComposeView] is built against the host [Activity]
+ * (resolved via `activityProvider`), not the [Context] Flutter hands the
+ * PlatformView. The `:ui` `ZeroSettleOfferTip` resolves the Switch & Save
+ * checkout Activity from `LocalContext` via `findActivity()`; Flutter's
+ * PlatformView Context is not an Activity and its wrapper chain never
+ * reaches one, so the CTA would silently no-op without this.
  */
-class MigrateTipViewFactory(private val messenger: BinaryMessenger) :
-    PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+class MigrateTipViewFactory(
+    private val messenger: BinaryMessenger,
+    private val activityProvider: () -> Activity?,
+) : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
 
     override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
         val params = decodeMigrateTipViewParams(args)
-        return MigrateTipViewPlatformView(context, viewId, params, messenger)
+        // Build the ComposeView against the host Activity so the SDK's
+        // ZeroSettleOfferTip can resolve it for the Switch & Save checkout.
+        // Falls back to the Flutter PlatformView Context when no Activity is
+        // attached — the tip still renders; only the CTA needs the Activity.
+        val viewContext: Context = activityProvider() ?: context
+        return MigrateTipViewPlatformView(viewContext, viewId, params, messenger)
     }
 }
 
@@ -135,22 +152,48 @@ internal class MigrateTipViewPlatformView(
                 params.backgroundColorArgb?.let { Color(it) }
             }
             ZeroSettleTheme {
+                // Flutter force-measures the embedding ComposeView at the
+                // AndroidView's current height (1px during the Dart-side
+                // bootstrap). A plain `onSizeChanged` would therefore observe
+                // that 1px constraint, not the tip's real height — so the
+                // SizedBox could never grow past the bootstrap. The outer
+                // `wrapContentHeight(unbounded = true)` re-measures its child
+                // with an *unbounded* height constraint; the inner Box then
+                // lays out at the tip's intrinsic height, and that is the
+                // value `onSizeChanged` observes and bridges back to Dart.
+                // Dart resizes the SizedBox, the next measure pass hands the
+                // ComposeView the real height, and the dead-band coalescing
+                // settles the loop.
                 Box(
-                    modifier = Modifier.onSizeChanged { size ->
-                        val heightDp = heightPxToDp(size.height, density)
-                        if (shouldReportHeight(lastReportedHeightDp, heightDp)) {
-                            lastReportedHeightDp = heightDp
-                            channel.invokeMethod(
-                                "setSize",
-                                mapOf("height" to heightDp),
-                            )
-                        }
-                    }
-                ) {
-                    ZeroSettleOfferTip(
-                        offerManager = offerManager,
-                        backgroundColor = composeBackgroundColor,
+                    modifier = Modifier.wrapContentHeight(
+                        align = Alignment.Top,
+                        unbounded = true,
                     )
+                ) {
+                    Box(
+                        modifier = Modifier.onSizeChanged { size ->
+                            val heightDp = heightPxToDp(size.height, density)
+                            if (shouldReportHeight(lastReportedHeightDp, heightDp)) {
+                                lastReportedHeightDp = heightDp
+                                channel.invokeMethod(
+                                    "setSize",
+                                    mapOf("height" to heightDp),
+                                )
+                            }
+                        }
+                    ) {
+                        ZeroSettleOfferTip(
+                            offerManager = offerManager,
+                            backgroundColor = composeBackgroundColor,
+                            onError = { error ->
+                                // The SDK surfaces CTA/checkout failures
+                                // here (e.g. no host Activity). The default
+                                // handler is a no-op — log so this class of
+                                // failure is never silent again.
+                                Log.w("ZeroSettle", "OfferTip error", error)
+                            },
+                        )
+                    }
                 }
             }
         }

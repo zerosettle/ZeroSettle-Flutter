@@ -39,9 +39,9 @@ android/src/main/kotlin/com/zerosettle/flutter/
   - Android viewType `com.zerosettle/migrate_tip_view`: Compose `ZeroSettleOfferTip` via `MigrateTipViewFactory.kt`
   - Both natives are identify-first — they resolve the active user from `identify(_:)`; no `userId` is consumed
   - Creation params (both platforms): `backgroundColor` (ARGB int32). `userId` (String) is still sent but deprecated/ignored — removed in 2.0
-  - Widget: `MigrationTipView` in `lib/widgets/` (legacy alias `ZSMigrateTipView`) — renders `UiKitView` on iOS, `AndroidView` on Android, `SizedBox.shrink()` on desktop
+  - Widget: `OfferTipView` in `lib/widgets/zs_offer_tip_view.dart` (deprecated aliases `MigrationTipView`, `ZSMigrateTipView`) — renders `UiKitView` on iOS, `AndroidView` on Android, `SizedBox.shrink()` on desktop. The `migrate_tip_view` viewType / `*MigrateTipViewFactory` class names are historical internal wire/impl names; the public widget is the generic `OfferTipView` (matching iOS `ZeroSettleKit`'s `OfferTipView`, which deprecated its own `MigrationTipView`).
   - Pattern: thin wrapper around autonomous native view — props set once at creation; the only callback is a native→Dart `setSize` height bridge
-* Android-only PlatformViews (no iOS counterpart yet): `com.zerosettle/offer_tip` (`OfferTipFactory`, widget `ZeroSettleOfferTip`), `com.zerosettle/pending_action_banner` (`PendingActionBannerFactory`, widget `ZeroSettlePendingActionBanner`)
+* Android-only PlatformView (no iOS counterpart yet): `com.zerosettle/pending_action_banner` (`PendingActionBannerFactory`, widget `ZeroSettlePendingActionBanner`)
 
 ## Bridge Pattern
 * **iOS:** Swift `handle()` is nonisolated; dispatches to `@MainActor handleOnMainActor()` via `Task { @MainActor in }` (required because `ZeroSettle.shared` is `@MainActor`-isolated)

@@ -151,6 +151,8 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
             "getDetectedJurisdiction" -> result.success(null)
             "getPendingCheckout" -> getPendingCheckout(result)
             "setBaseUrlOverride" -> setBaseUrlOverride(call, result)
+            "setEclAvailabilityOverride" -> setEclAvailabilityOverride(call, result)
+            "setSwitchAndSaveTestMode" -> setSwitchAndSaveTestMode(call, result)
             "trackEvent" -> result.success(null)
             "trackMigrationConversion" -> trackMigrationConversion(result)
             "resetMigrateTipState" -> result.success(null)
@@ -159,6 +161,31 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
             else -> return false
         }
         return true
+    }
+
+    // ── setEclAvailabilityOverride ──────────────────────────────────────
+
+    /**
+     * Testing hook for the Switch & Save offer's ECL availability gate.
+     * `true`/`false` forces [ZeroSettle.eclAvailabilityOverride]; a missing
+     * `override` arg clears it (`null` → the real Play Billing query).
+     */
+    private fun setEclAvailabilityOverride(call: MethodCall, result: MethodChannel.Result) {
+        ZeroSettle.eclAvailabilityOverride = call.argument<Boolean>("override")
+        result.success(null)
+    }
+
+    // ── setSwitchAndSaveTestMode ────────────────────────────────────────
+
+    /**
+     * Testing hook for the full Switch & Save flow. When `enabled` is `true`,
+     * the entire flow runs on a non-ECL device — the Play ECL plumbing is
+     * faked while the backend session mint and the web checkout run for real.
+     * Also implies ECL-available, so the Switch & Save offer tip surfaces.
+     */
+    private fun setSwitchAndSaveTestMode(call: MethodCall, result: MethodChannel.Result) {
+        ZeroSettle.switchAndSaveTestMode = call.argument<Boolean>("enabled") ?: false
+        result.success(null)
     }
 
     // ── handleUniversalLink ────────────────────────────────────────────

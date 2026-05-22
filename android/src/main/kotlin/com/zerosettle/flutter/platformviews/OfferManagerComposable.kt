@@ -16,8 +16,8 @@ import com.zerosettle.sdk.offers.OfferManager
  * `ZeroSettleOfferTip` PlatformView mounts a manager stuck in `LOADING` with
  * `offerData == null` and renders nothing forever.
  *
- * Shared by [OfferTipFactory] and [MigrateTipViewFactory] so both tip-view
- * surfaces resolve and evaluate the manager identically. `remember` keyed on
+ * Used by [MigrateTipViewFactory] to resolve and evaluate the manager that
+ * backs the `OfferTipView` Flutter widget. `remember` keyed on
  * [stripeCustomerId] keeps a single manager instance across recomposition;
  * the `LaunchedEffect` keyed on that manager evaluates once per instance.
  *

@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:zerosettle/zerosettle.dart';
 
-import '../../widgets/migration_tip_card.dart';
+import '../../app/inherited_just_one.dart';
+import '../../widgets/offer_tip_card.dart';
 
 /// Developer inspector for the user-offer API.
 ///
 /// A "Fetch user offer" button calls [ZeroSettle.instance.fetchUserOffer] and
 /// renders the resulting [UserOfferResponse] as labeled key/value rows.
-/// Also embeds [MigrationTipCard], the cross-platform migration tip view
+/// Also embeds [OfferTipCard], the cross-platform offer tip view
 /// (renders on both iOS and Android).
 ///
 /// Mirrors [OffersScreen.kt] from the JustOne Android sample.
@@ -22,6 +23,60 @@ class _DevOffersScreenState extends State<DevOffersScreen> {
   bool _busy = false;
   UserOfferResponse? _result;
   String? _error;
+  bool _forceEcl = false;
+  bool _switchTestMode = false;
+  bool _eclSeeded = false;
+
+  /// Bumped to re-key [OfferTipCard] after clearing the offer-dismissal
+  /// flag, forcing the native offer tip to re-evaluate immediately.
+  int _tipNonce = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Seed the toggle from the persisted value once. `main()` already
+    // re-applied it to the SDK on startup — this just reflects it in the UI.
+    if (_eclSeeded) return;
+    _eclSeeded = true;
+    final prefs = InheritedJustOne.of(context).prefs;
+    _forceEcl = prefs.eclOverride;
+    _switchTestMode = prefs.switchAndSaveTestMode;
+  }
+
+  /// Flips the Switch & Save ECL availability gate for testing. `true` forces
+  /// ECL "available"; `false` clears the override (real Play query). The value
+  /// is persisted (re-applied on every launch by `main()`); re-keying
+  /// [OfferTipCard] on [_forceEcl] re-creates the native offer tip so it
+  /// re-evaluates against the new override immediately.
+  Future<void> _setForceEcl(bool value) async {
+    await ZeroSettle.instance.setEclAvailabilityOverride(value ? true : null);
+    if (!mounted) return;
+    await InheritedJustOne.of(context).prefs.setEclOverride(value);
+    if (mounted) setState(() => _forceEcl = value);
+  }
+
+  /// Flips full Switch & Save test mode. When `true`, the entire flow runs on
+  /// a non-ECL device — the "Switch Now" CTA mints a real backend session and
+  /// opens the real web checkout. Implies "Force ECL available", so the offer
+  /// tip surfaces too. Persisted (re-applied on every launch by `main()`);
+  /// re-keying [OfferTipCard] on [_switchTestMode] re-creates the native tip
+  /// so it re-evaluates immediately.
+  Future<void> _setSwitchTestMode(bool value) async {
+    await ZeroSettle.instance.setSwitchAndSaveTestMode(value);
+    if (!mounted) return;
+    await InheritedJustOne.of(context).prefs.setSwitchAndSaveTestMode(value);
+    if (mounted) setState(() => _switchTestMode = value);
+  }
+
+  /// Clears the per-user offer-dismissal flag so the Switch & Save tip can
+  /// re-surface. `OfferDismissalStore` keys dismissal by user, not by offer —
+  /// declining any offer (an upgrade prompt, a cancel-flow offer) sets one
+  /// flag that also suppresses the migrate tip. `resetMigrateTipState` is a
+  /// no-op on Android; `OfferManager.resetDismissedState()` is the real reset.
+  Future<void> _resetOfferDismissal() async {
+    await OfferManager.resetDismissedState();
+    if (mounted) setState(() => _tipNonce++);
+  }
 
   Future<void> _fetch(BuildContext ctx) async {
     if (_busy) return;
@@ -50,8 +105,39 @@ class _DevOffersScreenState extends State<DevOffersScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Switch & Save ECL gate testing toggle — see [_setForceEcl].
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Force ECL available'),
+            subtitle: const Text(
+              'Bypasses the Play ECL gate so the Switch & Save tip can '
+              'surface on devices not enrolled in Google ECL. Android-only; testing.',
+            ),
+            value: _forceEcl,
+            onChanged: _setForceEcl,
+          ),
+          // Full Switch & Save test mode — see [_setSwitchTestMode].
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Switch & Save full test mode'),
+            subtitle: const Text(
+              'Runs the entire Switch & Save flow on a non-ECL device — the '
+              '"Switch Now" CTA mints a real backend session and opens the '
+              'real web checkout. Implies "Force ECL available". Android-only; '
+              'testing.',
+            ),
+            value: _switchTestMode,
+            onChanged: _setSwitchTestMode,
+          ),
+          // Clears the per-user offer-dismissal flag — see [_resetOfferDismissal].
+          OutlinedButton.icon(
+            onPressed: _resetOfferDismissal,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Reset offer dismissal'),
+          ),
+          const SizedBox(height: 8),
           // Cross-platform migration tip view (renders on iOS and Android).
-          const MigrationTipCard(),
+          OfferTipCard(key: ValueKey('$_forceEcl|$_switchTestMode|$_tipNonce')),
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _busy ? null : () => _fetch(context),

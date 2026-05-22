@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zerosettle_example/app/inherited_just_one.dart';
 import 'package:zerosettle_example/data/database.dart';
+import 'package:zerosettle_example/data/identity_store.dart';
 import 'package:zerosettle_example/data/user_prefs.dart';
 import 'package:zerosettle_example/notifications/notification_service.dart';
 import 'package:zerosettle_example/screens/habit/add_habit_screen.dart';
@@ -15,8 +16,9 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await UserPrefs.create();
+    final identityStore = await IdentityStore.create();
     db = AppDatabase.forTesting(NativeDatabase.memory());
-    scope = JustOneScope(db: db, prefs: prefs, notifications: NotificationService());
+    scope = JustOneScope(db: db, prefs: prefs, identityStore: identityStore, notifications: NotificationService());
   });
 
   tearDown(() async {

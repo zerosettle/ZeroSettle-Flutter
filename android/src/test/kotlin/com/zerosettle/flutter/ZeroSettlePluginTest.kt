@@ -76,17 +76,6 @@ class ZeroSettlePluginTest {
     // ─── PlatformView factory registration ──────────────────────────────
 
     @Test
-    fun `onAttachedToEngine registers offer_tip PlatformView factory`() {
-        plugin.onAttachedToEngine(binding)
-        verify {
-            platformViewRegistry.registerViewFactory(
-                "com.zerosettle/offer_tip",
-                any(),
-            )
-        }
-    }
-
-    @Test
     fun `onAttachedToEngine registers pending_action_banner PlatformView factory`() {
         plugin.onAttachedToEngine(binding)
         verify {

@@ -59,6 +59,20 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
   }
 
   @override
+  Future<void> setEclAvailabilityOverride(bool? override) async {
+    await methodChannel.invokeMethod('setEclAvailabilityOverride', {
+      if (override != null) 'override': override,
+    });
+  }
+
+  @override
+  Future<void> setSwitchAndSaveTestMode(bool enabled) async {
+    await methodChannel.invokeMethod('setSwitchAndSaveTestMode', {
+      'enabled': enabled,
+    });
+  }
+
+  @override
   Future<void> configure({
     required String publishableKey,
     bool syncStoreKitTransactions = true,

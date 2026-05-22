@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:zerosettle/zerosettle.dart';
 
 import '../../app/routes.dart';
+import '../paywall/premium_upsell_sheet.dart';
 
 /// Subscription card shown in [SettingsScreen].
 ///
@@ -12,8 +13,10 @@ import '../../app/routes.dart';
 /// on first build without blocking the render cycle.
 ///
 /// Branch logic:
-/// - No active entitlement → "Upgrade to Premium" [FilledButton] that calls
-///   [ZeroSettle.instance.presentUpgradeOffer].
+/// - No active entitlement → "Upgrade to Premium" [FilledButton] that opens
+///   the premium purchase sheet via [showPremiumUpsell]. (`presentUpgradeOffer`
+///   is for upgrading an *existing* subscriber — it has nothing to present to
+///   a user with no subscription.)
 /// - Active entitlement → shows plan + status + optional expiry date, a
 ///   "Cancel subscription" [OutlinedButton] (navigates to cancel flow), and
 ///   a "Resume" [FilledButton] when paused. A [FutureBuilder] checks
@@ -139,7 +142,7 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
         ),
         const SizedBox(height: 12),
         FilledButton(
-          onPressed: () => _presentUpgrade(ctx, null),
+          onPressed: () => showPremiumUpsell(ctx),
           child: const Text('Upgrade to Premium'),
         ),
       ],
@@ -178,6 +181,17 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
           ),
         ),
         Text(statusLabel, style: theme.textTheme.bodyMedium),
+
+        const SizedBox(height: 8),
+
+        // Billing source — direct (web checkout) vs Play / App Store
+        Text(
+          'Billing',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(_sourceLabel(sub.source), style: theme.textTheme.bodyMedium),
 
         // Expiry date
         if (sub.expiresAt != null) ...[
@@ -243,6 +257,13 @@ class _SubscriptionCardState extends State<SubscriptionCard> {
       ],
     );
   }
+
+  /// Human-readable billing storefront for [source].
+  String _sourceLabel(EntitlementSource source) => switch (source) {
+        EntitlementSource.webCheckout => 'Direct (web checkout)',
+        EntitlementSource.playStore => 'Google Play',
+        EntitlementSource.storeKit => 'App Store',
+      };
 
   String _formatDate(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';

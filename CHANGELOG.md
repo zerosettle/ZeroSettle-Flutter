@@ -1,4 +1,4 @@
-## Unreleased
+## 1.5.0 — 2026-05-22
 
 Android-parity sweep — closes the seven remaining bridge gaps so a Flutter app gets the same surfaces a native Android app gets. Everything is additive; no existing public API was renamed or removed.
 
@@ -10,14 +10,19 @@ Android-parity sweep — closes the seven remaining bridge gaps so a Flutter app
 - `ZeroSettle.instance.getPendingActions()`, `pendingActionsUpdates` stream, and `dismissPendingAction({transactionId})` — backend-driven user prompts (post-migration info, manual Play cancel). Android-only; iOS returns empty lists / no-op.
 - `PendingAction` Dart sealed model with `PendingActionMigrationCompletedInfo` and `PendingActionManualPlayCancel` variants.
 - `ZeroSettlePendingActionBanner` widget — zero-config Flutter mount point for the native Android pending-action banner; the native side self-renders the current top pending action from the SDK stream. iOS renders nothing.
-- `ZeroSettleOfferTip` widget — drop-in offer-tip wrapping the native Android `com.zerosettle/offer_tip` view, with an optional `stripeCustomerId` parameter forwarded to the native `OfferManager`. iOS renders nothing — iOS apps use the headless `OfferManager` path.
 - `ZeroSettle.instance.fetchUserOffer()` returning a typed `UserOfferResponse` — the server-canonical offer decision (migration / upgrade eligibility). The recommended offer API on both platforms.
 - `UserOffer*` Dart model tree (`UserOfferResponse`, `UserOfferSubscription`, `UserOfferData`, `UserOfferDisplay`, `UserOfferProration`, `UserOfferAppleSubscription`) plus `UserOfferActionType` and `UserOfferSourceStorefront` enums.
 - `ZeroSettle.instance.events` — `Stream<ZeroSettleEvent>` of SDK analytics/lifecycle events (see the variant table below). New `ZeroSettleEvent` sealed model with 10 typed variants + `ZSEventUnknown` forward-compat fallback.
+- `ZeroSettle.instance.setSwitchAndSaveTestMode(bool)` — testing override that runs the entire Switch & Save (Play→web ECL migration) flow on a device/account not enrolled in Google's External Content Link program: the Play ECL plumbing is faked while the backend session mint and the web checkout run for real. Also implies ECL-available, so the offer tip surfaces. Android-only; iOS is a no-op. Requires `zerosettle-android` 1.1.0.
+
+### Changed
+
+- **The offer-tip Flutter widget is now `OfferTipView`** (was `MigrationTipView`), matching the canonical name in iOS `ZeroSettleKit`. `MigrationTipView` and `ZSMigrateTipView` remain as `@Deprecated` typedef aliases, so existing code keeps compiling. The separate `ZeroSettleOfferTip` widget added earlier in this unreleased cycle (Android-only, no height-bridge) is removed — `OfferTipView` is the single, unified, cross-platform offer tip.
 
 ### Fixed
 
 - **Android: `ZeroSettleMigrationManagerStatics` no longer throws `MissingPluginException`.** The `zerosettle/migration_manager_static` MethodChannel is now wired. `isPermanentlyDismissed`/`setDismissed` route to the unified `OfferDismissalStore`; `resetDismissedState` is a deliberate no-op (calling it would conflate the two iOS-distinct stores).
+- **Android: the offer tip (`OfferTipView`) now renders and the "Switch now" CTA works.** Previously the embedded native offer tip never appeared on Android. Three stacked issues are fixed: a window-level `ViewTree*` lifecycle owner is installed on the activity content view so a `ComposeView` can compose inside a Flutter PlatformView (`FlutterView` provides none); the Android `AndroidView` is bootstrapped at 1px so Flutter instantiates the platform view; and the height bridge measures the tip's intrinsic height via an unbounded re-measure. The `ComposeView` is now built against the host `Activity`, so the "Switch now" CTA drives the SDK's Switch & Save checkout instead of silently no-op'ing (the SDK's offer-tip composable resolves the checkout Activity from `LocalContext`).
 
 ---
 

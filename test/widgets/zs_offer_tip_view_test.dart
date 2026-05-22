@@ -5,14 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zerosettle/zerosettle.dart';
 
 void main() {
-  group('MigrationTipView', () {
+  group('OfferTipView', () {
     testWidgets('renders UiKitView on iOS', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MigrationTipView(
+            body: OfferTipView(
               backgroundColor: Colors.black,
             ),
           ),
@@ -32,14 +32,14 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MigrationTipView(
+            body: OfferTipView(
               backgroundColor: Colors.black,
             ),
           ),
         ),
       );
 
-      // On Android, the widget mounts the F24 PlatformView
+      // On Android, the widget mounts the PlatformView
       // (`com.zerosettle/migrate_tip_view`) via AndroidView. UiKitView is
       // never instantiated on this platform.
       expect(find.byType(AndroidView), findsOneWidget);
@@ -57,7 +57,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MigrationTipView(
+            body: OfferTipView(
               backgroundColor: testColor,
             ),
           ),
@@ -68,7 +68,7 @@ void main() {
           tester.widget<AndroidView>(find.byType(AndroidView));
 
       // Android factory key — note the `com.` prefix (org-id convention),
-      // distinct from iOS's `zerosettle/migrate_tip_view`. The F24
+      // distinct from iOS's `zerosettle/migrate_tip_view`. The
       // MigrateTipViewFactory registers under exactly this string.
       expect(androidView.viewType, 'com.zerosettle/migrate_tip_view');
 
@@ -78,7 +78,7 @@ void main() {
       final params = androidView.creationParams as Map<String, Object?>;
       expect(params['backgroundColor'], testColor.toARGB32());
 
-      // StandardMessageCodec matches F24's PlatformViewFactory.
+      // StandardMessageCodec matches the PlatformViewFactory.
       expect(androidView.creationParamsCodec, isA<StandardMessageCodec>());
 
       debugDefaultTargetPlatformOverride = null;
@@ -97,7 +97,7 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             home: Scaffold(
-              body: MigrationTipView(
+              body: OfferTipView(
                 backgroundColor: Colors.black,
               ),
             ),
@@ -121,7 +121,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MigrationTipView(
+            body: OfferTipView(
               backgroundColor: testColor,
             ),
           ),
@@ -150,7 +150,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MigrationTipView(
+            body: OfferTipView(
               backgroundColor: Colors.blue,
             ),
           ),
@@ -159,6 +159,27 @@ void main() {
 
       final uiKitView = tester.widget<UiKitView>(find.byType(UiKitView));
       expect(uiKitView.creationParamsCodec, const StandardMessageCodec());
+
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('MigrationTipView deprecated alias still resolves to OfferTipView',
+        (WidgetTester tester) async {
+      // Back-compat: `MigrationTipView` was the released name (1.4.0) and is
+      // kept as a deprecated typedef. Existing adopter code must still work.
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+      // ignore: deprecated_member_use_from_same_package
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            // ignore: deprecated_member_use_from_same_package
+            body: MigrationTipView(backgroundColor: Colors.black),
+          ),
+        ),
+      );
+
+      expect(find.byType(OfferTipView), findsOneWidget);
 
       debugDefaultTargetPlatformOverride = null;
     });

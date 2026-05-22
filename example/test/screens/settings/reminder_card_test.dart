@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zerosettle_example/app/inherited_just_one.dart';
 import 'package:zerosettle_example/data/database.dart';
+import 'package:zerosettle_example/data/identity_store.dart';
 import 'package:zerosettle_example/data/user_prefs.dart';
 import 'package:zerosettle_example/notifications/notification_service.dart';
 import 'package:zerosettle_example/screens/settings/reminder_card.dart';
@@ -31,10 +32,12 @@ void main() {
       reminderEnabled ? {'reminderEnabled': true} : {},
     );
     final prefs = await UserPrefs.create();
+    final identityStore = await IdentityStore.create();
     db = AppDatabase.forTesting(NativeDatabase.memory());
     return JustOneScope(
       db: db,
       prefs: prefs,
+      identityStore: identityStore,
       notifications: NotificationService(),
     );
   }

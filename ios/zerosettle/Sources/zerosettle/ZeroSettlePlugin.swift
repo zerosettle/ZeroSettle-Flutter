@@ -470,6 +470,18 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
             #endif
             result(nil)
 
+        case "setEclAvailabilityOverride":
+            // ECL (External Content Links) is a Google Play concept — there is
+            // no iOS equivalent. Accept the call so Flutter callers get a clean
+            // no-op rather than a MissingPluginException on iOS.
+            result(nil)
+
+        case "setSwitchAndSaveTestMode":
+            // Switch & Save is the Play→web ECL migration flow — a Google Play
+            // concept with no iOS equivalent. Accept the call as a clean no-op
+            // so the Dart API is uniform across platforms.
+            result(nil)
+
         case "configure":
             guard let publishableKey = args?["publishableKey"] as? String else {
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "publishableKey is required", details: nil))

@@ -298,6 +298,12 @@ class MockZeroSettlePlatform
   Future<void> setBaseUrlOverride(String? url) async {}
 
   @override
+  Future<void> setEclAvailabilityOverride(bool? override) async {}
+
+  @override
+  Future<void> setSwitchAndSaveTestMode(bool enabled) async {}
+
+  @override
   Future<List<Map<String, dynamic>>> fetchTransactionHistory({required String userId}) async {
     return [
       _sampleTransactionMap(),

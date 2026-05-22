@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../data/database.dart';
+import '../data/identity_store.dart';
 import '../data/user_prefs.dart';
 import '../notifications/notification_service.dart';
 
@@ -12,11 +13,13 @@ import '../notifications/notification_service.dart';
 class JustOneScope {
   final AppDatabase db;
   final UserPrefs prefs;
+  final IdentityStore identityStore;
   final NotificationService notifications;
 
   const JustOneScope({
     required this.db,
     required this.prefs,
+    required this.identityStore,
     required this.notifications,
   });
 }

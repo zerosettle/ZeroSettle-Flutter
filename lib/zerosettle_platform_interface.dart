@@ -232,6 +232,16 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('setBaseUrlOverride() has not been implemented.');
   }
 
+  Future<void> setEclAvailabilityOverride(bool? override) {
+    throw UnimplementedError(
+        'setEclAvailabilityOverride() has not been implemented.');
+  }
+
+  Future<void> setSwitchAndSaveTestMode(bool enabled) {
+    throw UnimplementedError(
+        'setSwitchAndSaveTestMode() has not been implemented.');
+  }
+
   // -- Cancel Flow (Headless) --
 
   Future<Map<String, dynamic>> acceptSaveOffer({required String productId, required String userId}) {

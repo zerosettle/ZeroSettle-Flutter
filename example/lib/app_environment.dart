@@ -22,10 +22,10 @@ enum AppEnvironment {
   staging(
     displayName: 'Staging',
     baseUrl: 'https://api-staging.zerosettle.io',
-    // TODO: staging iOS publishable key not yet issued.
-    iosPublishableKey: '',
+    iosPublishableKey:
+        'zs_pk_test_0b26fc38ee8a3d84b13a47659e8196d2ebe510e9c2e2e7aa',
     androidPublishableKey:
-        'zs_pk_test_bded1f5dddde6f79ac538bff33b70737244a3557555d863c',
+        'zs_pk_test_70407768e788f8ed89817a959eceb110d652165a920c9395',
     isLive: false,
   ),
   prod(

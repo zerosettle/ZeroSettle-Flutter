@@ -3,6 +3,10 @@ package com.zerosettle.flutter
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.zerosettle.flutter.ext.toFlutterMap
 import com.zerosettle.flutter.handlers.ApplePayStubsHandler
 import com.zerosettle.flutter.handlers.CatalogHandler
@@ -18,8 +22,8 @@ import com.zerosettle.flutter.handlers.SubscriptionMgmtHandler
 import com.zerosettle.flutter.offermanager.MigrationManagerStaticHandler
 import com.zerosettle.flutter.offermanager.OfferManagerHandleRegistry
 import com.zerosettle.flutter.offermanager.OfferManagerStaticHandler
+import com.zerosettle.flutter.platformviews.FlutterPlatformViewComposeOwner
 import com.zerosettle.flutter.platformviews.MigrateTipViewFactory
-import com.zerosettle.flutter.platformviews.OfferTipFactory
 import com.zerosettle.flutter.platformviews.PendingActionBannerFactory
 import com.zerosettle.sdk.ZeroSettle
 import com.zerosettle.sdk.core.ZeroSettleEvent
@@ -389,6 +393,23 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     /** Lambda accessor — exposed to handlers in F8–F17. */
     internal val activityProvider: () -> Activity? = { activity }
 
+    /**
+     * Window-level Lifecycle/SavedState/ViewModel owner installed on the
+     * activity content view so `ComposeView`s embedded in Flutter
+     * PlatformViews can compose. `FlutterView` provides none of the
+     * `ViewTree*` owners Compose needs — without one, `ComposeView.onMeasure`
+     * throws `IllegalStateException: ViewTreeLifecycleOwner not found`.
+     * Compose anchors its window recomposer at `FlutterView` and walks *up*
+     * the tree for the owners, so the owner must sit on an ancestor of
+     * `FlutterView` (the content view), not on the `ComposeView` itself.
+     * Allocated lazily in [onAttachedToActivity] only when the host activity
+     * doesn't already provide the owners (e.g. a `ComponentActivity` host).
+     *
+     * Only ever touched from the main thread (the `ActivityAware`
+     * callbacks), so — unlike [activity] — it needs no synchronization.
+     */
+    private var composeOwner: FlutterPlatformViewComposeOwner? = null
+
     /** Application context — cached for CustomTabs `Intent` issuance. */
     @Volatile private var applicationContext: Context? = null
     internal val applicationContextProvider: () -> Context? = { applicationContext }
@@ -494,13 +515,17 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 setMethodCallHandler(migrationManagerStaticHandler)
             }
 
-        // PlatformView factories (F22–F24).
-        binding.platformViewRegistry
-            .registerViewFactory("com.zerosettle/offer_tip", OfferTipFactory())
+        // PlatformView factories. `migrate_tip_view` backs the public
+        // `OfferTipView` Flutter widget (the `migrate_tip_view` wire string
+        // is a historical internal name); `pending_action_banner` backs
+        // `ZeroSettlePendingActionBanner`.
         binding.platformViewRegistry
             .registerViewFactory("com.zerosettle/pending_action_banner", PendingActionBannerFactory())
         binding.platformViewRegistry
-            .registerViewFactory("com.zerosettle/migrate_tip_view", MigrateTipViewFactory(messenger))
+            .registerViewFactory(
+                "com.zerosettle/migrate_tip_view",
+                MigrateTipViewFactory(messenger, activityProvider),
+            )
 
         // F25 — pump SDK StateFlows onto buffered EventChannel sinks. Each
         // pump runs for the engine's lifetime; pluginScope.cancel() in
@@ -629,18 +654,63 @@ class ZeroSettlePlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
+        installComposeOwnerIfNeeded(binding.activity)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        // A config change destroys + recreates the activity (new content
+        // view); tear the owner down so it's freshly installed on reattach.
+        activity?.let { uninstallComposeOwner(it) }
         activity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
+        installComposeOwnerIfNeeded(binding.activity)
     }
 
     override fun onDetachedFromActivity() {
+        activity?.let { uninstallComposeOwner(it) }
         activity = null
+    }
+
+    /**
+     * Install a [FlutterPlatformViewComposeOwner] on the activity content
+     * view so embedded `ComposeView`s resolve the `ViewTree*` owners they
+     * need (see [composeOwner]). Only fills the gap — if the host activity
+     * already provides the owners (a custom `ComponentActivity` host), leave
+     * them untouched so we don't clobber the host's lifecycle. The standard
+     * `FlutterActivity` still hits the install path: Flutter's embedding
+     * does not surface a `ViewTree*` owner at the content view where
+     * Compose's window recomposer (anchored at `FlutterView`) resolves it.
+     */
+    private fun installComposeOwnerIfNeeded(activity: Activity) {
+        val content = activity.findViewById<android.view.View>(android.R.id.content)
+        if (content != null && content.findViewTreeLifecycleOwner() == null) {
+            val owner = FlutterPlatformViewComposeOwner().also { it.attach() }
+            composeOwner = owner
+            content.setViewTreeLifecycleOwner(owner)
+            content.setViewTreeViewModelStoreOwner(owner)
+            content.setViewTreeSavedStateRegistryOwner(owner)
+        }
+    }
+
+    /**
+     * Tear down the owner installed by [installComposeOwnerIfNeeded]. Clears
+     * the `ViewTree*` references off the content view too — but only if they
+     * still point at our owner — so an activity that outlives this plugin's
+     * attachment is never left resolving a `DESTROYED` owner.
+     */
+    private fun uninstallComposeOwner(activity: Activity) {
+        val owner = composeOwner ?: return
+        val content = activity.findViewById<android.view.View>(android.R.id.content)
+        if (content != null && content.findViewTreeLifecycleOwner() === owner) {
+            content.setViewTreeLifecycleOwner(null)
+            content.setViewTreeViewModelStoreOwner(null)
+            content.setViewTreeSavedStateRegistryOwner(null)
+        }
+        owner.detach()
+        composeOwner = null
     }
 
     // ── MethodCallHandler ────────────────────────────────────────────

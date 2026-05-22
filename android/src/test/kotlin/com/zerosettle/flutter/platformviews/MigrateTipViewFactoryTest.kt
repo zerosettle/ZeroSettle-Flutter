@@ -1,5 +1,6 @@
 package com.zerosettle.flutter.platformviews
 
+import android.app.Activity
 import android.content.Context
 import androidx.compose.ui.platform.ComposeView
 import androidx.test.core.app.ApplicationProvider
@@ -14,6 +15,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 
 /**
@@ -38,6 +40,9 @@ class MigrateTipViewFactoryTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val messenger: BinaryMessenger = mockk(relaxed = true)
+
+    /** Default provider — no Activity, exercising the Flutter-Context fallback. */
+    private val activityProvider: () -> Activity? = { null }
 
     @Before
     fun setUp() {
@@ -159,7 +164,7 @@ class MigrateTipViewFactoryTest {
 
     @Test
     fun `create returns a PlatformView with a ComposeView`() {
-        val factory = MigrateTipViewFactory(messenger)
+        val factory = MigrateTipViewFactory(messenger, activityProvider)
         val view = factory.create(
             context,
             /* viewId = */ 9,
@@ -174,14 +179,14 @@ class MigrateTipViewFactoryTest {
 
     @Test
     fun `create tolerates null args`() {
-        val factory = MigrateTipViewFactory(messenger)
+        val factory = MigrateTipViewFactory(messenger, activityProvider)
         val view = factory.create(context, /* viewId = */ 1, null)
         assertThat(view.view).isNotNull()
     }
 
     @Test
     fun `dispose runs without throwing and is idempotent`() {
-        val factory = MigrateTipViewFactory(messenger)
+        val factory = MigrateTipViewFactory(messenger, activityProvider)
         val view = factory.create(context, /* viewId = */ 1, emptyMap<String, Any?>())
         view.dispose()
         view.dispose()
@@ -192,10 +197,32 @@ class MigrateTipViewFactoryTest {
         // Sanity check that the factory doesn't memoize across viewIds —
         // each call must produce a fresh PlatformView so the per-view
         // channel name `zerosettle/migrate_tip_view_<viewId>` is unique.
-        val factory = MigrateTipViewFactory(messenger)
+        val factory = MigrateTipViewFactory(messenger, activityProvider)
         val a = factory.create(context, /* viewId = */ 1, emptyMap<String, Any?>())
         val b = factory.create(context, /* viewId = */ 2, emptyMap<String, Any?>())
         assertThat(a).isNotSameInstanceAs(b)
         assertThat(a.view).isNotSameInstanceAs(b.view)
+    }
+
+    // ─── host-Activity context selection ───────────────────────────────
+
+    @Test
+    fun `create builds the ComposeView against the Activity from activityProvider`() {
+        // The SDK's ZeroSettleOfferTip resolves the Switch & Save checkout
+        // Activity from the ComposeView's context via findActivity(), so the
+        // factory must build the view against the host Activity — not the
+        // (non-Activity) Context Flutter hands the PlatformView.
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val factory = MigrateTipViewFactory(messenger) { activity }
+        val view = factory.create(context, /* viewId = */ 5, null)
+        assertThat(view.view!!.context).isSameInstanceAs(activity)
+    }
+
+    @Test
+    fun `create falls back to the Flutter Context when no Activity is attached`() {
+        // No Activity yet — the tip still renders; only the CTA needs one.
+        val factory = MigrateTipViewFactory(messenger) { null }
+        val view = factory.create(context, /* viewId = */ 6, null)
+        assertThat(view.view!!.context).isSameInstanceAs(context)
     }
 }

@@ -28,9 +28,8 @@ export 'models/promotion.dart';
 export 'models/product_catalog.dart';
 export 'models/remote_config.dart';
 export 'errors/zs_exception.dart';
-export 'widgets/zs_migrate_tip_view.dart';
+export 'widgets/zs_offer_tip_view.dart';
 export 'widgets/zs_pending_action_banner.dart';
-export 'widgets/zs_offer_tip.dart';
 export 'models/cancel_flow.dart';
 export 'models/upgrade_offer.dart';
 export 'models/funnel_event.dart';
@@ -67,6 +66,31 @@ class ZeroSettle {
   /// Set before calling [configure]. Pass `null` to clear.
   Future<void> setBaseUrlOverride(String? url) {
     return _wrap(() => _platform.setBaseUrlOverride(url));
+  }
+
+  /// Testing override for the Switch & Save offer's ECL availability gate
+  /// (Android only — External Content Links is a Google Play concept).
+  ///
+  /// Pass `true`/`false` to force the result, or `null` to clear it and use
+  /// the real Play Billing query. Lets you exercise the Switch & Save offer
+  /// tip on a device/account not enrolled in Google's ECL program. No-op on
+  /// iOS. Leave unset (or `null`) in production.
+  Future<void> setEclAvailabilityOverride(bool? override) {
+    return _wrap(() => _platform.setEclAvailabilityOverride(override));
+  }
+
+  /// Testing override that runs the entire Switch & Save (Play→web ECL
+  /// migration) flow on a device/account NOT enrolled in Google's External
+  /// Content Link program (Android only).
+  ///
+  /// When `true`, the SDK fakes the Play ECL plumbing — availability check,
+  /// attribution token, and the disclosure dialog — while the backend session
+  /// mint and the Chrome Custom Tab web checkout run for real. It also implies
+  /// ECL-available for offer eligibility, so the Switch & Save tip surfaces
+  /// without separately calling [setEclAvailabilityOverride]. No-op on iOS
+  /// (ECL has no iOS equivalent). Leave `false` in production.
+  Future<void> setSwitchAndSaveTestMode(bool enabled) {
+    return _wrap(() => _platform.setSwitchAndSaveTestMode(enabled));
   }
 
   /// Configure the SDK with your publishable key.

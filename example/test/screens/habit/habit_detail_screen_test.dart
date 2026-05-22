@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zerosettle_example/app/inherited_just_one.dart';
 import 'package:zerosettle_example/data/database.dart';
+import 'package:zerosettle_example/data/identity_store.dart';
 import 'package:zerosettle_example/data/user_prefs.dart';
 import 'package:zerosettle_example/notifications/notification_service.dart';
 import 'package:zerosettle_example/screens/habit/habit_detail_screen.dart';
@@ -16,8 +17,9 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await UserPrefs.create();
+    final identityStore = await IdentityStore.create();
     db = AppDatabase.forTesting(NativeDatabase.memory());
-    scope = JustOneScope(db: db, prefs: prefs, notifications: NotificationService());
+    scope = JustOneScope(db: db, prefs: prefs, identityStore: identityStore, notifications: NotificationService());
     habitId = await db.habitDao.insertHabit(HabitsCompanion.insert(
         name: 'Read', emoji: '📖', colorValue: 0xFF6CA358));
   });

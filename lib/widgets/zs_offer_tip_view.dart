@@ -6,9 +6,11 @@ import 'package:flutter/services.dart';
 /// SwiftUI `OfferTipView` on iOS (from ZeroSettleKit), Compose
 /// `ZeroSettleOfferTip` on Android (from ZeroSettle-Android `:ui`).
 ///
-/// Both are the unified, `ZSOfferManager`-backed tip — they resolve the
-/// active user from `identify(_:)`, so call `ZeroSettle.instance.identify(...)`
-/// once before this widget mounts.
+/// The unified offer tip — it covers migration, upgrade, and web-to-web
+/// flows, with server-configurable copy. Both natives are
+/// `ZSOfferManager`-backed and identify-first: they resolve the active user
+/// from `identify(_:)`, so call `ZeroSettle.instance.identify(...)` once
+/// before this widget mounts.
 ///
 /// The native view is intrinsically self-sizing — its height changes based
 /// on event state (CTA swap when Apple Pay needs setup, dismissal, loading
@@ -26,19 +28,20 @@ import 'package:flutter/services.dart';
 /// The PlatformView `viewType` differs by platform (iOS uses
 /// `zerosettle/migrate_tip_view`, Android uses
 /// `com.zerosettle/migrate_tip_view`) — this matches each platform's
-/// factory registration (`ZSMigrateTipViewFactory.swift:188` /
-/// `MigrateTipViewFactory.kt`).
+/// factory registration (`ZSMigrateTipViewFactory.swift` /
+/// `MigrateTipViewFactory.kt`). The `migrate_tip_view` wire string is a
+/// historical internal name; the public widget is the generic [OfferTipView].
 ///
 /// Renders an empty `SizedBox.shrink()` on platforms other than iOS and
 /// Android (e.g. desktop, web).
 ///
 /// Example:
 /// ```dart
-/// MigrationTipView(
+/// OfferTipView(
 ///   backgroundColor: Theme.of(context).colorScheme.primary,
 /// )
 /// ```
-class MigrationTipView extends StatefulWidget {
+class OfferTipView extends StatefulWidget {
   /// (Deprecated) Legacy user identifier. The native offer tip is
   /// identify-first — it resolves the active user from
   /// `ZeroSettle.instance.identify(...)` — so this value is ignored on both
@@ -50,7 +53,7 @@ class MigrationTipView extends StatefulWidget {
   /// color, not a neutral surface — white-on-white text won't render.
   final Color backgroundColor;
 
-  const MigrationTipView({
+  const OfferTipView({
     super.key,
     @Deprecated(
       'Identify-first: the offer tip resolves the user from identify(_:). '
@@ -61,15 +64,22 @@ class MigrationTipView extends StatefulWidget {
   });
 
   @override
-  State<MigrationTipView> createState() => _MigrationTipViewState();
+  State<OfferTipView> createState() => _OfferTipViewState();
 }
 
-class _MigrationTipViewState extends State<MigrationTipView> {
+class _OfferTipViewState extends State<OfferTipView> {
   /// Native-reported intrinsic height. Starts at 0 so the widget collapses
   /// cleanly until the native view reports its first size — important when
-  /// the migration tip auto-hides (no offer available) and never reports
+  /// the offer tip auto-hides (no offer available) and never reports
   /// any height at all.
   double _height = 0;
+
+  /// Whether the native view has reported a real height yet. Until it has,
+  /// the Android `AndroidView` is held at a 1px height: Flutter never
+  /// instantiates a platform view for a zero-area `AndroidView`, so the
+  /// native factory would never run. 1px gives it non-zero area to create
+  /// the view; the first `setSize` then drives the real height.
+  bool _gotNativeSize = false;
   MethodChannel? _channel;
 
   void _onPlatformViewCreated(int viewId) {
@@ -79,8 +89,11 @@ class _MigrationTipViewState extends State<MigrationTipView> {
       if (call.method == 'setSize') {
         final args = call.arguments as Map?;
         final h = (args?['height'] as num?)?.toDouble();
-        if (h != null && h != _height && mounted) {
-          setState(() => _height = h);
+        if (h != null && mounted && (h != _height || !_gotNativeSize)) {
+          setState(() {
+            _height = h;
+            _gotNativeSize = true;
+          });
         }
       }
       return null;
@@ -115,12 +128,17 @@ class _MigrationTipViewState extends State<MigrationTipView> {
           ),
         );
       case TargetPlatform.android:
-        // F24 registers the Android factory under `com.zerosettle/...`
+        // The Android factory is registered under `com.zerosettle/...`
         // (Android convention prefixes with the org id); the per-view
         // height-bridge channel name format matches iOS exactly so
         // _onPlatformViewCreated is unchanged.
+        // 1px until the native view reports a real height — a zero-area
+        // `AndroidView` is never instantiated by Flutter, so the factory
+        // (and its `ComposeView`) would never run. Once `setSize` arrives,
+        // `_gotNativeSize` flips and the box tracks the real height (which
+        // collapses back to 0 when there is no offer to show).
         return SizedBox(
-          height: _height,
+          height: _gotNativeSize ? _height : 1.0,
           child: AndroidView(
             viewType: 'com.zerosettle/migrate_tip_view',
             creationParams: creationParams,
@@ -137,6 +155,12 @@ class _MigrationTipViewState extends State<MigrationTipView> {
   }
 }
 
-/// Backward-compatible typedef. Use [MigrationTipView] instead.
-@Deprecated('Use MigrationTipView instead')
-typedef ZSMigrateTipView = MigrationTipView;
+/// Deprecated alias for [OfferTipView] — the iOS SDK renamed
+/// `MigrationTipView` to `OfferTipView` once the tip became the unified
+/// surface for migration, upgrade, and web-to-web offers.
+@Deprecated('Use OfferTipView instead')
+typedef MigrationTipView = OfferTipView;
+
+/// Deprecated alias for [OfferTipView].
+@Deprecated('Use OfferTipView instead')
+typedef ZSMigrateTipView = OfferTipView;

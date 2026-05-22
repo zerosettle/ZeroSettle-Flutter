@@ -3,12 +3,13 @@ import 'package:zerosettle/zerosettle.dart';
 
 import '../../widgets/checkout_sheet_header.dart';
 import '../../widgets/dual_price_buttons.dart';
+import '../../widgets/plan_selector.dart';
 
 /// Shows a condensed premium upsell as a modal bottom sheet.
 ///
-/// Resolves the first [ZSProductType.autoRenewableSubscription] product from
-/// [ZeroSettle.instance.getProducts], renders [CheckoutSheetHeader] +
-/// [DualPriceButtons], and offers a "Maybe later" escape hatch.
+/// Fetches the catalog, lets the user pick a billing plan (weekly / monthly /
+/// yearly) via [PlanSelector], and renders [CheckoutSheetHeader] +
+/// [DualPriceButtons] for the selected plan, with a "Maybe later" escape hatch.
 ///
 /// Mirrors the visual hierarchy of the Android `PremiumUpsellSheet` Composable.
 Future<void> showPremiumUpsell(BuildContext context) {
@@ -29,10 +30,18 @@ class _PremiumUpsellSheet extends StatefulWidget {
 class _PremiumUpsellSheetState extends State<_PremiumUpsellSheet> {
   late Future<List<Product>> _productsFuture;
 
+  /// The user's explicitly-picked plan id. Null until they tap a row — until
+  /// then the default plan (monthly, else first) is used.
+  String? _selectedId;
+
   @override
   void initState() {
     super.initState();
-    _productsFuture = ZeroSettle.instance.getProducts();
+    // Actively fetch the catalog — the sheet must not assume an earlier
+    // call warmed the SDK's product cache (`getProducts()`). `fetchProducts()`
+    // loads it (or surfaces a real error instead of an empty list).
+    _productsFuture =
+        ZeroSettle.instance.fetchProducts().then((catalog) => catalog.products);
   }
 
   @override
@@ -68,6 +77,15 @@ class _PremiumUpsellSheetState extends State<_PremiumUpsellSheet> {
               FutureBuilder<List<Product>>(
                 future: _productsFuture,
                 builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Text(
+                      "Couldn't load premium plans.\n${snapshot.error}",
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                      textAlign: TextAlign.center,
+                    );
+                  }
                   if (!snapshot.hasData) {
                     return const SizedBox(
                       height: 80,
@@ -75,14 +93,8 @@ class _PremiumUpsellSheetState extends State<_PremiumUpsellSheet> {
                     );
                   }
 
-                  final products = snapshot.requireData;
-                  final subs = products
-                      .where((p) =>
-                          p.type == ZSProductType.autoRenewableSubscription)
-                      .toList();
-                  final subscription = subs.isEmpty ? null : subs.first;
-
-                  if (subscription == null) {
+                  final plans = subscriptionPlans(snapshot.requireData);
+                  if (plans.isEmpty) {
                     return Text(
                       'Premium isn\'t available right now.',
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -92,13 +104,27 @@ class _PremiumUpsellSheetState extends State<_PremiumUpsellSheet> {
                     );
                   }
 
+                  // Effective selection: the user's explicit pick while it's
+                  // still a valid plan, otherwise the default.
+                  final selectedId = (_selectedId != null &&
+                          plans.any((p) => p.id == _selectedId))
+                      ? _selectedId!
+                      : defaultPlanId(plans)!;
+                  final selected = plans.firstWhere((p) => p.id == selectedId);
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      CheckoutSheetHeader(product: subscription),
+                      CheckoutSheetHeader(product: selected),
+                      const SizedBox(height: 16),
+                      PlanSelector(
+                        plans: plans,
+                        selectedId: selectedId,
+                        onSelect: (id) => setState(() => _selectedId = id),
+                      ),
                       const SizedBox(height: 20),
                       DualPriceButtons(
-                        product: subscription,
+                        product: selected,
                         onPurchased: () => Navigator.of(context).maybePop(),
                       ),
                     ],

@@ -5,6 +5,7 @@ import 'package:zerosettle/zerosettle.dart';
 import '../../app/inherited_just_one.dart';
 import '../../app/routes.dart';
 import '../../app_environment.dart';
+import '../../data/identity_store.dart';
 import '../../widgets/environment_picker.dart';
 
 /// First-launch onboarding. Captures a display name, identifies the user
@@ -72,8 +73,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
   }
 
   Future<void> _submit() async {
+    final env = _env;
     final name = _controller.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty || env == null) return;
     setState(() {
       _submitting = true;
       _error = null;
@@ -84,9 +86,12 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
         Identity.user(id: id, name: name),
       );
       if (!mounted) return;
-      final prefs = InheritedJustOne.of(context).prefs;
-      await prefs.setUserId(id);
-      await prefs.setDisplayName(name);
+      // Persist the new user as a reusable, labeled identity for this env
+      // and mark it active — so a later logout / re-onboard never strands it.
+      final identityStore = InheritedJustOne.of(context).identityStore;
+      final identity = SavedIdentity(userId: id, displayName: name);
+      await identityStore.upsertIdentity(env.name, identity);
+      await identityStore.setActive(env.name, id);
       if (!mounted) return;
       context.go(Routes.home);
     } catch (e) {

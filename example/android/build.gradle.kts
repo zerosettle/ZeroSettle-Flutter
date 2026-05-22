@@ -1,5 +1,9 @@
 allprojects {
     repositories {
+        // TEMP: testing the launch-reconciliation fix from a local
+        // zerosettle-android build. Revert before release (the fix ships
+        // properly as zerosettle-android 1.0.1 on Maven Central).
+        mavenLocal()
         google()
         mavenCentral()
     }
