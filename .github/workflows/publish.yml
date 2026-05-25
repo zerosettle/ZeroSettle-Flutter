@@ -1,0 +1,86 @@
+# Publish to pub.dev on tag push.
+#
+# Triggers on bare-semver tags (e.g. `1.5.1`) — matches the existing
+# `git tag` convention in this repo; no `v` prefix.
+#
+# ────────────────────────────────────────────────────────────────────────────
+# One-time setup (browser, no GitHub secrets needed)
+# ────────────────────────────────────────────────────────────────────────────
+#
+# This workflow uses pub.dev's OIDC-based automated publishing, so there are
+# *no* credentials to store. The trade is a one-time browser config on pub.dev:
+#
+#   1. https://pub.dev/packages/zerosettle/admin (sign in as a `uploader`).
+#   2. Under "Automated publishing" → "Enable publishing from GitHub Actions".
+#   3. Repository:  zerosettle/ZeroSettle-Flutter
+#   4. Tag pattern: {{version}}
+#      (this matches bare semver like `1.5.1`; pub.dev substitutes
+#       `{{version}}` with the package version it sees in pubspec.yaml).
+#   5. Save.
+#
+# After that, every workflow run that has `permissions: id-token: write`
+# (set below) exchanges GitHub's OIDC token for a short-lived pub.dev publish
+# token automatically. See https://dart.dev/tools/pub/automated-publishing
+# for the full protocol.
+#
+# ────────────────────────────────────────────────────────────────────────────
+# What this does
+# ────────────────────────────────────────────────────────────────────────────
+#
+# 1. Verifies the tag matches `version:` in pubspec.yaml so a stale tag can't
+#    ship a mismatched package version.
+# 2. Runs `flutter test` as a final guard rail.
+# 3. Runs `dart pub publish --force` — the `--force` skips the interactive
+#    "Do you want to publish?" prompt (we already confirmed via the tag push).
+#
+# Note: the Flutter wrapper depends on `io.zerosettle:zerosettle-android` —
+# publish the Android side first (its workflow lives in ZeroSettle-Android)
+# so the Maven coord exists before this package ships, or the first few hours
+# of adopter Android builds will fail.
+
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  publish:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # `id-token: write` is what pub.dev's OIDC handshake needs. Without it the
+    # `dart pub publish` step would fall back to interactive auth and fail.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Match the minimum declared in pubspec.yaml's `environment.flutter`.
+          # Bump alongside any pubspec env bump.
+          flutter-version: '3.38.9'
+          channel: stable
+
+      - name: Verify tag matches pubspec version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION=$(awk '/^version: / {print $2; exit}' pubspec.yaml)
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag '$TAG' does not match pubspec.yaml version '$VERSION'"
+            exit 1
+          fi
+          echo "Publishing $VERSION."
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Publish to pub.dev
+        run: dart pub publish --force
