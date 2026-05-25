@@ -58,7 +58,9 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
     });
   }
 
+  @Deprecated('Use setSwitchAndSaveTestMode — see ZeroSettle.setEclAvailabilityOverride.')
   @override
+  // ignore: deprecated_member_use_from_same_package
   Future<void> setEclAvailabilityOverride(bool? override) async {
     await methodChannel.invokeMethod('setEclAvailabilityOverride', {
       if (override != null) 'override': override,

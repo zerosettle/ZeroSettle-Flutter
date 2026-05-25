@@ -297,6 +297,7 @@ class MockZeroSettlePlatform
   @override
   Future<void> setBaseUrlOverride(String? url) async {}
 
+  // ignore: deprecated_member_use
   @override
   Future<void> setEclAvailabilityOverride(bool? override) async {}
 

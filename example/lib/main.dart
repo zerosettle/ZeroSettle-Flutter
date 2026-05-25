@@ -57,17 +57,7 @@ Future<void> main() async {
     }
   }
 
-  // 2b. Re-apply the persisted "Force ECL available" testing override
-  //     (Switch & Save) so it survives launches — without this the offer
-  //     tip re-evaluates with the ECL gate live on every launch/refresh.
-  try {
-    await ZeroSettle.instance
-        .setEclAvailabilityOverride(prefs.eclOverride ? true : null);
-  } catch (e) {
-    debugPrint('[ZeroSettle] setEclAvailabilityOverride() failed: $e');
-  }
-
-  // 2c. Re-apply the persisted "Switch & Save full test mode" override so it
+  // 2b. Re-apply the persisted "Switch & Save full test mode" override so it
   //     survives launches — when on, the whole Switch & Save flow (incl. the
   //     "Switch Now" CTA) runs on a device not enrolled in Google's ECL
   //     program. Android-only; a no-op on iOS.

@@ -1,3 +1,32 @@
+## 1.5.1 — 2026-05-25
+
+Soft-deprecate the "Force ECL available" testing override in favor of the
+single, end-to-end `setSwitchAndSaveTestMode` flag.
+
+### Deprecated
+
+- `ZeroSettle.instance.setEclAvailabilityOverride(bool?)` — emits a deprecation
+  warning. The method only ever affected the offer-gate visibility on Android;
+  tapping the resulting "Switch Now" CTA still queried Play Billing for ECL
+  availability and errored with `SwitchAndSaveUnavailable` on non-enrolled
+  devices. Use `setSwitchAndSaveTestMode(true)` instead — it surfaces the tip
+  AND lets the entire flow run end-to-end on a non-ECL device. The bridge keeps
+  forwarding so existing apps continue to work; the method will be removed in a
+  future major.
+
+### Example app
+
+- Removed the "Force ECL available" toggle and its persisted `eclOverride`
+  pref. The remaining "Switch & Save full test mode" toggle is the single
+  end-to-end Switch & Save testing switch.
+
+### Bumped
+
+- `io.zerosettle:zerosettle-android` dependency to `1.1.1` (carries the matching
+  SDK-side soft-deprecation). Local Flutter Android builds need
+  `publishToMavenLocal` from the `ZeroSettle-Android` checkout until `1.1.1`
+  publishes to Maven Central.
+
 ## 1.5.0 — 2026-05-22
 
 Android-parity sweep — closes the seven remaining bridge gaps so a Flutter app gets the same surfaces a native Android app gets. Everything is additive; no existing public API was renamed or removed.

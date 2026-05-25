@@ -75,6 +75,18 @@ class ZeroSettle {
   /// the real Play Billing query. Lets you exercise the Switch & Save offer
   /// tip on a device/account not enrolled in Google's ECL program. No-op on
   /// iOS. Leave unset (or `null`) in production.
+  ///
+  /// **Deprecated.** This only affects the offer-gate visibility — tapping the
+  /// CTA still queries Play Billing for ECL availability and errors with
+  /// `SwitchAndSaveUnavailable` on non-enrolled devices. Use
+  /// [setSwitchAndSaveTestMode] instead, which surfaces the tip AND lets the
+  /// whole flow run end-to-end on a non-ECL device.
+  @Deprecated(
+    'Use setSwitchAndSaveTestMode instead — it forces the offer gate AND lets '
+    'the entire Switch & Save flow run on a non-ECL device. '
+    'setEclAvailabilityOverride only affects the offer gate, so the CTA errors '
+    'with SwitchAndSaveUnavailable when tapped.',
+  )
   Future<void> setEclAvailabilityOverride(bool? override) {
     return _wrap(() => _platform.setEclAvailabilityOverride(override));
   }

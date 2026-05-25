@@ -232,6 +232,9 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
     throw UnimplementedError('setBaseUrlOverride() has not been implemented.');
   }
 
+  @Deprecated(
+    'Use setSwitchAndSaveTestMode instead — see ZeroSettle.setEclAvailabilityOverride.',
+  )
   Future<void> setEclAvailabilityOverride(bool? override) {
     throw UnimplementedError(
         'setEclAvailabilityOverride() has not been implemented.');

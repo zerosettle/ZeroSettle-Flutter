@@ -169,7 +169,13 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
      * Testing hook for the Switch & Save offer's ECL availability gate.
      * `true`/`false` forces [ZeroSettle.eclAvailabilityOverride]; a missing
      * `override` arg clears it (`null` → the real Play Billing query).
+     *
+     * Deprecated alongside the SDK property — Dart callers receive a deprecation
+     * warning on `setEclAvailabilityOverride`. The bridge keeps forwarding so
+     * existing apps that haven't migrated yet continue to work; new code should
+     * use `setSwitchAndSaveTestMode` for end-to-end Switch & Save testing.
      */
+    @Suppress("DEPRECATION") // bridge for the soft-deprecated Dart API
     private fun setEclAvailabilityOverride(call: MethodCall, result: MethodChannel.Result) {
         ZeroSettle.eclAvailabilityOverride = call.argument<Boolean>("override")
         result.success(null)

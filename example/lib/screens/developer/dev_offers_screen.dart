@@ -23,9 +23,8 @@ class _DevOffersScreenState extends State<DevOffersScreen> {
   bool _busy = false;
   UserOfferResponse? _result;
   String? _error;
-  bool _forceEcl = false;
   bool _switchTestMode = false;
-  bool _eclSeeded = false;
+  bool _seeded = false;
 
   /// Bumped to re-key [OfferTipCard] after clearing the offer-dismissal
   /// flag, forcing the native offer tip to re-evaluate immediately.
@@ -36,31 +35,18 @@ class _DevOffersScreenState extends State<DevOffersScreen> {
     super.didChangeDependencies();
     // Seed the toggle from the persisted value once. `main()` already
     // re-applied it to the SDK on startup — this just reflects it in the UI.
-    if (_eclSeeded) return;
-    _eclSeeded = true;
+    if (_seeded) return;
+    _seeded = true;
     final prefs = InheritedJustOne.of(context).prefs;
-    _forceEcl = prefs.eclOverride;
     _switchTestMode = prefs.switchAndSaveTestMode;
-  }
-
-  /// Flips the Switch & Save ECL availability gate for testing. `true` forces
-  /// ECL "available"; `false` clears the override (real Play query). The value
-  /// is persisted (re-applied on every launch by `main()`); re-keying
-  /// [OfferTipCard] on [_forceEcl] re-creates the native offer tip so it
-  /// re-evaluates against the new override immediately.
-  Future<void> _setForceEcl(bool value) async {
-    await ZeroSettle.instance.setEclAvailabilityOverride(value ? true : null);
-    if (!mounted) return;
-    await InheritedJustOne.of(context).prefs.setEclOverride(value);
-    if (mounted) setState(() => _forceEcl = value);
   }
 
   /// Flips full Switch & Save test mode. When `true`, the entire flow runs on
   /// a non-ECL device — the "Switch Now" CTA mints a real backend session and
-  /// opens the real web checkout. Implies "Force ECL available", so the offer
-  /// tip surfaces too. Persisted (re-applied on every launch by `main()`);
-  /// re-keying [OfferTipCard] on [_switchTestMode] re-creates the native tip
-  /// so it re-evaluates immediately.
+  /// opens the real web checkout. The offer tip surfaces too (the ECL gate
+  /// resolves available in test mode). Persisted (re-applied on every launch
+  /// by `main()`); re-keying [OfferTipCard] on [_switchTestMode] re-creates
+  /// the native tip so it re-evaluates immediately.
   Future<void> _setSwitchTestMode(bool value) async {
     await ZeroSettle.instance.setSwitchAndSaveTestMode(value);
     if (!mounted) return;
@@ -105,17 +91,6 @@ class _DevOffersScreenState extends State<DevOffersScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Switch & Save ECL gate testing toggle — see [_setForceEcl].
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Force ECL available'),
-            subtitle: const Text(
-              'Bypasses the Play ECL gate so the Switch & Save tip can '
-              'surface on devices not enrolled in Google ECL. Android-only; testing.',
-            ),
-            value: _forceEcl,
-            onChanged: _setForceEcl,
-          ),
           // Full Switch & Save test mode — see [_setSwitchTestMode].
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -123,7 +98,7 @@ class _DevOffersScreenState extends State<DevOffersScreen> {
             subtitle: const Text(
               'Runs the entire Switch & Save flow on a non-ECL device — the '
               '"Switch Now" CTA mints a real backend session and opens the '
-              'real web checkout. Implies "Force ECL available". Android-only; '
+              'real web checkout. The offer tip surfaces too. Android-only; '
               'testing.',
             ),
             value: _switchTestMode,
@@ -137,7 +112,7 @@ class _DevOffersScreenState extends State<DevOffersScreen> {
           ),
           const SizedBox(height: 8),
           // Cross-platform migration tip view (renders on iOS and Android).
-          OfferTipCard(key: ValueKey('$_forceEcl|$_switchTestMode|$_tipNonce')),
+          OfferTipCard(key: ValueKey('$_switchTestMode|$_tipNonce')),
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _busy ? null : () => _fetch(context),

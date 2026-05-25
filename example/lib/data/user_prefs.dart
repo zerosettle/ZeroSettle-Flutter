@@ -8,7 +8,6 @@ class UserPrefs {
   static const _kStreakSaverCount = 'streakSaverCount';
   static const _kPaywallDismissedAtMs = 'paywallDismissedAtMs';
   static const _kReminderEnabled = 'reminderEnabled';
-  static const _kEclOverride = 'eclOverride';
   static const _kSwitchAndSaveTestMode = 'switchAndSaveTestMode';
 
   final SharedPreferences _store;
@@ -36,13 +35,6 @@ class UserPrefs {
   Future<void> setReminderEnabled(bool value) =>
       _store.setBool(_kReminderEnabled, value);
 
-  /// "Force ECL available" testing override for the Switch & Save offer tip.
-  /// Persisted so it survives launches; re-applied to the SDK in `main()` on
-  /// startup, before any offer tip evaluates.
-  bool get eclOverride => _store.getBool(_kEclOverride) ?? false;
-  Future<void> setEclOverride(bool value) =>
-      _store.setBool(_kEclOverride, value);
-
   /// "Switch & Save full test mode" override — runs the entire Switch & Save
   /// flow on a non-ECL device. Persisted; re-applied to the SDK in `main()`
   /// on startup.
@@ -65,7 +57,6 @@ class UserPrefs {
     await _store.remove(_kStreakSaverCount);
     await _store.remove(_kPaywallDismissedAtMs);
     await _store.remove(_kReminderEnabled);
-    await _store.remove(_kEclOverride);
     await _store.remove(_kSwitchAndSaveTestMode);
   }
 }
