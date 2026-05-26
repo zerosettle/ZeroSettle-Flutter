@@ -82,5 +82,20 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      # Diagnostic: confirms whether the OIDC env vars are reaching the runner.
+      # If `ACTIONS_ID_TOKEN_REQUEST_TOKEN is set: NO`, then `id-token: write`
+      # is being stripped by a repo or org policy — fix that, not the workflow.
+      # Token values themselves are NEVER printed (the `[ -n ]` test only checks
+      # for non-empty).
+      - name: Verify OIDC environment
+        run: |
+          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN is set: $([ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ] && echo YES || echo NO)"
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL is set:   $([ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && echo YES || echo NO)"
+          echo "GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
+          echo "GITHUB_REF_NAME:   $GITHUB_REF_NAME"
+          echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
+          echo "Dart version:"
+          dart --version
+
       - name: Publish to pub.dev
         run: dart pub publish --force
