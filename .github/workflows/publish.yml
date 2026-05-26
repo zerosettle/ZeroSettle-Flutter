@@ -98,4 +98,8 @@ jobs:
           dart --version
 
       - name: Publish to pub.dev
-        run: dart pub publish --force
+        # `--verbose` makes dart pub log the OIDC exchange flow — we'll see
+        # whether it attempts the exchange and what response it gets back from
+        # pub.dev. The OAuth URL fallback only fires after OIDC fails (or is
+        # skipped); verbose shows which.
+        run: dart pub publish --force --verbose
