@@ -586,6 +586,17 @@ class MockZeroSettlePlatform
         {'type': 'purchaseSucceeded', 'productId': 'p', 'transactionId': 't'},
       ]);
 
+  // ---- Offer Impression (Task 12) ----
+
+  @override
+  Future<void> reportOfferViewed({String? productId, int? variantId, String? flowType}) async {
+    _record('reportOfferViewed', {
+      if (productId != null) 'productId': productId,
+      if (variantId != null) 'variantId': variantId,
+      if (flowType != null) 'flowType': flowType,
+    });
+  }
+
   // ---- Task 9: fetchUserOffer ----
 
   @override
