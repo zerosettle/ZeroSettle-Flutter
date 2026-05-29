@@ -539,4 +539,12 @@ abstract class ZeroSettlePlatform extends PlatformInterface {
   Stream<Map<String, dynamic>> get eventsUpdates {
     throw UnimplementedError('eventsUpdates has not been implemented.');
   }
+
+  // -- Offer Impression (Task 12) --
+
+  /// Report that an offer was viewed by the user. All parameters are optional;
+  /// when omitted the native SDK resolves the active offer automatically.
+  Future<void> reportOfferViewed({String? productId, int? variantId, String? flowType}) {
+    throw UnimplementedError('reportOfferViewed() has not been implemented.');
+  }
 }

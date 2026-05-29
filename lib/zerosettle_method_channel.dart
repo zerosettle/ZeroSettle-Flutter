@@ -779,4 +779,15 @@ class MethodChannelZeroSettle extends ZeroSettlePlatform {
         .map((event) => Map<String, dynamic>.from(event as Map));
     return _eventsUpdatesStream!;
   }
+
+  // -- Offer Impression (Task 12) --
+
+  @override
+  Future<void> reportOfferViewed({String? productId, int? variantId, String? flowType}) async {
+    await methodChannel.invokeMethod('reportOfferViewed', {
+      if (productId != null) 'productId': productId,
+      if (variantId != null) 'variantId': variantId,
+      if (flowType != null) 'flowType': flowType,
+    });
+  }
 }

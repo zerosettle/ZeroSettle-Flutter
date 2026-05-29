@@ -1087,6 +1087,33 @@ class ZeroSettle {
     }
   }
 
+  // -- Offer Impression (Task 12) --
+
+  /// Fire-and-forget impression event for a custom offer banner.
+  ///
+  /// Call this when a custom offer banner becomes visible to the user (≥50%
+  /// on screen). All parameters are optional; when omitted the native SDK
+  /// resolves the active offer automatically from the identified user's
+  /// current state. Errors are silently swallowed — this is analytics-only.
+  ///
+  /// The SDK's own [ZsOfferTipView] tracks impressions natively and should NOT
+  /// call this method — it is only for custom/Flutter-rendered offer UIs.
+  static Future<void> reportOfferViewed({
+    String? productId,
+    int? variantId,
+    String? flowType,
+  }) async {
+    try {
+      await ZeroSettlePlatform.instance.reportOfferViewed(
+        productId: productId,
+        variantId: variantId,
+        flowType: flowType,
+      );
+    } catch (_) {
+      // fire-and-forget
+    }
+  }
+
   // -- Error wrapping --
 
   Future<T> _wrap<T>(Future<T> Function() fn) async {
