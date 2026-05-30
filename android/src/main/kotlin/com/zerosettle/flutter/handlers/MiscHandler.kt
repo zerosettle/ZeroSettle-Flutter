@@ -155,6 +155,7 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
             "setSwitchAndSaveTestMode" -> setSwitchAndSaveTestMode(call, result)
             "trackEvent" -> result.success(null)
             "trackMigrationConversion" -> trackMigrationConversion(result)
+            "reportOfferViewed" -> reportOfferViewed(call, result)
             "resetMigrateTipState" -> result.success(null)
             "fetchTransactionHistory" -> fetchTransactionHistory(result)
             "fetchUserOffer" -> fetchUserOffer(result)
@@ -254,6 +255,33 @@ internal class MiscHandler(private val deps: HandlerDependencies) {
                 onFailure = { result.sendError(it) },
             )
         }
+    }
+
+    // ── reportOfferViewed (fire-and-forget impression report) ──────────
+
+    /**
+     * Bridges the Dart `reportOfferViewed` call to the SDK's fire-and-forget
+     * impression report. `productId` is resolved from the call args, falling
+     * back to `ZeroSettle.currentOffer.value?.productId` so callers that rely
+     * on the auto-resolved current offer don't have to pass it. If no product
+     * can be resolved, we just `result.success(null)` (nothing to report).
+     *
+     * The SDK's [ZeroSettle.reportOfferViewed] is a plain (non-suspend) fun
+     * that launches its own background work, so — unlike
+     * [trackMigrationConversion] — there's no coroutine to launch here; we
+     * call it directly, mirroring the synchronous `trackEvent` stub.
+     */
+    private fun reportOfferViewed(call: MethodCall, result: MethodChannel.Result) {
+        val productId = call.argument<String>("productId")
+            ?: ZeroSettle.currentOffer.value?.productId
+        if (productId != null) {
+            ZeroSettle.reportOfferViewed(
+                productId = productId,
+                variantId = call.argument<Int>("variantId"),
+                flowType = call.argument<String>("flowType") ?: "migration",
+            )
+        }
+        result.success(null)
     }
 
     // ── fetchUserOffer (Task 9) ────────────────────────────────────────

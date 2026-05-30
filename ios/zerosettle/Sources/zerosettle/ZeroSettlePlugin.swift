@@ -1070,6 +1070,24 @@ public class ZeroSettlePlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCy
                 }
             }
 
+        // -- Offer Impression --
+
+        case "reportOfferViewed":
+            // Resolve productId from args, else from the auto-resolved current
+            // offer. `currentOffer` is @MainActor-isolated; this case runs on
+            // handleOnMainActor (@MainActor), so we read it directly — matching
+            // the other ZeroSettle.shared reads in this switch. The static
+            // `reportOfferViewed` is `nonisolated` + fire-and-forget.
+            let pid = (args?["productId"] as? String) ?? ZeroSettle.shared.currentOffer?.productId
+            if let pid {
+                ZeroSettle.reportOfferViewed(
+                    productId: pid,
+                    variantId: args?["variantId"] as? Int,
+                    flowType: (args?["flowType"] as? String) ?? "migration"
+                )
+            }
+            result(nil)
+
         // -- Migration Tip --
 
         case "resetMigrateTipState":
