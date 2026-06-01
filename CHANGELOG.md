@@ -1,3 +1,10 @@
+## 1.6.0 — 2026-06-01
+
+On-screen offer-impression tracking for custom banners:
+- `OfferImpression(child:)` wrapper widget — reports a ≥50%-on-screen impression once per appearance; the SDK's built-in `OfferTipView` already self-tracks natively.
+- `ZeroSettle.reportOfferViewed(...)` bridged to the native iOS/Android SDKs.
+- Requires ZeroSettleKit ≥ 1.5.0 (iOS) and zerosettle-android ≥ 1.2.0 (Android).
+
 ## 1.5.1 — 2026-05-25
 
 Soft-deprecate the "Force ECL available" testing override in favor of the
