@@ -11,6 +11,7 @@ import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
 import com.zerosettle.sdk.models.ProductCatalog
 import com.zerosettle.sdk.models.ProductType
+import com.zerosettle.sdk.models.TrialFacts
 import com.zerosettle.sdk.models.UpgradeOffer
 import com.zerosettle.sdk.models.UserOffer
 import com.zerosettle.sdk.offers.OfferManager
@@ -162,6 +163,16 @@ fun Product.toFlutterMap(): Map<String, Any?> {
     subscriptionGroupId?.let { map["subscriptionGroupId"] = it }
     freeTrialDuration?.let { map["freeTrialDuration"] = it }
     isTrialEligible?.let { map["isTrialEligible"] = it }
+    trial?.let { t ->
+        val trialMap = mutableMapOf<String, Any>(
+            "mode" to t.mode.wire,
+            "upfrontAmountCents" to t.upfrontAmountCents,
+            "holdAmountCents" to t.holdAmountCents,
+            "validatesCard" to t.validatesCard,
+        )
+        t.duration?.let { trialMap["duration"] = it }
+        map["trial"] = trialMap
+    }
     // Intentionally omitted (Android-only fields with no Dart parser
     // counterpart): playStorePrice, playProductId, playBasePlanId.
     return map

@@ -11,6 +11,8 @@ import com.zerosettle.sdk.models.PendingClaim
 import com.zerosettle.sdk.models.Price
 import com.zerosettle.sdk.models.Product
 import com.zerosettle.sdk.models.ProductType
+import com.zerosettle.sdk.models.TrialFacts
+import com.zerosettle.sdk.models.TrialMode
 import com.zerosettle.sdk.models.UpgradeOffer
 import com.zerosettle.sdk.models.UserOffer
 import com.zerosettle.sdk.models.ZeroSettleError
@@ -179,6 +181,85 @@ class ModelToFlutterMapTest {
         assertThat(map).doesNotContainKey("subscriptionGroupId")
         assertThat(map).doesNotContainKey("freeTrialDuration")
         assertThat(map).doesNotContainKey("isTrialEligible")
+        assertThat(map).doesNotContainKey("trial")
+    }
+
+    @Test
+    fun `Product emits trial map with all fields when trial is present`() {
+        val product = Product(
+            id = "com.app.pro_monthly",
+            displayName = "Pro Monthly",
+            productDescription = "All features.",
+            type = ProductType.AUTO_RENEWABLE_SUBSCRIPTION,
+            trial = TrialFacts(
+                mode = TrialMode.FREE,
+                duration = "P7D",
+                upfrontAmountCents = 0,
+                holdAmountCents = 0,
+                validatesCard = false,
+            ),
+        )
+
+        val map = product.toFlutterMap()
+
+        @Suppress("UNCHECKED_CAST")
+        val trialMap = map["trial"] as Map<String, Any?>
+        assertThat(trialMap["mode"]).isEqualTo("free")
+        assertThat(trialMap["duration"]).isEqualTo("P7D")
+        assertThat(trialMap["upfrontAmountCents"]).isEqualTo(0)
+        assertThat(trialMap["holdAmountCents"]).isEqualTo(0)
+        assertThat(trialMap["validatesCard"]).isEqualTo(false)
+    }
+
+    @Test
+    fun `Product trial map omits duration when null`() {
+        val product = Product(
+            id = "com.app.pro_monthly",
+            displayName = "Pro Monthly",
+            productDescription = "All features.",
+            type = ProductType.AUTO_RENEWABLE_SUBSCRIPTION,
+            trial = TrialFacts(
+                mode = TrialMode.AUTH_HOLD,
+                duration = null,
+                upfrontAmountCents = 0,
+                holdAmountCents = 100,
+                validatesCard = true,
+            ),
+        )
+
+        val map = product.toFlutterMap()
+
+        @Suppress("UNCHECKED_CAST")
+        val trialMap = map["trial"] as Map<String, Any?>
+        assertThat(trialMap["mode"]).isEqualTo("auth_hold")
+        assertThat(trialMap).doesNotContainKey("duration")
+        assertThat(trialMap["holdAmountCents"]).isEqualTo(100)
+        assertThat(trialMap["validatesCard"]).isEqualTo(true)
+    }
+
+    @Test
+    fun `Product trial map encodes paid mode correctly`() {
+        val product = Product(
+            id = "com.app.pro_monthly",
+            displayName = "Pro Monthly",
+            productDescription = "All features.",
+            type = ProductType.AUTO_RENEWABLE_SUBSCRIPTION,
+            trial = TrialFacts(
+                mode = TrialMode.PAID,
+                duration = "P14D",
+                upfrontAmountCents = 99,
+                holdAmountCents = 0,
+                validatesCard = false,
+            ),
+        )
+
+        val map = product.toFlutterMap()
+
+        @Suppress("UNCHECKED_CAST")
+        val trialMap = map["trial"] as Map<String, Any?>
+        assertThat(trialMap["mode"]).isEqualTo("paid")
+        assertThat(trialMap["duration"]).isEqualTo("P14D")
+        assertThat(trialMap["upfrontAmountCents"]).isEqualTo(99)
     }
 
     @Test
