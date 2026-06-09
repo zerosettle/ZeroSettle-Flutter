@@ -158,6 +158,22 @@ void main() {
       expect(p.trial, isNull);
       expect(p.id, 'pro');
     });
+    test('trial facts: free decodes', () {
+      final p = Product.fromMap({
+        'id': 'pro', 'displayName': 'Pro', 'productDescription': 'd', 'type': 'auto_renewable_subscription',
+        'trial': {'mode': 'free', 'duration': '1_week', 'upfrontAmountCents': 0, 'holdAmountCents': 0, 'validatesCard': false},
+      });
+      expect(p.trial!.mode, ZSTrialMode.free);
+      expect(p.trial!.validatesCard, false);
+    });
+    test('trial facts: toMap/fromMap round-trip', () {
+      const withDur = TrialFacts(mode: ZSTrialMode.paid, duration: '1_week', upfrontAmountCents: 100, validatesCard: true);
+      expect(TrialFacts.fromMap(withDur.toMap()), withDur);
+      const noDur = TrialFacts(mode: ZSTrialMode.authHold, holdAmountCents: 100, validatesCard: true);
+      final back = TrialFacts.fromMap(noDur.toMap());
+      expect(back, noDur);
+      expect(back!.duration, isNull);
+    });
   });
 
   group('Product', () {

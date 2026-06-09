@@ -45,12 +45,13 @@ class TrialFacts {
 
   @override
   bool operator ==(Object other) =>
+      identical(this, other) ||
       other is TrialFacts &&
-      other.mode == mode &&
-      other.duration == duration &&
-      other.upfrontAmountCents == upfrontAmountCents &&
-      other.holdAmountCents == holdAmountCents &&
-      other.validatesCard == validatesCard;
+          other.mode == mode &&
+          other.duration == duration &&
+          other.upfrontAmountCents == upfrontAmountCents &&
+          other.holdAmountCents == holdAmountCents &&
+          other.validatesCard == validatesCard;
 
   @override
   int get hashCode => Object.hash(
@@ -60,6 +61,10 @@ class TrialFacts {
         holdAmountCents,
         validatesCard,
       );
+
+  @override
+  String toString() =>
+      'TrialFacts(mode: ${mode.rawValue}, duration: $duration, upfront: $upfrontAmountCents, hold: $holdAmountCents, validatesCard: $validatesCard)';
 }
 
 /// A product available for web checkout via ZeroSettle.
