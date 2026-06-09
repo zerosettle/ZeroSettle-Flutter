@@ -2053,6 +2053,15 @@ extension ZeroSettleKit.ZSProduct {
         if let isTrialEligible {
             map["isTrialEligible"] = isTrialEligible
         }
+        if let t = trial {
+            map["trial"] = [
+                "mode": t.mode.rawValue,
+                "duration": t.duration as Any,
+                "upfrontAmountCents": t.upfrontAmountCents,
+                "holdAmountCents": t.holdAmountCents,
+                "validatesCard": t.validatesCard,
+            ]
+        }
         return map
     }
 }
