@@ -123,6 +123,43 @@ void main() {
     });
   });
 
+  group('TrialFacts', () {
+    test('trial facts: paid decodes', () {
+      final p = Product.fromMap({
+        'id': 'pro', 'displayName': 'Pro', 'productDescription': 'd',
+        'type': 'auto_renewable_subscription',
+        'trial': {'mode': 'paid', 'duration': '1_week', 'upfrontAmountCents': 100, 'holdAmountCents': 0, 'validatesCard': true},
+      });
+      expect(p.trial, isNotNull);
+      expect(p.trial!.mode, ZSTrialMode.paid);
+      expect(p.trial!.upfrontAmountCents, 100);
+      expect(p.trial!.validatesCard, true);
+      expect(p.trial!.duration, '1_week');
+    });
+    test('trial facts: auth_hold decodes', () {
+      final p = Product.fromMap({
+        'id': 'pro', 'displayName': 'Pro', 'productDescription': 'd', 'type': 'auto_renewable_subscription',
+        'trial': {'mode': 'auth_hold', 'holdAmountCents': 100, 'validatesCard': true},
+      });
+      expect(p.trial!.mode, ZSTrialMode.authHold);
+      expect(p.trial!.holdAmountCents, 100);
+    });
+    test('trial facts: absent -> null', () {
+      final p = Product.fromMap({
+        'id': 'pro', 'displayName': 'Pro', 'productDescription': 'd', 'type': 'auto_renewable_subscription',
+      });
+      expect(p.trial, isNull);
+    });
+    test('trial facts: unknown mode -> null (mirrors iOS)', () {
+      final p = Product.fromMap({
+        'id': 'pro', 'displayName': 'Pro', 'productDescription': 'd', 'type': 'auto_renewable_subscription',
+        'trial': {'mode': 'future_mode', 'upfrontAmountCents': 0},
+      });
+      expect(p.trial, isNull);
+      expect(p.id, 'pro');
+    });
+  });
+
   group('Product', () {
     test('fromMap / toMap round-trip', () {
       final map = {

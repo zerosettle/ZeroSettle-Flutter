@@ -163,6 +163,23 @@ enum ApplePaySetupBehavior {
   }
 }
 
+/// The trial billing mode for a subscription product.
+enum ZSTrialMode {
+  free('free'),
+  paid('paid'),
+  authHold('auth_hold');
+
+  const ZSTrialMode(this.rawValue);
+  final String rawValue;
+
+  static ZSTrialMode? fromRawValueOrNull(String value) {
+    for (final m in ZSTrialMode.values) {
+      if (m.rawValue == value) return m;
+    }
+    return null;
+  }
+}
+
 /// Tri-state Apple Pay availability on the device, observed from the iOS
 /// Kit's `ApplePayAvailability` service.
 ///

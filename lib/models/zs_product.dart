@@ -2,6 +2,66 @@ import 'enums.dart';
 import 'price.dart';
 import 'promotion.dart';
 
+/// Trial billing facts for a subscription product.
+///
+/// When the bridge emits a `trial` map with an unrecognised `mode`,
+/// [fromMap] returns `null` — mirroring the iOS ZSProduct behaviour.
+class TrialFacts {
+  final ZSTrialMode mode;
+  final String? duration;
+  final int upfrontAmountCents;
+  final int holdAmountCents;
+  final bool validatesCard;
+
+  const TrialFacts({
+    required this.mode,
+    this.duration,
+    this.upfrontAmountCents = 0,
+    this.holdAmountCents = 0,
+    this.validatesCard = false,
+  });
+
+  /// Returns null (the whole trial) when mode is missing/unknown — mirrors iOS.
+  static TrialFacts? fromMap(Map<String, dynamic> map) {
+    final raw = map['mode'] as String?;
+    final mode = raw == null ? null : ZSTrialMode.fromRawValueOrNull(raw);
+    if (mode == null) return null;
+    return TrialFacts(
+      mode: mode,
+      duration: map['duration'] as String?,
+      upfrontAmountCents: map['upfrontAmountCents'] as int? ?? 0,
+      holdAmountCents: map['holdAmountCents'] as int? ?? 0,
+      validatesCard: map['validatesCard'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'mode': mode.rawValue,
+        if (duration != null) 'duration': duration,
+        'upfrontAmountCents': upfrontAmountCents,
+        'holdAmountCents': holdAmountCents,
+        'validatesCard': validatesCard,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is TrialFacts &&
+      other.mode == mode &&
+      other.duration == duration &&
+      other.upfrontAmountCents == upfrontAmountCents &&
+      other.holdAmountCents == holdAmountCents &&
+      other.validatesCard == validatesCard;
+
+  @override
+  int get hashCode => Object.hash(
+        mode,
+        duration,
+        upfrontAmountCents,
+        holdAmountCents,
+        validatesCard,
+      );
+}
+
 /// A product available for web checkout via ZeroSettle.
 class Product {
   final String id;
@@ -19,6 +79,7 @@ class Product {
   final String? billingInterval;
   final String? freeTrialDuration;
   final bool? isTrialEligible;
+  final TrialFacts? trial;
 
   const Product({
     required this.id,
@@ -36,6 +97,7 @@ class Product {
     this.billingInterval,
     this.freeTrialDuration,
     this.isTrialEligible,
+    this.trial,
   });
 
   factory Product.fromMap(Map<String, dynamic> map) {
@@ -63,6 +125,9 @@ class Product {
       billingInterval: map['billingInterval'] as String?,
       freeTrialDuration: map['freeTrialDuration'] as String?,
       isTrialEligible: map['isTrialEligible'] as bool?,
+      trial: map['trial'] != null
+          ? TrialFacts.fromMap(Map<String, dynamic>.from(map['trial'] as Map))
+          : null,
     );
   }
 
@@ -83,6 +148,7 @@ class Product {
       'billingInterval': billingInterval,
       'freeTrialDuration': freeTrialDuration,
       'isTrialEligible': isTrialEligible,
+      if (trial != null) 'trial': trial!.toMap(),
     };
   }
 
@@ -101,13 +167,14 @@ class Product {
           subscriptionGroupId == other.subscriptionGroupId &&
           billingInterval == other.billingInterval &&
           freeTrialDuration == other.freeTrialDuration &&
-          isTrialEligible == other.isTrialEligible;
+          isTrialEligible == other.isTrialEligible &&
+          trial == other.trial;
 
   @override
   int get hashCode => Object.hash(
         id, displayName, productDescription, type,
         webPrice, appStorePrice, syncedToAppStoreConnect, promotion, subscriptionGroupId,
-        billingInterval, freeTrialDuration, isTrialEligible,
+        billingInterval, freeTrialDuration, isTrialEligible, trial,
       );
 
   @override
