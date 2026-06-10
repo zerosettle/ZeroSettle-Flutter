@@ -1,3 +1,22 @@
+## 1.7.0 — 2026-06-10
+
+Trial display facts + Apple external-purchase compliance flow-through:
+
+- `Product.trial` (`TrialFacts`) — trial mode, price, and duration display
+  facts on products, mirroring the native iOS/Android SDKs. `null` when the
+  product has no trial or the mode is unknown.
+- iOS: ZeroSettleKit floor raised to 1.5.2, which auto-mints Apple
+  external-purchase tokens (EU/EEA/JP) and sends the App Store storefront
+  at checkout initiation — no Dart-side changes required. Apps in affected
+  regions should also follow the native setup guide (Apple program
+  enrollment, entitlements, Info.plist keys).
+- Android: zerosettle-android floor raised to 1.2.1 (TrialFacts support).
+
+### Bumped
+
+- ZeroSettleKit (iOS) `~> 1.5.2`
+- zerosettle-android / zerosettle-android-ui `1.2.1`
+
 ## 1.6.0 — 2026-06-01
 
 On-screen offer-impression tracking for custom banners:

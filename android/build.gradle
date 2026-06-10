@@ -66,8 +66,8 @@ android {
 dependencies {
     // api-scope so the host app's Compose theming can integrate naturally if
     // they ever need to.
-    api 'io.zerosettle:zerosettle-android:1.2.0'
-    api 'io.zerosettle:zerosettle-android-ui:1.2.0'
+    api 'io.zerosettle:zerosettle-android:1.2.1'
+    api 'io.zerosettle:zerosettle-android-ui:1.2.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
 
     // Compose stack — ZeroSettleHostActivity hosts a ModalBottomSheet that
