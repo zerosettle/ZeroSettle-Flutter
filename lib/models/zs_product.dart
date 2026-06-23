@@ -86,6 +86,11 @@ class Product {
   final bool? isTrialEligible;
   final TrialFacts? trial;
 
+  /// Where the backend wants this cohort to check out. Defaults to
+  /// [ZSCheckoutRoute.web] when absent. The SDK's `purchase()` honors this
+  /// natively — see [ZSCheckoutRoute].
+  final ZSCheckoutRoute checkoutRoute;
+
   const Product({
     required this.id,
     required this.displayName,
@@ -103,6 +108,7 @@ class Product {
     this.freeTrialDuration,
     this.isTrialEligible,
     this.trial,
+    this.checkoutRoute = ZSCheckoutRoute.web,
   });
 
   factory Product.fromMap(Map<String, dynamic> map) {
@@ -133,6 +139,8 @@ class Product {
       trial: map['trial'] != null
           ? TrialFacts.fromMap(Map<String, dynamic>.from(map['trial'] as Map))
           : null,
+      // Soft-fails to web on absent/unknown — mirrors the native SDKs.
+      checkoutRoute: ZSCheckoutRoute.fromRawValue(map['checkoutRoute'] as String?),
     );
   }
 
@@ -154,6 +162,7 @@ class Product {
       'freeTrialDuration': freeTrialDuration,
       'isTrialEligible': isTrialEligible,
       if (trial != null) 'trial': trial!.toMap(),
+      'checkoutRoute': checkoutRoute.rawValue,
     };
   }
 
@@ -173,13 +182,14 @@ class Product {
           billingInterval == other.billingInterval &&
           freeTrialDuration == other.freeTrialDuration &&
           isTrialEligible == other.isTrialEligible &&
-          trial == other.trial;
+          trial == other.trial &&
+          checkoutRoute == other.checkoutRoute;
 
   @override
   int get hashCode => Object.hash(
         id, displayName, productDescription, type,
         webPrice, appStorePrice, syncedToAppStoreConnect, promotion, subscriptionGroupId,
-        billingInterval, freeTrialDuration, isTrialEligible, trial,
+        billingInterval, freeTrialDuration, isTrialEligible, trial, checkoutRoute,
       );
 
   @override

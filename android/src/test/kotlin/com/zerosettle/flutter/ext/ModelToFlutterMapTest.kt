@@ -125,6 +125,7 @@ class ModelToFlutterMapTest {
             subscriptionGroupId = 42,
             freeTrialDuration = "P7D",
             isTrialEligible = true,
+            checkoutRoute = "store",
             // Android-only fields — must not leak onto the wire:
             playStorePrice = Price(amountCents = 599, currencyCode = "USD"),
             playProductId = "com.app.pro_monthly",
@@ -142,6 +143,8 @@ class ModelToFlutterMapTest {
         assertThat(map["subscriptionGroupId"]).isEqualTo(42)
         assertThat(map["freeTrialDuration"]).isEqualTo("P7D")
         assertThat(map["isTrialEligible"]).isEqualTo(true)
+        // checkoutRoute crosses the wire as a camelCase key with the raw value.
+        assertThat(map["checkoutRoute"]).isEqualTo("store")
 
         // Nested Price maps mirror iOS encoding shape exactly.
         @Suppress("UNCHECKED_CAST")
@@ -175,6 +178,8 @@ class ModelToFlutterMapTest {
         assertThat(map["id"]).isEqualTo("com.app.coins100")
         assertThat(map["type"]).isEqualTo("consumable")
         assertThat(map["syncedToAppStoreConnect"]).isEqualTo(false)
+        // Nullable SDK checkoutRoute coalesces to "web" and is always emitted.
+        assertThat(map["checkoutRoute"]).isEqualTo("web")
         assertThat(map).doesNotContainKey("webPrice")
         assertThat(map).doesNotContainKey("appStorePrice")
         assertThat(map).doesNotContainKey("billingInterval")

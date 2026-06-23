@@ -156,6 +156,13 @@ fun Product.toFlutterMap(): Map<String, Any?> {
         "productDescription" to productDescription,
         "type" to type.toWireString(),
         "syncedToAppStoreConnect" to syncedToAppStoreConnect,
+        // Always emit, coalescing the SDK's nullable `checkoutRoute` to "web"
+        // (its documented null-means-web default — see Product.kt). camelCase
+        // key per the Flutter wire convention; iOS emits the same key from a
+        // non-optional field. The SDK's `purchase()` already honors this
+        // natively; Dart exposes it for host apps. Dart's
+        // ZSCheckoutRoute.fromRawValue soft-fails to web on unknown values.
+        "checkoutRoute" to (checkoutRoute ?: "web"),
     )
     webPrice?.let { map["webPrice"] = it.toFlutterMap() }
     appStorePrice?.let { map["appStorePrice"] = it.toFlutterMap() }

@@ -2025,6 +2025,11 @@ extension ZeroSettleKit.ZSProduct {
             "type": type.rawValue,
             "syncedToAppStoreConnect": syncedToAppStoreConnect,
             "storeKitAvailable": storeKitAvailable,
+            // Always emit — `checkoutRoute` is non-optional on the Kit (defaults
+            // to `.web`). camelCase key per the Flutter wire convention; the
+            // value is the raw enum string ("web"/"store"). The SDK's
+            // `purchase()` already honors this; Dart exposes it for host apps.
+            "checkoutRoute": checkoutRoute.rawValue,
         ]
         if let webPrice {
             map["webPrice"] = webPrice.toFlutterMap()

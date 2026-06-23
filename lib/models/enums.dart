@@ -163,6 +163,38 @@ enum ApplePaySetupBehavior {
   }
 }
 
+/// Where the backend wants this cohort to check out.
+///
+/// Driven by a `checkout_routing` experiment on the backend. ORTHOGONAL to
+/// [Product.webPrice]: [web] does NOT imply a web price is present — a
+/// store-only product (web storefront not opted in) reports [web] with a
+/// null `webPrice`. The SDK's `purchase()` already applies the routing rule
+/// natively (use web checkout only when route is [web] AND a web price
+/// exists; otherwise route to StoreKit/Play); this field is exposed so host
+/// apps can read the directive (e.g. to label or pre-flight their own UI).
+///
+/// Soft-fails to [web] on absent/unknown values — mirrors the native SDKs,
+/// which default to `web` when the backend omits the field (older servers)
+/// or sends a future value.
+enum ZSCheckoutRoute {
+  /// Route this cohort through ZeroSettle web checkout (Stripe).
+  web('web'),
+
+  /// Route this cohort to the native store (StoreKit / Play Billing).
+  store('store');
+
+  const ZSCheckoutRoute(this.rawValue);
+  final String rawValue;
+
+  static ZSCheckoutRoute fromRawValue(String? value) {
+    if (value == null) return ZSCheckoutRoute.web;
+    for (final r in ZSCheckoutRoute.values) {
+      if (r.rawValue == value) return r;
+    }
+    return ZSCheckoutRoute.web;
+  }
+}
+
 /// The trial billing mode for a subscription product.
 enum ZSTrialMode {
   free('free'),

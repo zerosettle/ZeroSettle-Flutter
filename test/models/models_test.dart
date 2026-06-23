@@ -40,6 +40,17 @@ void main() {
       }
     });
 
+    test('ZSCheckoutRoute round-trip', () {
+      for (final r in ZSCheckoutRoute.values) {
+        expect(ZSCheckoutRoute.fromRawValue(r.rawValue), r);
+      }
+    });
+
+    test('ZSCheckoutRoute soft-fails to web on null/unknown', () {
+      expect(ZSCheckoutRoute.fromRawValue(null), ZSCheckoutRoute.web);
+      expect(ZSCheckoutRoute.fromRawValue('nope'), ZSCheckoutRoute.web);
+    });
+
     test('TransactionStatus round-trip', () {
       for (final s in TransactionStatus.values) {
         expect(TransactionStatus.fromRawValue(s.rawValue), s);
@@ -213,6 +224,51 @@ void main() {
       expect(product.syncedToAppStoreConnect, isFalse);
       expect(product.promotion, isNull);
       expect(product.storeKitAvailable, isFalse);
+    });
+
+    test('checkoutRoute: store decodes', () {
+      final p = Product.fromMap({
+        'id': 'p', 'displayName': 'P', 'productDescription': '',
+        'type': 'auto_renewable_subscription',
+        'checkoutRoute': 'store',
+      });
+      expect(p.checkoutRoute, ZSCheckoutRoute.store);
+    });
+
+    test('checkoutRoute: web decodes', () {
+      final p = Product.fromMap({
+        'id': 'p', 'displayName': 'P', 'productDescription': '',
+        'type': 'auto_renewable_subscription',
+        'checkoutRoute': 'web',
+      });
+      expect(p.checkoutRoute, ZSCheckoutRoute.web);
+    });
+
+    test('checkoutRoute: absent -> web (soft-fail, mirrors native SDKs)', () {
+      final p = Product.fromMap({
+        'id': 'p', 'displayName': 'P', 'productDescription': '',
+        'type': 'auto_renewable_subscription',
+      });
+      expect(p.checkoutRoute, ZSCheckoutRoute.web);
+    });
+
+    test('checkoutRoute: unknown -> web (soft-fail, mirrors native SDKs)', () {
+      final p = Product.fromMap({
+        'id': 'p', 'displayName': 'P', 'productDescription': '',
+        'type': 'auto_renewable_subscription',
+        'checkoutRoute': 'future_route',
+      });
+      expect(p.checkoutRoute, ZSCheckoutRoute.web);
+    });
+
+    test('checkoutRoute: toMap/fromMap round-trip', () {
+      const p = Product(
+        id: 'p', displayName: 'P', productDescription: '',
+        type: ZSProductType.autoRenewableSubscription,
+        checkoutRoute: ZSCheckoutRoute.store,
+      );
+      expect(p.toMap()['checkoutRoute'], 'store');
+      expect(Product.fromMap(p.toMap()).checkoutRoute, ZSCheckoutRoute.store);
     });
   });
 
